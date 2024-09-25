@@ -1,0 +1,39 @@
+version: '3'
+services:
+  app:
+    # image: darrenopf/viper-web-gui:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - '3322:3000'
+    restart: always
+    env_file: ./src/.env
+    volumes:
+      - ./src:/usr/src/app
+    depends_on:
+      - mysqldb
+  mysqldb:
+    image: mysql:5.7
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: TX2vvhVifqRZCM6JkxkWknD4TLYszR7aD
+      MYSQL_DATABASE: viper_db
+      MYSQL_USER: viper_root
+      MYSQL_PASSWORD: TX2vvhVifqRZCM6JkxkWknD4TLYszR7aD
+    ports:
+      - 3306:3306
+    volumes:
+      - ./volumes/mysql_data:/var/lib/mysql
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: pma
+    environment:
+      PMA_HOST: db
+      PMA_PORT: 3306
+      PMA_ARBITRARY: 1
+    restart: always
+    ports:
+      - "8383:80"
+    depends_on:
+      - mysqldb

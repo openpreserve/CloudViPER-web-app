@@ -1,0 +1,26 @@
+{
+  "name": "viper-cloud-web-gui",
+  "version": "1.0.4",
+  "description": "Container orchestrator app for the Viper Cloud project",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Darren Dignam",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@dr.pogodin/csurf": "^1.13.0",
+    "body-parser": "^1.20.2",
+    "cookie-parser": "^1.4.6",
+    "dockerode": "^4.0.2",
+    "dotenv": "10.0.0",
+    "express": "^4.19.2",
+    "express-handlebars": "^8.0.1",
+    "express-session": "^1.18.0",
+    "memorystore": "^1.6.7",
+    "mysql2": "3.10.3",
+    "redis": "^4.7.0",
+    "sequelize": "6.37.3"
+  }
+}
