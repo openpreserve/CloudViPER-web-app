@@ -6,15 +6,17 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - '3322:3000'
+      - '3322:3232'
     restart: always
     env_file: ./src/.env
     volumes:
       - ./src:/usr/src/app
+      - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       - mysqldb
   mysqldb:
     image: mysql:5.7
+    container_name: mysqldb-viper-cloud
     restart: always
     environment:
       MYSQL_ROOT_PASSWORD: TX2vvhVifqRZCM6JkxkWknD4TLYszR7aD
