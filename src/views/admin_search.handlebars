@@ -1,0 +1,158 @@
+            <div class="text-white">
+                <h1>{{{form_h1}}}</h1>
+                <p>{{{form_p}}}</p>
+                <a href="/admin" class="text-white underline">← Return to admin page</a>
+            </div>
+            <div>
+            <h2 class="text-white">Choose date range to see results of the survey:</h2>
+            <form method="post" action="/admin/search" class="nps-form">
+                <div class="mb-3">
+                    <label for="startdate" class="form-label text-white">Start Date:</label>
+                    <input type="text" class="datepicker" id="startdate" name="startdate" placeholder="Start" value="{{{from}}}" required>
+
+                    <label for="enddate" class="form-label text-white">End Date:</label>
+                    <input type="text" class="datepicker" id="enddate" name="enddate" placeholder="End" value="{{{to}}}" required>
+                </div>
+                <div class="mb-3">
+                    <input class="btn btn-secondary" style="width:100%" type="submit" value="Submit">
+                </div>
+            </form>
+            </div>
+            <div>
+                <button id="download_csv" type="button" class="btn btn-primary">Download Raw Data as CSV</button>
+            </div>   
+            
+            <div id="results-div"></div>
+            <table id="summary-table"></table>
+
+            <script>
+$(document).ready(function(e) {
+    $('.datepicker').datepicker({
+        format: 'yyyy-mm-dd', // Set your desired date format
+        autoclose: true, // Close the datepicker when a date is selected
+        todayHighlight: true, // Highlight today's date
+    });
+
+    var results = {{{results}}} ;
+    //console.log(results);
+    //$('#summary-table').DataTable({        data: results,    });
+
+    var rnd_id = Math.floor((Math.random() * 90000) + 1);
+    $("#results-div").html("");
+    $("#results-div").append("<table id='results-div-table-"+rnd_id+"' class='table mt-4'></table>");
+    tableGenerator('#results-div-table-'+rnd_id, results);
+
+        function tableGenerator(selector, data) { // data is an array
+            var dateString = "Fri, 12 Jan 2024 00:56:30 GMT";
+            var dateRegex = /^[A-Z][a-z]{2}, \d{1,2} [A-Z][a-z]{2} \d{4} \d{2}:\d{2}:\d{2} [A-Z]{3}$/;
+
+            var keys = Object.keys(Object.assign({}, ...data));// Get the keys to make the header
+            // Add header
+            var head = '<thead><tr>';
+            keys.forEach(function(key) {
+                head += '<th>'+key+'</th>';
+            });
+            $(selector).append(head+'</tr></thead>');
+            var c = 0;
+            // Add body
+            var body = '<tbody>';
+            data.forEach(function(obj) { // For each row
+                var row = '';
+                if(c%2){
+                    row += '<tr style="background-color:#e8eeff">';
+                }else{
+                    row += '<tr>';
+                }
+                
+                keys.forEach(function(key) { // For each column
+                    row += '<td class="mb-2">';
+                    if (obj.hasOwnProperty(key)) { // If the obj doesnt has a certain key, add a blank space.
+
+
+                        if (dateRegex.test( obj[key] )) {
+                            // console.log("Valid date string");
+                            var dateObject = new Date( obj[key] );
+                            var year = dateObject.getFullYear();
+                            var month = ('0' + (dateObject.getMonth() + 1)).slice(-2); // Months are zero-based, so add 1
+                            var day = ('0' + dateObject.getDate()).slice(-2);
+                            // Extract time components
+                            var hours = ('0' + dateObject.getHours()).slice(-2);
+                            var minutes = ('0' + dateObject.getMinutes()).slice(-2);
+                            var seconds = ('0' + dateObject.getSeconds()).slice(-2);
+
+                            // var row_date = `${year}-${month}-${day}`;
+                            var row_date = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+                            row += row_date;
+
+                        } else {
+                            row += obj[key];
+                        }
+                    }
+                    row += '</td>';
+                });
+                body += row+'<tr>';
+                c++;
+            })
+            $(selector).append(body+'</tbody>');
+        }
+
+    function downloadCSV(csv, filename) {
+        var csvFile;
+        var downloadLink;
+
+        // CSV file
+        csvFile = new Blob([csv], {type: "text/csv"});
+
+        // Download link
+        downloadLink = document.createElement("a");
+
+        // File name
+        downloadLink.download = filename;
+
+        // Create a link to the file
+        downloadLink.href = window.URL.createObjectURL(csvFile);
+
+        // Hide download link
+        downloadLink.style.display = "none";
+
+        // Add the link to DOM
+        document.body.appendChild(downloadLink);
+
+        // Click download link
+        downloadLink.click();
+    }
+
+    function exportTableToCSV(filename) {
+        var csv = [];
+        var rows = document.querySelectorAll("table tr");
+        
+        for (var i = 0; i < rows.length; i++) {
+            var cols = rows[i].querySelectorAll("td, th");
+            
+            // Skip if there are no cells in the row
+            if (cols.length === 0) continue;
+            
+            var row = [];
+            for (var j = 0; j < cols.length; j++) 
+                row.push('"' + cols[j].innerText + '"');
+            
+            csv.push(row.join(","));        
+        }
+
+        // Download CSV
+        downloadCSV(csv.join("\n"), filename);
+    }
+    $("#download_csv").click(function () {
+        var filename = "table.csv";
+
+        var startDate = $('#startdate').val();
+        var endDate = $('#enddate').val();
+        var tool = "NPS";
+
+        filename = `${tool}_start_${startDate}_end_${endDate}.csv`;
+
+        exportTableToCSV(filename);
+    });
+
+});
+            </script>

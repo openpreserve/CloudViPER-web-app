@@ -1,0 +1,28 @@
+            <div class="text-white">
+                <h1>{{{form_h1}}}</h1>
+                <p>{{{form_p}}}</p>
+            </div>
+
+            <div style="background:#fff">
+                <div>
+                    <input id="btn-new-viper" class="btn btn-secondary" value="Start New Viper Instance">
+                </div>
+                <div><h2>Containers:</h2></div>
+                <div id="containers-div">
+                    
+                </div>
+            </div>
+
+            <script>
+                $(document).ready(function() {
+                    $('#btn-new-viper').click(function() {
+                        $.get('/admin/new-instance', function(data) {
+                            // Assuming data is a JSON object
+                            $('#containers-div').append('<div><pre>' + JSON.stringify(data, null, 2) + '</pre><div><a target="_BLANK" href="http://localhost:'+data.container.port+'/">http://localhost:'+data.container.port+'/<a/>&nbsp;-&nbsp;<a target="_BLANK" href="/admin/terminate-instance/'+data.container.id+'">Terminate Container<a/></div></div>');
+                        }).fail(function() {
+                            $('#containers-div').text('Error fetching data.');
+                        });
+                    });
+                });
+
+            </script>

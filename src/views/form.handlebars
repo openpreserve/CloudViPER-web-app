@@ -1,0 +1,67 @@
+            <div class="text-white">
+                <h1>{{{form_h1}}}</h1>
+                <p>{{{form_p}}}</p>
+            </div>
+            <div>
+            <form method="post" action="/submit" class="nps-form">
+                <div class="mb-3">
+                    <label for="score" class="form-label text-white block-label">{{{question_one}}}</label>
+                    <div id="nps-radio-form" class="btn-group btn-group-toggle form-check" data-toggle="buttons">
+                        <label class="btn btn-outline-light btn-lg form-check-label" for="score1">
+                            <input class="form-check-input" type="radio" name="score" value="1" id="score1"> 1
+                        </label>
+                        <label class="btn btn-outline-light btn-lg form-check-label" for="score2">
+                            <input class="form-check-input" type="radio" name="score" value="2" id="score2"> 2
+                        </label>
+                        <label class="btn btn-outline-light btn-lg form-check-label" for="score3">
+                            <input class="form-check-input" type="radio" name="score" value="3" id="score3"> 3
+                        </label>
+                        <label class="btn btn-outline-light btn-lg form-check-label" for="score4">
+                            <input class="form-check-input" type="radio" name="score" value="4" id="score4"> 4
+                        </label>
+                        <label class="btn btn-outline-light btn-lg form-check-label" for="score5">
+                            <input class="form-check-input" type="radio" name="score" value="5" id="score5"> 5
+                        </label>
+                        <label class="btn btn-outline-light btn-lg form-check-label" for="score6">
+                            <input class="form-check-input" type="radio" name="score" value="6" id="score6"> 6
+                        </label>
+                        <label class="btn btn-outline-light btn-lg form-check-label" for="score7">
+                            <input class="form-check-input" type="radio" name="score" value="7" id="score7"> 7
+                        </label>
+                        <label class="btn btn-outline-light btn-lg form-check-label" for="score8">
+                            <input class="form-check-input" type="radio" name="score" value="8" id="score8"> 8
+                        </label>
+                        <label class="btn btn-outline-light btn-lg form-check-label" for="score9">
+                            <input class="form-check-input" type="radio" name="score" value="9" id="score9"> 9
+                        </label>                                                                                                                                                                                                
+                        <label class="btn btn-outline-light btn-lg form-check-label" for="score10">
+                            <input class="form-check-input" type="radio" name="score" value="10" id="score10"> 10
+                        </label>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label for="comment" class="form-label text-white">{{{question_two}}}</label>
+                    <textarea class="form-control" name="comment" id="comment" rows="3"></textarea>
+                </div>
+                <div class="mb-3">
+                    <input class="btn btn-secondary" style="width:100%" type="submit" value="Submit">
+                </div>
+                <input type="hidden" name="form_path" value="{{{form_path}}}">
+                <input type="hidden" name="form_hidden_string_1" value="{{{form_hidden_string_1}}}">
+                <input type="hidden" name="form_hidden_referer" value="{{{referer}}}">
+            </form>
+            </div>
+            <script>
+                // Get all the labels within the form
+                const labels = document.querySelectorAll('.form-check-label');
+
+                // Attach an event listener to each label
+                labels.forEach(label => {
+                    label.addEventListener('click', () => {
+                        // Remove the 'label-checked' class from all labels
+                        labels.forEach(l => l.classList.remove('label-checked'));
+                        // Add the 'label-checked' class to the clicked label
+                        label.classList.add('label-checked');
+                    });
+                });
+            </script>

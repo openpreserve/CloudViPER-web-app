@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{{page_title}}}</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    {{!-- <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" integrity="sha512-9UaG1UHF/lW7q6GXs5kDnT6KvKZt01+08p0Eb02M25ztzJ8TbQxU8gS+AnU6FLq4Q753xogN419iGsonhUrc7E/w==" crossorigin="anonymous" referrerpolicy="no-referrer" /> --}}
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css">
+    <link rel='stylesheet' id='themify-custom-fonts-css' href='https://staging.openpreservation.org/?tb_load_cf=lato|lato|lato|lato:normal,bold' type='text/css' media='all' />
+    <link rel="icon" href="https://openpreservation.org/wp-content/uploads/2019/11/cropped-favicon-32x32.png" sizes="32x32" />
+    <link rel="icon" href="https://openpreservation.org/wp-content/uploads/2019/11/cropped-favicon-192x192.png" sizes="192x192" />
+    <link rel="apple-touch-icon" href="https://openpreservation.org/wp-content/uploads/2019/11/cropped-favicon-180x180.png" />
+    <meta name="msapplication-TileImage" content="https://openpreservation.org/wp-content/uploads/2019/11/cropped-favicon-270x270.png" />
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap-datepicker@1.10.0/dist/js/bootstrap-datepicker.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-datepicker@1.10.0/dist/css/bootstrap-datepicker3.min.css">
+    <script type="text/javascript" charset="utf8" src="//cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+
+
+    <style>
+        body {
+            background-color: #f0f0f0;
+            font-family: montserrat;
+            font-weight: 400;
+            font-size: 16px;
+            color: #555;
+            margin: 0;
+        }
+        .header, .footer {
+            background-color: #363737;
+            color: #fff;
+            padding: 20px;
+        }
+        .main-content {
+            min-height: calc(100vh - 377px); /* Adjust based on your content */
+            padding: 20px;
+        }
+        .footer-columns {
+            display: flex;
+            justify-content: space-between;
+            flex-flow: wrap;
+            align-items: flex-end; /* Align content to the bottom */
+            padding-left: 20px;
+            padding-right:20px;
+            padding-top:10px;
+        }
+        .footer-columns a { 
+            color:#fff;
+            text-decoration: none;
+        }
+        .footer-column {
+            flex: 1;
+        }
+        .footer-column .text-left{
+
+        }
+        .footer-column.text-center{
+            text-align: center;
+        }
+        .footer-column .text-right{
+            align-items: flex-end;
+            align-content: flex-end;
+            text-align: right;
+        }
+        div.footer-column.text-right {
+            text-align: right;
+        }
+        .cover-image-bg {
+            background-position: 50% 50%;
+            background-attachment: scroll;
+            background-repeat: no-repeat;
+            background-size: cover;
+            background-image: url(https://staging.openpreservation.org/wp-content/uploads/2019/11/Homepage-bg.jpg);
+        }
+        .nps-form{
+            text-align: center;
+            width:80%;
+            margin:0 auto;
+            {{!-- display: flex; --}}
+            {{!-- align-items: center; --}}
+        }
+        {{!-- .btn-outline-light {
+            border-color: transparent;
+            background-color: white;
+            color: #333;
+        }
+        .btn-outline-light:checked {
+            background-color: #333;
+            color: white;
+        } --}}
+        .block-label{
+            display: block;
+        }
+        .label-checked{
+            color:#333;
+            background:#fff;
+        }
+        #results-div{
+            background-color: #ccc;
+        }
+        .btn-group > .btn{
+            border: 1px solid #fff;
+        }
+        @media only screen and (max-width: 700px) {
+            #nps-radio-form {
+	            display: inline-table;
+            }
+        .btn-group > .btn{
+            border: 0px solid #fff;
+        }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+		<a href="https://openpreservation.org">
+    		<img decoding="async" src="https://openpreservation.org/wp-content/uploads/2019/11/opf-site-logo-white-margin-110x60.png" width="110" height="60" class=" wp-post-image wp-image-828" alt="opf-site-logo-white" srcset="https://openpreservation.org/wp-content/uploads/2019/11/opf-site-logo-white-margin-110x60.png 110w, https://openpreservation.org/wp-content/uploads/2019/11/opf-site-logo-white-margin-300x165.png 300w, https://openpreservation.org/wp-content/uploads/2019/11/opf-site-logo-white-margin-768x423.png 768w, https://openpreservation.org/wp-content/uploads/2019/11/opf-site-logo-white-margin-1024x564.png 1024w, https://openpreservation.org/wp-content/uploads/2019/11/opf-site-logo-white-margin-136x73.png 136w, https://openpreservation.org/wp-content/uploads/2019/11/opf-site-logo-white-margin-129x69.png 129w, https://openpreservation.org/wp-content/uploads/2019/11/opf-site-logo-white-margin-128x69.png 128w, https://openpreservation.org/wp-content/uploads/2019/11/opf-site-logo-white-margin-127x69.png 127w, https://openpreservation.org/wp-content/uploads/2019/11/opf-site-logo-white-margin-126x69.png 126w, https://openpreservation.org/wp-content/uploads/2019/11/opf-site-logo-white-margin-125x69.png 125w, https://openpreservation.org/wp-content/uploads/2019/11/opf-site-logo-white-margin-124x69.png 124w, https://openpreservation.org/wp-content/uploads/2019/11/opf-site-logo-white-margin-112x60.png 112w, https://openpreservation.org/wp-content/uploads/2019/11/opf-site-logo-white-margin-94x50.png 94w, https://openpreservation.org/wp-content/uploads/2019/11/opf-site-logo-white-margin-92x51.png 92w, https://openpreservation.org/wp-content/uploads/2019/11/opf-site-logo-white-margin-108x60.png 108w, https://openpreservation.org/wp-content/uploads/2019/11/opf-site-logo-white-margin-109x60.png 109w, https://openpreservation.org/wp-content/uploads/2019/11/opf-site-logo-white-margin-111x60.png 111w, https://openpreservation.org/wp-content/uploads/2019/11/opf-site-logo-white-margin.png 1670w" sizes="(max-width: 110px) 100vw, 110px" />
+        </a>        
+    </div>
+    <div class="main-content cover-image-bg">
+        <!-- Your main content goes here -->
+        {{{body}}}
+    </div>
+    <div class="footer">
+        <div class="footer-columns">
+            <div class="footer-column text-left">
+                <div class="tb-column-inner">
+
+                    <div class="module module-text tb_35z5121    ">
+                    <div class="tb_text_wrap">
+                    <p>Open Preservation Foundation<br>11 Jamaica Street<br>Greenock, PA15 1XX</p>
+                    <p>+44 (0) 113 526 6467</p>
+                    <p>info@openpreservation.org</p> </div>
+                    </div>
+
+
+                    <div class="module module-text tb_yqch524    ">
+                    <div class="tb_text_wrap">
+                    <p><a href="https://openpreservation.org/about">About</a>&nbsp;| <a href="https://openpreservation.org/company-information/">Company Information</a></p> </div>
+                    </div>
+
+
+                    <div class="module module-icon tb_vpuw6  small none icon_vertical icon_position_left ">
+                    <div class="module-icon">
+                    <div class="module-icon-item">
+                    <i class="fa fa-copyright ui blue"></i>
+                    <span>Open Preservation Foundation</span>
+                    </div>
+                    </div>
+                    </div>
+
+                    </div>
+            </div>
+            <div class="footer-column text-center">
+                <div class="sub_column module_column col3-1 middle sub_column_post_712 sub_column_0-0-0-1 tb_ehm1772">
+                <div class="tb-column-inner">
+
+                <div class="module module-icon tb_hvbk795 opf_icons-cc xlarge none icon_horizontal  ">
+                <div class="module-icon">
+                <div class="module-icon-item">
+                <a href="http://creativecommons.org/licenses/by-sa/4.0/" rel="noopener" onclick="javascript:window.open('http://creativecommons.org/licenses/by-sa/4.0/', '_blank', 'noopener'); return false;">
+                <i class="icon-cc ui blue"></i>
+                </a>
+                </div>
+                <div class="module-icon-item">
+                <a href="http://creativecommons.org/licenses/by-sa/4.0/" rel="noopener" onclick="javascript:window.open('http://creativecommons.org/licenses/by-sa/4.0/', '_blank', 'noopener'); return false;">
+                <i class="icon-cc-by ui tb_default_color"></i>
+                </a>
+                </div>
+                <div class="module-icon-item">
+                <a href="http://creativecommons.org/licenses/by-sa/4.0/" rel="noopener" onclick="javascript:window.open('http://creativecommons.org/licenses/by-sa/4.0/', '_blank', 'noopener'); return false;">
+                <i class="icon-cc-sa ui tb_default_color"></i>
+                </a>
+                </div>
+                </div>
+                </div>
+
+
+                <div class="module module-text tb_le05434    ">
+                <div class="tb_text_wrap">
+                <p>All content on this website is licensed under <br>CC BY-SA 4.0 unless stated otherwise.</p> </div>
+                </div>
+
+                </div>
+                </div>
+            </div>
+            <div class="footer-column text-right">
+                
+                <div>
+                    <a href="https://twitter.com/openpreserve" onclick="javascript:window.open('https://twitter.com/openpreserve', '_blank', 'noopener'); return false;"><i class="fa fa-twitter"></i> </a>
+                    &nbsp;|&nbsp;
+                    <a href="https://github.com/openpreserve" onclick="javascript:window.open('https://github.com/openpreserve', '_blank', 'noopener'); return false;"><i class="fa fa-github"></i> </a>
+                    &nbsp;|&nbsp;
+                    <a href="https://www.linkedin.com/company/openpreservation/" onclick="javascript:window.open('https://www.linkedin.com/company/openpreservation/', '_blank', 'noopener'); return false;"><i class="fa fa-linkedin"></i> </a>
+                    &nbsp;|&nbsp;
+                    <a href="https://www.youtube.com/c/OpenpreservationOrg" onclick="javascript:window.open('https://www.youtube.com/c/OpenpreservationOrg', '_blank', 'noopener'); return false;"><i class="fa fa-youtube"></i> </a>
+                </div>
+
+                <div>
+                    <a href="https://openpreservation.org/contact/">Contact Us</a>&nbsp;|&nbsp;
+                    <a href="https://openpreservation.org/membership/">Join Us</a>&nbsp;|&nbsp;
+                    <a href="https://openpreservation.org/donate/">Donate</a>
+                </div>
+
+                <div>
+                    <a href="https://openpreservation.org/terms-of-use/">Terms of Use</a>&nbsp;|&nbsp;
+                    <a rel="privacy-policy" href="https://openpreservation.org/privacy-policy/">Privacy Policy</a>
+                </div>
+
+
+            </div>
+        </div>
+    </div>
+</body>
+</html>

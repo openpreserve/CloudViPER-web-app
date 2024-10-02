@@ -4,7 +4,10 @@ const bodyParser = require('body-parser');
 const dotenv = require('dotenv').config();
 const { Op } = require('sequelize');
 
+var Docker = require('dockerode');
+var docker = new Docker({socketPath: '/var/run/docker.sock'});
 
+const { getAvailablePort } = require('../utility/docker-port-generator.js');
 
 const expressSession = require('express-session');
 const MemoryStore = require('memorystore')(expressSession);
@@ -36,8 +39,61 @@ router.get('/', authenticate, (req, res)=>{
       });
 });
 
-router.get('/new-instance', (req, res)=>{
-    res.json({});
+router.get('/new-instance', async (req, res)=>{
+    const availablePort = await getAvailablePort();
+    const containerName = `viper-cloud-${availablePort}`;
+    const portString = `${availablePort}/tcp`;
+
+    console.log(portString);
+
+    docker.createContainer({
+        Image: 'opf-viper-cloud:v0.0.8',
+        name: containerName,
+        ExposedPorts: { '3000/tcp': {} },
+        HostConfig: {
+          PortBindings: { "3000/tcp": [{ "HostPort": availablePort }] },
+        }
+      }, (err, container) => {
+        if (err) {
+            console.log('err: 1');
+            res.json({'error1':err});
+        }
+        //console.log(container);
+        container.start((err, data) => {
+          if (err) {
+            res.json({'error2':err});
+            console.log('err: 2');
+          }
+          console.log('OK: 3');
+          console.log(data);
+          res.json({'container': { id: container.id,
+                                   port: availablePort}});
+        });
+      });
+});
+
+router.get('/terminate-instance/:containerId', async (req, res)=>{
+  const containerID = req.params.containerId;
+  console.log(containerID);
+  const container = docker.getContainer(containerID);
+
+  let ti_response = {}
+
+  container.stop((err, data) => {
+    if (err) {
+      ti_response["STOP-ERROR"] =  {'Error stopping container': err} ;
+    }
+    console.log('Container stopped:', data);
+  
+    // Remove the container
+    container.remove((err, data) => {
+      if (err) {
+        ti_response["REMOVE-ERROR"] =  {'Error removing container': err};
+      } 
+      ti_response["REMOVE"] = {'Container removed': data};
+      res.json(ti_response);
+    });
+  });
 });
 
 // router.get('/all', async (req,res)=>{
