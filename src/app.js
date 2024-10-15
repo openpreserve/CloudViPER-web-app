@@ -26,6 +26,7 @@ app.set('view engine', 'handlebars');
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.use('/', require('./routes/home'));
+app.use('/account', require('./routes/account'));
 app.use('/admin', require('./routes/admin'));
 
 // catch 404 and forward to error handler
