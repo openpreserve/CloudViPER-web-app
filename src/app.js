@@ -14,7 +14,7 @@ if (process.env.NODE_ENV === 'production') {
     app.use((req, res, next)=>{
         //force https
         if (req.headers['x-forwarded-proto'] !== 'https') {
-            return res.redirect(302, ['https://opf.sh', req.url].join('')); 
+            return res.redirect(302, ['https://vipercloud.cc', req.url].join('')); 
         }
         next();
     });

@@ -24,50 +24,77 @@ router.use( bodyParser.urlencoded({ extended: true}) );
 const authenticate = require('../utility/authenticate');
 const database = require('../utility/db.js');
 
-function endOfDay(dateString) {
-    const date = new Date(dateString);
-    date.setHours(23, 59, 59, 999); // Set to the last millisecond of the day
-    return date;
+function generateRandomString(length) {
+  const characters = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  const charactersLength = characters.length;
+  for (let i = 0; i < length; i++) {
+    result += characters.charAt(Math.floor(Math.random() * charactersLength));
+  }
+  return result;
 }
+
 
 /* GET home page. */
 router.get('/', authenticate, (req, res)=>{
     res.render('admin_index', {
         page_title: "ViPER Admin Portal",
         form_h1: "Admin Portal",
-        form_p: "Search and tools", 
+        form_p: "Manage container instances", 
       });
 });
 
 router.get('/new-instance', async (req, res)=>{
-    const availablePort = await getAvailablePort();
-    const containerName = `viper-cloud-${availablePort}`;
-    const portString = `${availablePort}/tcp`;
+    // const availablePort = await getAvailablePort();
+    // const portString = `${availablePort}/tcp`;
 
-    console.log(portString);
+    const instanceUUID = generateRandomString(12);
+    const instanceURL = `${instanceUUID}.${process.env.APP_HOST}`;
+    const containerName = `viper-cloud-${instanceUUID}`;
+
+    const envVars = [
+      "VIRTUAL_PORT=3000",
+      "VIRTUAL_HOST="+instanceURL,
+      "LETSENCRYPT_HOST="+instanceURL,
+      "LETSENCRYPT_EMAIL=sysadmin@openpreservation.org",
+    ];
+
+    console.log(instanceUUID);
 
     docker.createContainer({
-        Image: 'opf-viper-cloud:v0.0.8',
+        Image: 'darrendignam/opf-viper-cloud:v0.0.10',
         name: containerName,
-        ExposedPorts: { '3000/tcp': {} },
-        HostConfig: {
-          PortBindings: { "3000/tcp": [{ "HostPort": availablePort }] },
-        }
+        ExposedPorts: { '3000/tcp': {},'3001/tcp': {} },
+        NetworkingConfig: {
+          EndpointsConfig: {
+              'ingress-proxy': {}
+          }
+        },
+        Env: envVars,
+        // // this was good for localhost, not so much here:
+        // HostConfig: {
+        //   PortBindings: { "3000/tcp": [{ "HostPort": availablePort }] },
+        // }
       }, (err, container) => {
         if (err) {
-            console.log('err: 1');
+            console.log('err: 1:');
+            console.log(err);
             res.json({'error1':err});
         }
         //console.log(container);
         container.start((err, data) => {
           if (err) {
-            res.json({'error2':err});
+            console.log('err: 2');
+            console.log(err);
+            // res.json({'error2':err});
             console.log('err: 2');
           }
           console.log('OK: 3');
           console.log(data);
           res.json({'container': { id: container.id,
-                                   port: availablePort}});
+                                   uuid: instanceUUID,
+                                   url: instanceURL,
+                                  }});
         });
       });
 });

@@ -8,4 +8,12 @@ router.get('/', (req, res)=>{
   res.redirect("/admin/login");
 });
 
+router.get('/privacy-policy', (req, res)=>{
+  res.send("Privacy Policy Coming Soon");
+});
+
+router.get('/terms', (req, res)=>{
+  res.send("Terms and Conditions Coming Soon");
+});
+
 module.exports = router;
