@@ -18,7 +18,7 @@
                     $('#btn-new-viper').click(function() {
                         $.get('/admin/new-instance', function(data) {
                             // Assuming data is a JSON object
-                            $('#containers-div').append('<div><pre>' + JSON.stringify(data, null, 2) + '</pre><div><a target="_BLANK" href="http://localhost:'+data.container.port+'/">http://localhost:'+data.container.port+'/<a/>&nbsp;-&nbsp;<a target="_BLANK" href="/admin/terminate-instance/'+data.container.id+'">Terminate Container<a/></div></div>');
+                            $('#containers-div').append('<div><pre>' + JSON.stringify(data, null, 2) + '</pre><div><a target="_BLANK" href="https://'+data.container.url+'">'+data.container.url+'<a/>&nbsp;-&nbsp;<a target="_BLANK" href="/admin/terminate-instance/'+data.container.id+'">Terminate Container<a/></div></div>');
                         }).fail(function() {
                             $('#containers-div').text('Error fetching data.');
                         });

@@ -14,7 +14,7 @@ if (process.env.NODE_ENV === 'production') {
     app.use((req, res, next)=>{
         //force https
         if (req.headers['x-forwarded-proto'] !== 'https') {
-            return res.redirect(302, ['https://opf.sh', req.url].join('')); 
+            return res.redirect(302, ['https://vipercloud.cc', req.url].join('')); 
         }
         next();
     });
@@ -25,8 +25,10 @@ app.engine('handlebars', exphbs.engine());
 app.set('view engine', 'handlebars');
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.use('/', require('./routes/home'));
-app.use('/admin', require('./routes/admin'));
+// Web Appliaction Routes
+app.use('/',        require('./routes/home'));
+app.use('/account', require('./routes/account'));
+app.use('/admin',   require('./routes/admin'));
 
 // catch 404 and forward to error handler
 app.use(function(req, res ) {

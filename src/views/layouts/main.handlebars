@@ -19,6 +19,9 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap-datepicker@1.10.0/dist/js/bootstrap-datepicker.min.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-datepicker@1.10.0/dist/css/bootstrap-datepicker3.min.css">
     <script type="text/javascript" charset="utf8" src="//cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300..800;1,300..800&display=swap" rel="stylesheet">
 
 
     <style>
@@ -30,11 +33,47 @@
             color: #555;
             margin: 0;
         }
+
+        .bg-blue{
+            background-color: #137DA4;
+            color: #fff;
+            padding: 20px;
+            margin-bottom: 0;
+        }
+        .navbar-brand{
+                        padding:1px;
+        }
+        .navbar-brand > img {
+            height: 50px;
+        }
+        .header-title-p{
+            padding:0; margin:0;
+            font-family: "Open Sans", sans-serif;
+            font-optical-sizing: auto;
+            font-style: normal;
+            font-size: 3em;
+        }
+        .header-title-p > span {
+            font-style: italic;    
+        }
+
+        {{!-- .open-sans{
+        font-family: "Open Sans", sans-serif;
+        font-optical-sizing: auto;
+        font-weight: <weight>;
+        font-style: normal;
+        font-variation-settings:
+            "wdth" 100;
+        } --}}
+        
         .header, .footer {
             background-color: #363737;
             color: #fff;
             padding: 20px;
         }
+        .header{ 
+            background-color: #137DA4;
+        }        
         .main-content {
             min-height: calc(100vh - 377px); /* Adjust based on your content */
             padding: 20px;
@@ -70,11 +109,8 @@
             text-align: right;
         }
         .cover-image-bg {
-            background-position: 50% 50%;
-            background-attachment: scroll;
-            background-repeat: no-repeat;
-            background-size: cover;
-            background-image: url(https://staging.openpreservation.org/wp-content/uploads/2019/11/Homepage-bg.jpg);
+            background-color: #000;
+            box-shadow: inset 0 -80px 80px -80px rgba(170, 170, 170, 0.5);
         }
         .nps-form{
             text-align: center;
@@ -114,13 +150,35 @@
         }
         }
     </style>
+    
 </head>
 <body>
-    <div class="header">
-		<a href="https://openpreservation.org">
-    		<img decoding="async" src="https://openpreservation.org/wp-content/uploads/2019/11/opf-site-logo-white-margin-110x60.png" width="110" height="60" class=" wp-post-image wp-image-828" alt="opf-site-logo-white" srcset="https://openpreservation.org/wp-content/uploads/2019/11/opf-site-logo-white-margin-110x60.png 110w, https://openpreservation.org/wp-content/uploads/2019/11/opf-site-logo-white-margin-300x165.png 300w, https://openpreservation.org/wp-content/uploads/2019/11/opf-site-logo-white-margin-768x423.png 768w, https://openpreservation.org/wp-content/uploads/2019/11/opf-site-logo-white-margin-1024x564.png 1024w, https://openpreservation.org/wp-content/uploads/2019/11/opf-site-logo-white-margin-136x73.png 136w, https://openpreservation.org/wp-content/uploads/2019/11/opf-site-logo-white-margin-129x69.png 129w, https://openpreservation.org/wp-content/uploads/2019/11/opf-site-logo-white-margin-128x69.png 128w, https://openpreservation.org/wp-content/uploads/2019/11/opf-site-logo-white-margin-127x69.png 127w, https://openpreservation.org/wp-content/uploads/2019/11/opf-site-logo-white-margin-126x69.png 126w, https://openpreservation.org/wp-content/uploads/2019/11/opf-site-logo-white-margin-125x69.png 125w, https://openpreservation.org/wp-content/uploads/2019/11/opf-site-logo-white-margin-124x69.png 124w, https://openpreservation.org/wp-content/uploads/2019/11/opf-site-logo-white-margin-112x60.png 112w, https://openpreservation.org/wp-content/uploads/2019/11/opf-site-logo-white-margin-94x50.png 94w, https://openpreservation.org/wp-content/uploads/2019/11/opf-site-logo-white-margin-92x51.png 92w, https://openpreservation.org/wp-content/uploads/2019/11/opf-site-logo-white-margin-108x60.png 108w, https://openpreservation.org/wp-content/uploads/2019/11/opf-site-logo-white-margin-109x60.png 109w, https://openpreservation.org/wp-content/uploads/2019/11/opf-site-logo-white-margin-111x60.png 111w, https://openpreservation.org/wp-content/uploads/2019/11/opf-site-logo-white-margin.png 1670w" sizes="(max-width: 110px) 100vw, 110px" />
-        </a>        
-    </div>
+    {{!-- <div class="header">
+		<a href="https://www.vipercloud.cc">
+    		<img decoding="async" src="http://viper.openpreservation.org/assets/img/viper-menu-logo.png" width="110" class=" wp-post-image wp-image-828" alt="viper-site-logo-white"  sizes="(max-width: 110px) 100vw, 110px" />
+        </a>
+        <p>ViPER Cloud</p>
+    </div> --}}
+
+<nav class="navbar navbar-expand-md navbar-dark fixed-top bg-blue">
+<a class="navbar-brand" href="https://www.vipercloud.cc/"><img src="https://viper.openpreservation.org/assets/img/viper-menu-logo.png" title="ViPER logo" alt="ViPER logo"></a>
+<p class="header-title-p">ViPER<span>Cloud</span></p>
+<div class="collapse navbar-collapse" id="navbarCollapse">
+<ul class="navbar-nav mr-auto">
+<li class="nav-item">
+<a class="nav-link" target="_blank" href="https://viper.openpreservation.org/tools">ViPER Tools</a>
+</li>
+<li class="nav-item">
+<a class="nav-link" target="_blank" href="https://viper.openpreservation.org/faqs">FAQs</a>
+</li>
+<li class="nav-item">
+<a class="nav-link" target="_blank" href="https://viper.openpreservation.org/refs">References</a>
+</li>
+</ul>
+</div>
+</nav>
+
+
     <div class="main-content cover-image-bg">
         <!-- Your main content goes here -->
         {{{body}}}
@@ -181,6 +239,8 @@
 
 
                 <div class="module module-text tb_le05434    ">
+                <div class="tb_text_wrap">
+                <p>ViPER is <b>supported, hosted, and maintained</b> by the Open Preservation Foundation</p> </div>
                 <div class="tb_text_wrap">
                 <p>All content on this website is licensed under <br>CC BY-SA 4.0 unless stated otherwise.</p> </div>
                 </div>
