@@ -1,6 +1,5 @@
 const express = require('express');
 const router = express.Router();
-const bodyParser = require('body-parser');
 const dotenv = require('dotenv').config();
 const { Op } = require('sequelize');
 
@@ -9,18 +8,6 @@ var docker = new Docker({socketPath: '/var/run/docker.sock'});
 
 const { getAvailablePort } = require('../utility/docker-port-generator.js');
 
-const expressSession = require('express-session');
-const MemoryStore = require('memorystore')(expressSession);
-
-const sessionMW = expressSession({
-    store: new MemoryStore({ checkPeriod: 86400000 }), // prune expired entries every 24h
-    secret: process.env.APP_COOKIE_SECRET, // Replace with your own secret key
-    resave: false,
-    saveUninitialized: false,
-});
-
-router.use(sessionMW);
-router.use( bodyParser.urlencoded({ extended: true}) );
 const authenticate = require('../utility/authenticate');
 const database = require('../utility/db.js');
 
