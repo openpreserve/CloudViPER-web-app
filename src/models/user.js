@@ -1,3 +1,4 @@
+const passport = require('passport');
 const Sequelize = require('sequelize'); //this is passed in as lowercase sequelize.... refactor?
 const passportLocalSequelize = require('passport-local-sequelize');
 
@@ -5,10 +6,9 @@ function model(sequelize) {
     const attributes = {
         nickname: { type: Sequelize.JSON },
         email: { type: Sequelize.STRING, allowNull: false },
-        passwordHash: { type: Sequelize.STRING, allowNull: false },
-        title: { type: Sequelize.STRING, allowNull: false },
-        firstName: { type: Sequelize.STRING, allowNull: false },
-        lastName: { type: Sequelize.STRING, allowNull: false },
+        title: { type: Sequelize.STRING, allowNull: true },
+        firstName: { type: Sequelize.STRING, allowNull: true },
+        lastName: { type: Sequelize.STRING, allowNull: true },
         role: { type: Sequelize.STRING, allowNull: false },
 
         oauthID: { type: Sequelize.STRING },
@@ -41,7 +41,7 @@ function model(sequelize) {
         saltField: 'salt'
     });
 
-    return sequelize.define('User', attributes, options);
+    return User;
 }
 
 
