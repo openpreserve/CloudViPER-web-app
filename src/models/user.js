@@ -4,8 +4,8 @@ const passportLocalSequelize = require('passport-local-sequelize');
 
 function model(sequelize) {
     const attributes = {
-        nickname: { type: Sequelize.JSON },
-        email: { type: Sequelize.STRING, allowNull: false },
+        username: { type: Sequelize.STRING, unique: true, allowNull: false },
+        email: { type: Sequelize.STRING, unique: true, allowNull: false, validate: { isEmail: true } },
         title: { type: Sequelize.STRING, allowNull: true },
         firstName: { type: Sequelize.STRING, allowNull: true },
         lastName: { type: Sequelize.STRING, allowNull: true },
@@ -31,12 +31,20 @@ function model(sequelize) {
         scopes: {
             // include hash with this scope
             withHash: { attributes: {}, }
-        }
+        },
+        define: {
+            indexes: [
+                {
+                    unique: true,
+                    fields: ['email', 'username']
+                }
+            ]
+        },
     };
 
     var User = sequelize.define('User', attributes, options);
     passportLocalSequelize.attachToUser(User, {
-        usernameField: 'nickname',
+        usernameField: 'username',
         hashField: 'hash',
         saltField: 'salt'
     });
