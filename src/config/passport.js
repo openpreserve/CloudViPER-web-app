@@ -6,64 +6,78 @@ const database = require('../utility/db.js');
 
 // load the auth variables
 var configAuth = require('./auth');
-var gmail = require('../utility/email-relay.js');
+var mailer = require('../utility/email-relay.js');
+const { sanitizeUsername, updateRoleIfAdmin } = require('../utility/helperFunctions.js');
 
-module.exports = function(passport) {
 
+module.exports = (passport) => {
     passport.use(database.User.createStrategy());
-    passport.serializeUser(database.User.serializeUser());
-    passport.deserializeUser(database.User.deserializeUser());
+    passport.use(new LocalStrategy(database.User.authenticate()));
 
-//   //passport google
-//   passport.use(new GoogleStrategy(configAuth.googleAuth,
-//     function(accessToken, refreshToken, profile, cb) {
-//       //console.log(JSON.stringify( profile ));
-//       LocalAccount.findOne({oauthID: profile.id}, function (err, user) {
-//         if(err) {
-//           console.log("GooglePassport find err: "+err);  // handle errors!
-//         }
-//         if (!err && user !== null) {
-//           return cb(null, user);
-//         } else {
-//           var _email="";
-//           try {
-//               _email = profile.emails[0].value;
-//           } catch (ex) {
-//             console.log(ex);
-//           }
-//           console.log('oauthID: '+ profile.id);
-//           user = new LocalAccount({
-//             oauthID : ""+profile.id,
-//             username : ""+profile.id,
-//             email : _email,
-//             name : profile.displayName,
-//             nickname : profile.displayName,
-//             oauthProvider: "google",
-//             profile_pic: _pic,
-//             oauthProfile : profile,
-//             role:"user",
-//             created : Date.now()          
-//           });
-//           user.save(function(err) {
-//             if(err) {
-//               console.log("GooglePassport save err: "+err);  // handle errors!
-//               if(err.code == 11000){
-//                   tmpErrMsg = "We are sorry but that email address is already taken. Perhaps you have an account already? Try logging in or creating a new account. Alternatively contact us and we will see what we can do.";
-//               }else if(err.message){
-//                   tmpErrMsg = err.message;
-//               }
-//               return cb(null, false, { message: tmpErrMsg });
-//             } else {
-//               console.log("saving GOOGLE user ...");
-//               gmail.sendWelcomeEmail(_email);
-//               return cb(null, user);
-//             }
-//           });
-//         }
-//         //return done(error, user);
-//       });
-//     }
-//   ));
-  
+    passport.serializeUser((user, done) => {
+        done(null, user.oauthID);
+    });
+    
+    passport.deserializeUser((id, done) => {
+        database.User.findOne({ where: { oauthID: id } }).then((user) => {
+            done(null, user);
+        }).catch(done);
+    });
+    
+    passport.use(new GoogleStrategy(configAuth.googleAuth, 
+        (accessToken, refreshToken, profile, done) => {
+            const _email = profile.emails[0].value || '';
+        
+            // First, find a user with the provided oauthID
+            database.User.findOne({ where: { oauthID: profile.id } })
+            .then(user => {
+                if (user) {
+                    // If the user with the oauthID exists, return the user
+                    return done(null, user);
+                } else {
+                    // If no user with the oauthID exists, look for a user with the same email
+                    database.User.findOne({ where: { email: _email } })
+                    .then(existingUser => {
+                        if (existingUser) {
+                            // Update the existing user with Google profile info
+                            existingUser.update({
+                                oauthID: profile.id,
+                                oauthProvider: 'google',
+                                profile_pic: profile.photos[0].value,
+                                oauthProfile: profile
+                            }).then(updatedUser => {
+                                return done(null, updatedUser);
+                            }).catch(err => {
+                                console.log("GooglePassport update err: ", err);
+                                return done(null, false, { message: err.message });
+                            });
+                        } else {
+                            // Create a new user with the Google profile info
+                            database.User.create({
+                                oauthID: profile.id,
+                                email: _email,
+                                name: profile.displayName,
+                                username: sanitizeUsername(profile.displayName),
+                                oauthProvider: 'google',
+                                profile_pic: profile.photos[0].value,
+                                role: updateRoleIfAdmin(_email),
+                                created: Date.now()
+                            }).then(newUser => {
+                                return done(null, newUser);
+                            }).catch(err => {
+                                console.log("GooglePassport create err: ", err);
+                                return done(null, false, { message: err.message });
+                            });
+                        }
+                    }).catch(err => {
+                        console.log("GooglePassport find by email err: ", err);
+                        return done(err);
+                    });
+                }
+            }).catch(err => {
+                console.log("GooglePassport find by oauthID err: ", err);
+                return done(err);
+            });
+        }));
 
 }; //module exports
