@@ -1,29 +1,61 @@
-            <div class="text-white">
-                <h1>Register new Account</h1>
-                <p>By signing up for a new account you are accepting the terms and conditions</p>
-                <p>{{{form_p}}}</p>
-            </div>
-            <div>
-            <form method="post" action="/account/register" class="nps-form">
-                <div class="mb-3">
-                    <div>
-                        <label for="username" class="form-label text-white">Username:</label>
-                        <input type="text" id="username" name="username" placeholder="Username" required>
-                    </div>
+    <div class="text-white">
+        <h1>Register new Account</h1>
+        <p>By signing up for a new account you are accepting the terms and conditions</p>
+        <p>{{{form_p}}}</p>
+    </div>
 
-                    <div>              
-                        <label for="password" class="form-label text-white">Password:</label>
-                        <input type="password" id="password" name="password" placeholder="Password" required>
-                    </div>
-                    <div>
-                        <label for="email" class="form-label text-white">Email:</label>
-                        <input type="text" id="email" name="email" placeholder="email" required>
-                    </div>
-
-                </div>
-                <div class="mb-3">
-                    <input class="btn btn-secondary" style="width:100%" type="submit" value="Submit">
-                </div>
-            </form>
-            <p class="text-white">The admin section of the website uses functional cookies.</p>
+    {{#if error_message}}
+            {{#ifNotEquals error_message ""}}
+            <div class="alert alert-danger" role="alert">
+                {{error_message}}
             </div>
+            {{/ifNotEquals}}
+    {{/if}}
+
+
+  <div class="container">
+    <div class="row justify-content-center">
+
+  <form method="post" action="/account/register" class="nps-form">
+    <table class="table">
+      <tr>
+        <td>
+          <label for="email" class="form-label text-white">Email:</label>
+        </td>
+        <td>
+          <input type="text" id="email" name="email" placeholder="email" required>
+        </td>
+      </tr>        
+      <tr>
+        <td>
+          <label for="username" class="form-label text-white">Username:</label>
+        </td>
+        <td>
+          <input type="text" id="username" name="username" placeholder="Username" required>
+        </td>
+      </tr>
+      <tr>
+        <td>
+          <label for="password" class="form-label text-white">Password:</label>
+        </td>
+        <td>
+          <input type="password" id="password" name="password" placeholder="Password" required>
+        </td>
+      </tr>
+      <tr>
+        <td colspan="2">
+          <input class="btn btn-secondary" style="width:100%" type="submit" value="Submit">
+        </td>
+      </tr>
+    </table>
+  </form>
+    <a href="/account/login/google" class="btn btn-block google-btn">
+        <img src="https://img.icons8.com/color/16/000000/google-logo.png"/> Login with Google
+    </a>
+
+
+    <p class="text-white">The admin section of the website uses functional cookies.</p>
+
+
+
+</div></div>

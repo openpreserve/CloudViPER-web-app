@@ -4,3 +4,11 @@
             </div>
             <div>
 
+    {{#if alertSuccess}}
+            {{#ifNotEquals alertSuccess ""}}
+            <div class="alert alert-success" role="alert">
+                {{alertSuccess}}
+            </div>
+            {{/ifNotEquals}}
+    {{/if}}
+
