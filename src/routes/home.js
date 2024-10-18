@@ -5,7 +5,7 @@ const dotenv = require('dotenv').config();
 
 /* GET home page. */
 router.get('/', (req, res)=>{
-  res.redirect("/admin/login");
+  res.redirect("/account/login");
 });
 
 router.get('/privacy-policy', (req, res)=>{
