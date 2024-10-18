@@ -1,11 +1,15 @@
 const express = require('express');
-const exphbs = require('express-handlebars');
+const exphbs = require("./config/handlebars.js");
 const dotenv = require('dotenv').config();
 const bodyParser = require('body-parser');
 const expressSession = require('express-session');
 const MemoryStore = require('memorystore')(expressSession);
 const passport = require('passport');
+const flash = require('connect-flash');
+
 const app = express();
+
+
 
 const PORT = process.env.PORT || 3000;
 
@@ -35,19 +39,21 @@ if (process.env.NODE_ENV === 'production') {
         next();
     });
 }
+
 // Add session to app
 const sessionMW = expressSession(session_config);
 app.use(sessionMW);
+app.use(flash());
 
 // Configure passport
-require('./config/passport.js')(passport);
 app.use(passport.initialize());
 app.use(passport.session());
+require('./config/passport.js')(passport);
 
 
 // View Engine
 app.set('views', path.join(__dirname, 'views'));
-app.engine('handlebars', exphbs.engine());
+app.engine('handlebars', exphbs.engine);
 app.set('view engine', 'handlebars');
 app.use(express.static(path.join(__dirname, 'public')));
 
