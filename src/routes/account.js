@@ -7,20 +7,23 @@ const { Op } = require('sequelize');
 const authenticate = require('../utility/authenticate');
 const database = require('../utility/db.js');
 
-const mailer = require("../utility/email-relay.js");
+const mailer = require("../utility/emailRelay.js");
 
 var passport = require('passport');
 var bcrypt = require('bcrypt-nodejs');
 var crypto = require('crypto');
 
 const { sanitizeUsername } = require('../utility/helperFunctions.js');
+const emailRelay = require('../utility/emailRelay.js');
 
 router.get('/', (req,res) => {
     if (req.user) {
         const alertSuccess = req.flash('alert-success');
+        //console.log( JSON.stringify(req.user) );
+
         res.render('user_account_edit', {
             // csrfToken: req.csrfToken(),
-            user: req.user,
+            user: req.user.toJSON(),
             alertSuccess: alertSuccess
         });
     } else {
@@ -41,34 +44,19 @@ router.post('/register', (req, res) => {
         created: Date.now()
     }), req.body.password, (err, user) => {
         if (err) {
-            var tmpErrMsg = "There was a problem creating your account. Please try again or contact our team who can assist.";
-            res.format({
-                html: () => {
-                    console.log("sign up err: " + err.parent.errno);
-                    if (err.parent.errno == 1062) {
-                        tmpErrMsg = "We are sorry but that email or username is already taken. If this is your account try resetting your password. Or use the social login.";
-                    } else if ( err.errors && err.errors[0].message ) {
-                        tmpErrMsg = err.errors[0].message;
-                    }
-                    res.render('user_account_register', {
-                        error_message: tmpErrMsg,
-                        page_title: 'register a new ViPER Cloud account',
-                        loggedin: 0
-                    });
-                },
-                //JSON response will show the newly created blob
-                json: () => {
-                    res.json(responseData);
-                }
-            });
+            console.log(err);
+            res.status(500).json({ message: 'Error creating user.' });
         } else {
-            mailer.sendWelcomeEmail(req.body.email);
+            mailer.sendWelcomeEmail(req.body.email,sanitizeUsername(req.body.username));
             req.flash('alert-success', 'Thanks for setting up a ViPER account - you may need to contact an admin to get full access to the services on offer.');
+            // res.redirect('/account');
+            //console.log( JSON.stringify(user) );
             req.login(user, (err) => {
-                if (!err) {
-                    res.redirect('/account');
+                if (err) {
+                    console.log(err);
+                    res.status(500).json({ message: 'Error logging in user.' });
                 } else {
-                    res.json(err);
+                    res.redirect('/account');
                 }
             });
         }
@@ -108,5 +96,81 @@ router.get('/google/return', passport.authenticate('google', { failureRedirect: 
     req.flash('alert-success', 'Thanks for setting up a ViPER account - you may need to contact an admin to get full access to the services on offer.');
     res.redirect('/account');
 });
+
+router.get('/reset-password',
+function (req, res) {
+    res.render('user_account/forgot_password');
+})
+
+router.post('/reset-password', (req, res) => {
+    const { email } = req.body;
+    const token = crypto.randomBytes(20).toString('hex');
+
+    database.User.findOne({ where: { email } }).then(user => {
+        if (!user) {
+            // return res.status(400).json({ message: 'No account with that email address exists.' });
+            // For security reasons, don't return information that leaks info about the service and users...
+            return res.render('user_account_post_reset_password');
+        }
+        
+        user.update({
+            resetPasswordToken: token,
+            resetPasswordExpires: Date.now() + 3600000,
+        }).then(() => {
+            text = `You are receiving this message because you have requested the reset of the password for your account.\n\n
+                Please click on the following link, or paste this into your browser to complete the process:\n\n
+                https://www.vipercloud.cc/account/reset-token/${token}\n\n
+                If you did not request this, please ignore this email and your password will remain unchanged.\n`
+
+            emailRelay.sendResetEmail(email, text);
+            res.render('user_account_post_reset_password');
+
+        }).catch(err => {
+            console.log("Error updating user: ", err);
+            // res.status(500).json({ message: 'Error updating user.' });
+            res.render('user_account_post_reset_password');
+        });
+    }).catch(err => {
+        console.log("Error finding user: ", err);
+        // res.status(500).json({ message: 'Error finding user.' });
+        res.render('user_account_post_reset_password');
+    });
+});
+
+router.get('/reset-token/:token', (req, res) => {
+    database.User.findOne({ where: { resetPasswordToken: req.params.token, resetPasswordExpires: { $gt: Date.now() } } }).then(user => {
+        if (!user) {
+            return res.status(400).json({ message: 'Password reset token is invalid or has expired.' });
+        }
+        res.render('user_account_get_reset_token');
+    });
+});
+
+router.post('/reset-token/:token', (req, res) => {
+    database.User.findOne({ where: { resetPasswordToken: req.params.token, resetPasswordExpires: { $gt: Date.now() } } }).then(user => {
+        if (!user) {
+            return res.status(400).json({ message: 'Password reset token is invalid or has expired.' });
+        }
+        user.setPassword(req.body.password, (err, updatedUser) => {
+            if (err) {
+                console.log("Error setting new password: ", err);
+                return res.status(500).json({ message: 'Error setting new password.' });
+            }
+            updatedUser.resetPasswordToken = null; // Clear the reset token
+            updatedUser.save().then(() => {
+                // res.status(200).json({ message: 'Password has been updated.' });
+                res.render('user_account_post_reset_token');
+            }).catch(saveErr => {
+                console.log("Error saving user: ", saveErr);
+                res.status(500).json({ message: 'Error saving user.' });
+            });
+        });
+    }).catch(err => {
+        console.log("Error finding user by token: ", err);
+        res.status(500).json({ message: 'Error finding user.' });
+    });
+});
+
+
 
 module.exports = router;
