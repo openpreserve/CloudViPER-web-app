@@ -15,11 +15,11 @@ module.exports = (passport) => {
     passport.use(new LocalStrategy(database.User.authenticate()));
 
     passport.serializeUser((user, done) => {
-        done(null, user.oauthID);
+        done(null, user.email);
     });
     
-    passport.deserializeUser((id, done) => {
-        database.User.findOne({ where: { oauthID: id } }).then((user) => {
+    passport.deserializeUser((email, done) => {
+        database.User.findOne({ where: { email: email} }).then((user) => {
             done(null, user);
         }).catch(done);
     });
@@ -63,7 +63,7 @@ module.exports = (passport) => {
                                 role: updateRoleIfAdmin(_email),
                                 created: Date.now()
                             }).then(newUser => {
-                                mailer.sendWelcomeEmail(_email);
+                                mailer.sendWelcomeEmail(_email, sanitizeUsername(profile.displayName));
                                 return done(null, newUser);
                             }).catch(err => {
                                 console.log("GooglePassport create err: ", err);
