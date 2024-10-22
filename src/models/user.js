@@ -4,8 +4,8 @@ const passportLocalSequelize = require('passport-local-sequelize');
 
 function model(sequelize) {
     const attributes = {
-        username: { type: Sequelize.STRING, unique: true, allowNull: false },
-        email: { type: Sequelize.STRING, unique: true, allowNull: false, validate: { isEmail: true } },
+        username: { type: Sequelize.STRING, allowNull: false },
+        email: { type: Sequelize.STRING, allowNull: false, validate: { isEmail: true } },
         title: { type: Sequelize.STRING, allowNull: true },
         firstName: { type: Sequelize.STRING, allowNull: true },
         lastName: { type: Sequelize.STRING, allowNull: true },
@@ -32,14 +32,16 @@ function model(sequelize) {
             // include hash with this scope
             withHash: { attributes: {}, }
         },
-        define: {
-            indexes: [
-                {
-                    unique: true,
-                    fields: ['email', 'username']
-                }
-            ]
-        },
+        indexes: [
+            {
+                unique: true,
+                fields: ['username']
+            },
+            {
+                unique: true,
+                fields: ['email']
+            },
+        ]
     };
 
     var User = sequelize.define('User', attributes, options);
