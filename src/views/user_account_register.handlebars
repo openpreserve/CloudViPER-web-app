@@ -13,49 +13,60 @@
     {{/if}}
 
 
-  <div class="container">
-    <div class="row justify-content-center">
-
-  <form method="post" action="/account/register" class="nps-form">
-    <table class="table">
-      <tr>
-        <td>
-          <label for="email" class="form-label text-white">Email:</label>
-        </td>
-        <td>
-          <input type="text" id="email" name="email" placeholder="email" required>
-        </td>
-      </tr>        
-      <tr>
-        <td>
-          <label for="username" class="form-label text-white">Username:</label>
-        </td>
-        <td>
-          <input type="text" id="username" name="username" placeholder="Username" required>
-        </td>
-      </tr>
-      <tr>
-        <td>
-          <label for="password" class="form-label text-white">Password:</label>
-        </td>
-        <td>
-          <input type="password" id="password" name="password" placeholder="Password" required>
-        </td>
-      </tr>
-      <tr>
-        <td colspan="2">
-          <input class="btn btn-secondary" style="width:100%" type="submit" value="Submit">
-        </td>
-      </tr>
-    </table>
-  </form>
-    <a href="/account/login/google" class="btn btn-block google-btn">
-        <img src="https://img.icons8.com/color/16/000000/google-logo.png"/> Login with Google
-    </a>
+    <!-- <div class="row justify-content-center"> -->
 
 
-    <p class="text-white">The admin section of the website uses functional cookies.</p>
+        <div class="row">
+            <div class="col-md-4">
+              <form method="post" action="/account/register" class="register-form">
+                <table class="table">
+                  <tr>
+                    <td>
+                      <label for="email" class="form-label text-white">Email:</label>
+                    </td>
+                    <td>
+                      <input type="text" id="email" name="email" placeholder="email" required>
+                    </td>
+                  </tr>        
+                  <tr>
+                    <td>
+                      <label for="username" class="form-label text-white">Username:</label>
+                    </td>
+                    <td>
+                      <input type="text" id="username" name="username" placeholder="Username" required>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <label for="password" class="form-label text-white">Password:</label>
+                    </td>
+                    <td>
+                      <input type="password" id="password" name="password" placeholder="Password" required>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td colspan="2">
+                      <input class="btn btn-secondary" style="width:100%" type="submit" value="Submit">
+                    </td>
+                  </tr>
+
+                  <tr>
+                    <td colspan="2">
+                      <a href="/account/login/google" class="btn btn-block google-btn" style="width:100%"><img src="https://img.icons8.com/color/16/000000/google-logo.png"/>Login with Google</a>
+                    </td>
+                  </tr>
+
+
+                </table>
+              </form>
 
 
 
-</div></div>
+                <p class="text-white">The admin section of the website uses functional cookies.</p>
+          </div>
+          <div class="col-md-8">
+                <h2>ViPER Cloud</h2>
+                <p>Welcome to our app! Here, we prioritize your privacy and security above all. Feel free to log in and explore our features. Remember, we never share your information with anyone.</p>
+                <p>If you encounter any issues while logging in, please contact our support team for assistance. We're here to help you every step of the way.</p>
+          </div>
+      </div>
