@@ -6,7 +6,7 @@ const database = require('../utility/db.js');
 
 // load the auth variables
 var configAuth = require('./auth');
-var mailer = require('../utility/email-relay.js');
+var mailer = require('../utility/emailRelay.js');
 const { sanitizeUsername, updateRoleIfAdmin } = require('../utility/helperFunctions.js');
 
 
@@ -63,6 +63,7 @@ module.exports = (passport) => {
                                 role: updateRoleIfAdmin(_email),
                                 created: Date.now()
                             }).then(newUser => {
+                                mailer.sendWelcomeEmail(_email);
                                 return done(null, newUser);
                             }).catch(err => {
                                 console.log("GooglePassport create err: ", err);
