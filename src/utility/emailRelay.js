@@ -4,11 +4,11 @@ const sgMail = require('@sendgrid/mail')
 sgMail.setApiKey(process.env.SENDGRID_API_KEY)
 
 module.exports = {
-    sendWelcomeEmail : function(in_email){
+    sendWelcomeEmail : function(in_email, in_username){
         sgMail.send({
             to: in_email, 
             from: 'no-reply@vipercloud.cc',
-            subject: 'Welcome to ViPER Cloud',
+            subject: 'Welcome to ViPER Cloud '+in_username,
             text: 'You are now part of the ViPER community. Access ViPER Cloud via https://www.vipercloud.cc/',
             html: '<h2>You are now part of the ViPER community</h2>'+
             'Access ViPER Cloud via <a href="https://www.vipercloud.cc">www.vipercloud.cc</a>.<br>\n\n'+
@@ -23,4 +23,17 @@ module.exports = {
           console.error(error)
         });
     },
+    sendResetEmail : function(in_email, in_text){
+      sgMail.send({
+          to: in_email, 
+          from: 'no-reply@vipercloud.cc',
+          subject: 'ViPER Cloud - Password reset',
+          text: in_text,
+      }).then(() => {
+        console.log('Email sent')
+      })
+      .catch((error) => {
+        console.error(error)
+      });
+  },
 };
