@@ -1,0 +1,35 @@
+    <div class="text-white">
+        <h1>{{{form_h1}}}</h1>
+        <p>{{{form_p}}}</p>
+    </div>
+
+    {{#if error_message}}
+            {{#ifNotEquals error_message ""}}
+            <div class="alert alert-danger" role="alert">
+                {{error_message}}
+            </div>
+            {{/ifNotEquals}}
+    {{/if}}
+
+
+    <div class="container">
+        <div class="row">
+            <div class="col-md-4">
+                <form method="post" action="/account/reset-token" class="nps-form">
+                    <div class="mb-3">
+                        <label for="email" class="form-label text-white">New Password:</label>
+                        <input type="text" id="password" name="password" placeholder="password" required>
+                    </div>
+                    <div class="mb-3">
+                        <input class="btn btn-secondary" style="width:100%" type="submit" value="Reset Password">
+                    </div>
+                </form>
+
+                <p class="text-white">The admin section of the website uses functional cookies.</p>
+            </div>
+            <div class="col-md-4">
+                <h2>Password Reset</h2>
+                <p>Please enter a new password for this account.</p>
+            </div>
+        </div>
+    </div>
