@@ -64,8 +64,8 @@ app.use('/admin', require('./routes/admin'));
 
 if (process.env.NODE_ENV === 'production') {
     app.use(function (req, res, next) {
-        if (req.headers.host === 'example.com') {
-            res.redirect(301, 'https://www.example.com' + req.originalUrl);
+        if (req.headers.host === 'vipercloud.cc') {
+            res.redirect(302, 'https://www.vipercloud.cc' + req.originalUrl);
         } else {
             next();
         }
