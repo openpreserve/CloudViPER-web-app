@@ -62,6 +62,16 @@ app.use('/', require('./routes/home'));
 app.use('/account', require('./routes/account'));
 app.use('/admin', require('./routes/admin'));
 
+if (process.env.NODE_ENV === 'production') {
+    app.use(function (req, res, next) {
+        if (req.headers.host === 'example.com') {
+            res.redirect(301, 'https://www.example.com' + req.originalUrl);
+        } else {
+            next();
+        }
+    });
+}
+
 // catch 404 and forward to error handler
 app.use(function(req, res ) {
     res.json({"error":{code:404,status:"not found"}});
