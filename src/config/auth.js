@@ -1,7 +1,7 @@
 // config/auth.js
 
 module.exports = {
-    'googleAuth' : 
+    'googleAuth':
     {
         clientID: process.env.GOOGLE_AUTH_CLIENT_ID,
         clientSecret: process.env.GOOGLE_AUTH_CLIENT_SECRET,
