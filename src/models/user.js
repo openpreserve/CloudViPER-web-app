@@ -2,6 +2,17 @@ const passport = require('passport');
 const Sequelize = require('sequelize'); //this is passed in as lowercase sequelize.... refactor?
 const passportLocalSequelize = require('passport-local-sequelize');
 
+/*
+ROLES:
+
+user - nothing
+testing - can run one viper
+member - can run one viper
+subscriber - pays for use
+admin - viper and user management
+
+*/
+
 function model(sequelize) {
     const attributes = {
         username: { type: Sequelize.STRING, allowNull: false },

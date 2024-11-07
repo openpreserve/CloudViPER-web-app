@@ -17,8 +17,9 @@
             <div class="col-md-4">
                 <form method="post" action="/account/reset-token" class="nps-form">
                     <div class="mb-3">
-                        <label for="email" class="form-label text-white">New Password:</label>
-                        <input type="text" id="password" name="password" placeholder="password" required>
+                        <input type="text" id="token" name="token" value="{{{token}}}" hidden>
+                        <label for="password" class="form-label text-white">New Password:</label>
+                        <input type="password" id="password" name="password" placeholder="password" required>
                     </div>
                     <div class="mb-3">
                         <input class="btn btn-secondary" style="width:100%" type="submit" value="Reset Password">
