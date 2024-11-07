@@ -1,6 +1,6 @@
             <div class="text-white">
                 <h1>User:</h1>
-                <p>{{{user}}}</p>
+                {{!-- <p>{{{user}}}</p> --}}
 
                 <table class="table table-striped">
                 <thead class="thead-dark">
@@ -17,8 +17,12 @@
                     <td>{{user.role}}</td>
                     </tr>
                 </tbody>
+                </table>
 
-                {{!-- <tbody>
+              {{!-- {{#ifEquals user.role 'user' }}
+              <p>hello user</p>
+                <table class="table table-striped">
+                <tbody>
                     {{#each user}}
                     <tr>
                     <td>{{this.username}}</td>
@@ -26,11 +30,16 @@
                     <td>{{this.role}}</td>
                     </tr>
                     {{/each}}
-                </tbody> --}}
+                </tbody>
                 </table>
+              {{/ifEquals}} --}}
+
+              <p>
+                Hello new user. If you would like to access viper an Admin will have to activate your account. Please speak to an admin and they can do this for you.
+              </p>
 
             </div>
-            <div>
+
 
     {{#if alertSuccess}}
             {{#ifNotEquals alertSuccess ""}}
