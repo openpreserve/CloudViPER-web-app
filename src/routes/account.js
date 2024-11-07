@@ -15,17 +15,40 @@ var crypto = require('crypto');
 
 const { sanitizeUsername } = require('../utility/helperFunctions.js');
 const emailRelay = require('../utility/emailRelay.js');
+const { dfareporting } = require('googleapis/build/src/apis/dfareporting/index.js');
 
-router.get('/', (req,res) => {
+/*
+ROLES:
+
+user - nothing
+testing - can run one viper
+member - can run one viper
+subscriber - pays for use
+admin - viper and user management
+
+*/
+
+router.get('/', (req, res) => {
     if (req.user) {
         const alertSuccess = req.flash('alert-success');
         //console.log( JSON.stringify(req.user) );
 
-        res.render('user_account_edit', {
-            // csrfToken: req.csrfToken(),
-            user: req.user.toJSON(),
-            alertSuccess: alertSuccess
-        });
+        switch (req.user.role) {
+            case 'admin':
+                res.redirect('/service/admin');
+            case 'testing':
+                res.redirect('/service/testing');
+            case 'member':
+                res.redirect('/service/member');
+
+            default:
+                res.render('user_account_index', {
+                    // csrfToken: req.csrfToken(),
+                    user: req.user.toJSON(),
+                    alertSuccess: alertSuccess
+                });
+        }
+
     } else {
         res.redirect('/account/login');
     }
@@ -47,7 +70,7 @@ router.post('/register', (req, res) => {
             console.log(err);
             res.status(500).json({ message: 'Error creating user.' });
         } else {
-            mailer.sendWelcomeEmail(req.body.email,sanitizeUsername(req.body.username));
+            mailer.sendWelcomeEmail(req.body.email, sanitizeUsername(req.body.username));
             req.flash('alert-success', 'Thanks for setting up a ViPER account - you may need to contact an admin to get full access to the services on offer.');
             // res.redirect('/account');
             //console.log( JSON.stringify(user) );
@@ -78,7 +101,7 @@ router.post('/login', passport.authenticate('local', { failureRedirect: '/accoun
             console.log("Login failed... redirecting....");
             res.redirect('/account/login');
         }
-});
+    });
 
 router.get('/logout', (req, res) => {
     req.logout((err) => {
@@ -92,15 +115,15 @@ router.get('/logout', (req, res) => {
 //Google oAuth routes
 router.get('/login/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
 
-router.get('/google/return', passport.authenticate('google', { failureRedirect: '/account/login', failureFlash: true }),  (req, res) => {
+router.get('/google/return', passport.authenticate('google', { failureRedirect: '/account/login', failureFlash: true }), (req, res) => {
     req.flash('alert-success', 'Thanks for setting up a ViPER account - you may need to contact an admin to get full access to the services on offer.');
     res.redirect('/account');
 });
 
 router.get('/reset-password',
-function (req, res) {
-    res.render('user_account/forgot_password');
-})
+    function (req, res) {
+        res.render('user_account_get_reset_password');
+    })
 
 router.post('/reset-password', (req, res) => {
     const { email } = req.body;
@@ -112,7 +135,7 @@ router.post('/reset-password', (req, res) => {
             // For security reasons, don't return information that leaks info about the service and users...
             return res.render('user_account_post_reset_password');
         }
-        
+
         user.update({
             resetPasswordToken: token,
             resetPasswordExpires: Date.now() + 3600000,
@@ -138,16 +161,23 @@ router.post('/reset-password', (req, res) => {
 });
 
 router.get('/reset-token/:token', (req, res) => {
-    database.User.findOne({ where: { resetPasswordToken: req.params.token, resetPasswordExpires: { $gt: Date.now() } } }).then(user => {
+    const _token = req.params.token;
+    database.User.findOne({ where: { resetPasswordToken: _token, resetPasswordExpires: { [Op.gt]: Date.now() } } }).then(user => {
         if (!user) {
             return res.status(400).json({ message: 'Password reset token is invalid or has expired.' });
         }
-        res.render('user_account_get_reset_token');
+        res.render('user_account_get_reset_token',
+            {
+                token: _token,
+            }
+        );
     });
 });
 
-router.post('/reset-token/:token', (req, res) => {
-    database.User.findOne({ where: { resetPasswordToken: req.params.token, resetPasswordExpires: { $gt: Date.now() } } }).then(user => {
+router.post('/reset-token', (req, res) => {
+    const _token = req.body.token;
+
+    database.User.findOne({ where: { resetPasswordToken: _token, resetPasswordExpires: { [Op.gt]: Date.now() } } }).then(user => {
         if (!user) {
             return res.status(400).json({ message: 'Password reset token is invalid or has expired.' });
         }
@@ -157,6 +187,7 @@ router.post('/reset-token/:token', (req, res) => {
                 return res.status(500).json({ message: 'Error setting new password.' });
             }
             updatedUser.resetPasswordToken = null; // Clear the reset token
+            updatedUser.resetPasswordExpires = null; // Clear the reset token
             updatedUser.save().then(() => {
                 // res.status(200).json({ message: 'Password has been updated.' });
                 res.render('user_account_post_reset_token');
