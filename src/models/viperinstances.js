@@ -2,11 +2,23 @@ const { DataTypes } = require('sequelize');
 
 function model(sequelize) {
     const attributes = {
-        uniqueID: {
+        // owner: {
+        //     type: DataTypes.STRING,
+        //     allowNull: true,
+        // },        
+        uuid: {
             type: DataTypes.STRING,
             allowNull: true,
         },
-        webAddress: {
+        dockerid: {
+            type: DataTypes.STRING,
+            allowNull: true,
+        },
+        name: {
+            type: DataTypes.STRING,
+            allowNull: true,
+        },
+        url: {
             type: DataTypes.STRING,
             allowNull: true,
         },
