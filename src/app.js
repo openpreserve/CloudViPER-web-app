@@ -60,7 +60,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Add routes
 app.use('/', require('./routes/home'));
 app.use('/account', require('./routes/account'));
-app.use('/admin', require('./routes/admin'));
+app.use('/service', require('./routes/service'));
 
 if (process.env.NODE_ENV === 'production') {
     app.use(function (req, res, next) {
