@@ -3,14 +3,13 @@ const exphbs = require("./config/handlebars.js");
 const dotenv = require('dotenv').config();
 const bodyParser = require('body-parser');
 const expressSession = require('express-session');
-const MemoryStore = require('memorystore')(expressSession);
+const MySQLStore = require('express-mysql-session')(expressSession);
 const passport = require('passport');
 const flash = require('connect-flash');
 
+var configAuth = require('./config/auth');
+
 const app = express();
-
-
-
 const PORT = process.env.PORT || 3000;
 
 // Begin server setup
@@ -23,7 +22,7 @@ app.set('trust proxy', 1);
 var session_config = {
     name:"vipercloud.sid",
     cookie: { maxAge: ((4 * 24) * 60 * 60 * 1000) }, // 4 days
-    store: new MemoryStore({ checkPeriod: 86400000 }), // prune expired entries every 24h
+    store: new MySQLStore( configAuth.mysqlSessionAuth ),
     secret: process.env.APP_COOKIE_SECRET, // Replace with your own secret key
     resave: false,
     saveUninitialized: false,
@@ -64,6 +63,7 @@ app.use('/service', require('./routes/service'));
 
 if (process.env.NODE_ENV === 'production') {
     app.use(function (req, res, next) {
+        console.log( req.headers.host );
         if (req.headers.host === 'vipercloud.cc') {
             res.redirect(302, 'https://www.vipercloud.cc' + req.originalUrl);
         } else {
