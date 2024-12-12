@@ -2,10 +2,10 @@ const { DataTypes } = require('sequelize');
 
 function model(sequelize) {
     const attributes = {
-        // owner: {
-        //     type: DataTypes.STRING,
-        //     allowNull: true,
-        // },        
+        owner: {
+            type: DataTypes.STRING,
+            allowNull: true,
+        },        
         uuid: {
             type: DataTypes.STRING,
             allowNull: true,
@@ -26,6 +26,16 @@ function model(sequelize) {
             type: DataTypes.DATE,
             allowNull: false,
             defaultValue: DataTypes.NOW, // Set a default value if needed
+        },
+        createdAt: {
+            type: DataTypes.DATE,
+            allowNull: false,
+            defaultValue: DataTypes.NOW, // Set a default value if needed
+        },
+        status: {
+            type: DataTypes.STRING,
+            allowNull: false,
+            defaultValue: 'active'
         },
     };
 
