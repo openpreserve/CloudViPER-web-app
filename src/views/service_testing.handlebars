@@ -1,28 +1,140 @@
             <div class="text-white">
-                <h1>Testing Account</h1>
+                <h1>Viper Testing Account</h1>
                 <p>{{{form_p}}}</p>
             </div>
 
-            <div style="background:#fff">
-                <div>
-                    <input id="btn-new-viper" class="btn btn-secondary" value="Start New Viper Instance">
-                </div>
-                <div><h2>Your Containers:</h2></div>
-                <div id="containers-div">
-                    
-                </div>
+  <style>
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 8px;
+    }
+    th {
+      background-color: #f2f2f2;
+      text-align: left;
+    }
+  </style>
+
+  <div id="react-root" style="background:#fff"></div>
+
+
+  <!-- Add React, ReactDOM, and Babel scripts -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.development.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.development.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/6.25.0/babel.min.js"></script>
+
+  <script type="text/babel">
+
+    class ViperInstanceList extends React.Component {
+      constructor(props) {
+        super(props);
+        this.state = {
+          instances: [],
+          isLoading: true,
+          error: null,
+        };
+      }
+
+      componentDidMount() {
+        this.fetchInstances();
+      }
+
+      fetchInstances = () => {
+        fetch('/service/viperinstances')
+          .then(response => response.json())
+          .then(data => this.setState({ instances: data, isLoading: false }))
+          .catch(error => this.setState({ error, isLoading: false }));
+      }
+
+      startNewInstance = () => {
+        fetch('/service/new-instance', { method: 'GET' })
+          .then(response => {
+            if (response.ok) {
+              this.fetchInstances();
+            }
+          })
+          .catch(error => console.error('Error starting new instance:', error));
+      }
+
+      removeInstance = (dockerid) => {
+        fetch(`/service/terminate-instance/${dockerid}`, { method: 'GET' })
+          .then(response => {
+            if (response.ok) {
+              this.setState(prevState => ({
+                instances: prevState.instances.filter(instance => instance.dockerid !== dockerid)
+              }));
+            }
+          })
+          .catch(error => console.error('Error terminating instance:', error));
+      }
+
+      formatUrl = (url) => {
+        return `https://${url}`;
+      }
+
+      render() {
+        const { instances, isLoading, error } = this.state;
+
+        if (isLoading) {
+          return <p>Loading instances...</p>;
+        }
+
+        if (error) {
+          return <p>Error loading instances: {error.message}</p>;
+        }
+
+        return (
+          <div>
+            <h1>Viper Instances</h1>
+            <div className="btn-container">
+              <button className="btn btn-primary" onClick={this.startNewInstance}>Start New Instance</button>
             </div>
 
-            <script>
-                $(document).ready(function() {
-                    $('#btn-new-viper').click(function() {
-                        $.get('/service/new-instance', function(data) {
-                            // Assuming data is a JSON object
-                            $('#containers-div').append('<div><pre>' + JSON.stringify(data, null, 2) + '</pre><div><a target="_BLANK" href="https://'+data.container.url+'">'+data.container.url+'<a/>&nbsp;-&nbsp;<a target="_BLANK" href="/service/terminate-instance/'+data.container.id+'">Terminate Container<a/></div></div>');
-                        }).fail(function() {
-                            $('#containers-div').text('Error fetching data.');
-                        });
-                    });
-                });
+            <table className="table table-striped">
+              <thead>
+                <tr>
+                  <th>UUID</th>
+                  <th>Docker ID</th>
+                  <th>Name</th>
+                  <th>URL</th>
+                  <th>Created At</th>
+                  <th>Owner Id</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {instances.map(instance => (
+                  <tr key={instance.uuid}>
+                    <td>{instance.uuid}</td>
+                    <td>{instance.dockerid}</td>
+                    <td>{instance.name}</td>
+                    <td><a href={this.formatUrl(instance.url)} target="_blank" rel="noopener noreferrer">{instance.url}</a></td>
+                    <td>{new Date(instance.createdAt).toLocaleString()}</td>
+                    <td>{instance.owner}</td>
+                    <td>
+                      <button className="btn btn-danger" onClick={() => this.removeInstance(instance.dockerid)}>Remove Instance</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      }
+    }
 
-            </script>
+    class App extends React.Component {
+      render() {
+        return (
+          <div>
+            <ViperInstanceList />
+          </div>
+        );
+      }
+    }
+
+    ReactDOM.render(<App />, document.getElementById('react-root'));
+  </script>
