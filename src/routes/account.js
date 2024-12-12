@@ -6,6 +6,7 @@ const { Op } = require('sequelize');
 
 const authenticate = require('../utility/authenticate');
 const database = require('../utility/db.js');
+const mysql = require('mysql2');
 
 const mailer = require("../utility/emailRelay.js");
 
@@ -15,7 +16,10 @@ var crypto = require('crypto');
 
 const { sanitizeUsername } = require('../utility/helperFunctions.js');
 const emailRelay = require('../utility/emailRelay.js');
-const { dfareporting } = require('googleapis/build/src/apis/dfareporting/index.js');
+var configAuth = require('../config/auth');
+// const { dfareporting } = require('googleapis/build/src/apis/dfareporting/index.js');
+
+router.use(express.json()); // parse json
 
 /*
 ROLES:
@@ -36,10 +40,13 @@ router.get('/', (req, res) => {
         switch (req.user.role) {
             case 'admin':
                 res.redirect('/service/admin');
+                break;
             case 'testing':
                 res.redirect('/service/testing');
+                break;
             case 'member':
                 res.redirect('/service/member');
+                break;
 
             default:
                 res.render('user_account_index', {
@@ -51,6 +58,117 @@ router.get('/', (req, res) => {
 
     } else {
         res.redirect('/account/login');
+    }
+});
+
+router.post('/update', (req, res) => {
+    const _action = req.body.action;
+    const _userid = req.body.userid;
+
+    if (req.user && (req.user.role == 'admin' || req.user.id == req.body.userid)) {
+        switch (_action) {
+            case 'get':
+                database.User.findOne({ where: { id: _userid } }).then(user => {
+                    if (!user) {
+                        return res.status(400).json({ message: 'Not found.' });
+                    }
+                }).catch(err => {
+                    console.log("Error finding user by id: ", _userid);
+                    res.status(500).json({ message: 'Error finding user.' });
+                });
+
+                break;
+
+            default:
+                res.json(req.user);//send back the actuall user, like get
+        }
+    } else {
+        res.status(403);
+    }
+});
+
+router.get('/users', (req, res) => {
+    if (req.user && req.user.role == 'admin') {
+        database.User.findAll().then((users) => {
+            // Remove 'salt' and 'hash' from each user
+            const safeUsers = users.map(user => {
+                const { salt, hash, ...safeUser } = user.toJSON(); // Use toJSON() to get a plain object
+                return safeUser;
+            });
+
+            res.json(safeUsers);
+        }).catch((error)=>{
+            res.status(500).json({ error: error });
+        });
+    } else {
+        res.status(403).send({ message: 'Error' });
+    }
+});
+
+router.put('/users/:id/role', (req, res) => {
+    if (req.user && req.user.role == 'admin') {
+        const userId = req.params.id;
+        const newRole = req.body.role;
+
+        console.error(req.body);
+        console.error(`${userId} - ${newRole}`);
+
+        database.User.update({ role: newRole }, { where: { id: userId } })
+        .then(() => res.status(200).send({ message: 'Role updated successfully' }))
+        .catch(error => res.status(500).send({ message: 'Error updating role', error }));
+    }else{
+        res.status(403).send({ message: 'Error updating role' });
+    }
+});
+
+router.get('/users', (req, res) => {
+    if (req.user && req.user.role == 'admin') {
+        database.User.findAll().then((users) => {
+            // Remove 'salt' and 'hash' from each user
+            const safeUsers = users.map(user => {
+                const { salt, hash, ...safeUser } = user.toJSON(); // Use toJSON() to get a plain object
+                return safeUser;
+            });
+
+            res.json(safeUsers);
+        }).catch((error)=>{
+            res.status(500).json({ error: error });
+        });
+    } else {
+        res.status(403).send({message:"Error 3"});
+    }
+});
+  
+
+router.get('/sessions', (req, res) => {
+    if (req.user && req.user.role == 'admin') {
+        const connection = mysql.createConnection(configAuth.mysqlSessionAuth);
+        const query = 'SELECT session_id, expires, data FROM sessions';
+
+        connection.query(query, (error, results) => {
+          if (error) {
+            console.error('Error retrieving sessions:', error);
+            return res.status(500).send({ message: 'Error retrieving sessions', error });
+          }
+      
+          const safeSessions = results.map(session => {
+            const sessionData = JSON.parse(session.data);
+           const expiresAt = new Date(sessionData.cookie.expires); 
+           const isExpired = Date.now() > expiresAt; 
+
+           return{
+              id: session.session_id,
+              username: sessionData.passport.user,
+              loginTime: new Date(sessionData.cookie.expires).toLocaleString(),
+              expiresAt: expiresAt.toLocaleString(), 
+              status: isExpired ? 'active' : 'expired',
+            };
+          });
+      
+          res.json(safeSessions);
+        });   
+    } else {
+        res.status(403).send({ message: 'Error 2' });
     }
 });
 
