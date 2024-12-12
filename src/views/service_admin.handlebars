@@ -1,0 +1,293 @@
+            <div class="text-white">
+                <h1>Admin Account</h1>
+                <p>{{{form_p}}}</p>
+            </div>
+
+  <style>
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 8px;
+    }
+    th {
+      background-color: #f2f2f2;
+      text-align: left;
+    }
+  </style>
+
+  <div id="react-root" style="background:#fff"></div>
+
+
+  <!-- Add React, ReactDOM, and Babel scripts -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.development.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.development.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/6.25.0/babel.min.js"></script>
+
+  <script type="text/babel">
+    class UserList extends React.Component {
+      constructor(props) {
+        super(props);
+        this.state = {
+          users: [],
+          isLoading: true,
+          error: null,
+        };
+      }
+
+      componentDidMount() {
+        fetch('/account/users')
+          .then(response => response.json())
+          .then(data => this.setState({ users: data, isLoading: false }))
+          .catch(error => this.setState({ error, isLoading: false }));
+      }
+
+      handleRoleChange = (userId, newRole) => {
+        fetch(`/account/users/${userId}/role`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ role: newRole }),
+        })
+          .then(response => response.json())
+          .then(data => {
+            this.setState(prevState => ({
+              users: prevState.users.map(user =>
+                user.id === userId ? { ...user, role: newRole } : user
+              ),
+            }));
+          })
+          .catch(error => {
+            console.error('Error updating role:', error);
+          });
+      };
+
+      render() {
+        const { users, isLoading, error } = this.state;
+
+        if (isLoading) {
+          return <p>Loading users...</p>;
+        }
+
+        if (error) {
+          return <p>Error loading users: {error.message}</p>;
+        }
+
+        return (
+          <div>
+            <h1>User List</h1>
+            <table className="table table-striped">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Username</th>
+                  <th>Email</th>
+                  <th>Role</th>
+                  <th>OAuth Provider</th>
+                  <th>Created At</th>
+                  <th>Updated At</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.map(user => (
+                  <tr key={user.id}>
+                    <td>{user.id}</td>
+                    <td>{user.username}</td>
+                    <td>{user.email}</td>
+                    <td>
+                      <select
+                        className="form-control"
+                        value={user.role}
+                        onChange={e => this.handleRoleChange(user.id, e.target.value)}
+                      >
+                        <option value="user">User</option>
+                        <option value="testing">Testing</option>
+                        <option value="member">Member</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                    </td>
+                    <td>{user.oauthProvider}</td>
+                    <td>{new Date(user.createdAt).toLocaleString()}</td>
+                    <td>{new Date(user.updatedAt).toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      }
+    }
+
+        class SessionList extends React.Component {
+      constructor(props) {
+        super(props);
+        this.state = {
+          sessions: [],
+          isLoading: true,
+          error: null,
+        };
+      }
+
+      componentDidMount() {
+        fetch('/account/sessions')
+          .then(response => response.json())
+          .then(data => this.setState({ sessions: data, isLoading: false }))
+          .catch(error => this.setState({ error, isLoading: false }));
+      }
+
+      render() {
+        const { sessions, isLoading, error } = this.state;
+
+        if (isLoading) {
+          return <p>Loading sessions...</p>;
+        }
+
+        if (error) {
+          return <p>Error loading sessions: {error.message}</p>;
+        }
+
+        return (
+          <div>
+            <h1>Session List</h1>
+            <table className="table table-striped">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>User</th>
+                  <th>Expires</th>
+                  {{!-- <th>Expires Time</th>
+                  <th>Status</th> --}}
+                </tr>
+              </thead>
+              <tbody>
+                {sessions.map(session => (
+                  <tr key={session.id}>
+                    <td>{session.id}</td>
+                    <td>{session.username}</td>
+                    <td>{new Date(session.loginTime).toLocaleString()}</td>
+                    {{!-- <td>{new Date(session.expiresAt).toLocaleString()}</td>
+                    <td>{session.status}</td> --}}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      }
+    }
+
+    class ViperInstanceList extends React.Component {
+      constructor(props) {
+        super(props);
+        this.state = {
+          instances: [],
+          isLoading: true,
+          error: null,
+        };
+      }
+
+      componentDidMount() {
+        this.fetchInstances();
+      }
+
+      fetchInstances = () => {
+        fetch('/service/viperinstances')
+          .then(response => response.json())
+          .then(data => this.setState({ instances: data, isLoading: false }))
+          .catch(error => this.setState({ error, isLoading: false }));
+      }
+
+      startNewInstance = () => {
+        fetch('/service/new-instance', { method: 'GET' })
+          .then(response => {
+            if (response.ok) {
+              this.fetchInstances();
+            }
+          })
+          .catch(error => console.error('Error starting new instance:', error));
+      }
+
+      removeInstance = (dockerid) => {
+        fetch(`/service/terminate-instance/${dockerid}`, { method: 'GET' })
+          .then(response => {
+            if (response.ok) {
+              this.setState(prevState => ({
+                instances: prevState.instances.filter(instance => instance.dockerid !== dockerid)
+              }));
+            }
+          })
+          .catch(error => console.error('Error terminating instance:', error));
+      }
+
+      formatUrl = (url) => {
+        return `https://${url}`;
+      }
+
+      render() {
+        const { instances, isLoading, error } = this.state;
+
+        if (isLoading) {
+          return <p>Loading instances...</p>;
+        }
+
+        if (error) {
+          return <p>Error loading instances: {error.message}</p>;
+        }
+
+        return (
+          <div>
+            <h1>Viper Instances</h1>
+            <div className="btn-container">
+              <button className="btn btn-primary" onClick={this.startNewInstance}>Start New Instance</button>
+            </div>
+
+            <table className="table table-striped">
+              <thead>
+                <tr>
+                  <th>UUID</th>
+                  <th>Docker ID</th>
+                  <th>Name</th>
+                  <th>URL</th>
+                  <th>Created At</th>
+                  <th>Owner Id</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {instances.map(instance => (
+                  <tr key={instance.uuid}>
+                    <td>{instance.uuid}</td>
+                    <td>{instance.dockerid}</td>
+                    <td>{instance.name}</td>
+                    <td><a href={this.formatUrl(instance.url)} target="_blank" rel="noopener noreferrer">{instance.url}</a></td>
+                    <td>{new Date(instance.createdAt).toLocaleString()}</td>
+                    <td>{instance.owner}</td>
+                    <td>
+                      <button className="btn btn-danger" onClick={() => this.removeInstance(instance.dockerid)}>Remove Instance</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      }
+    }
+
+    class App extends React.Component {
+      render() {
+        return (
+          <div>
+            <UserList />
+            <SessionList />
+            <ViperInstanceList />
+          </div>
+        );
+      }
+    }
+
+    ReactDOM.render(<App />, document.getElementById('react-root'));
+  </script>
