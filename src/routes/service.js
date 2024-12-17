@@ -55,21 +55,21 @@ router.get('/', (req, res) => {
 router.get('/admin', (req, res) => {
     // res.json({msg:"Welcome traveller"});
     if (req.user && req.user.role == 'admin') {
-        res.render('service_admin');
+        res.render('service_admin', { user : req.user.toJSON() });
     } else {
         res.redirect('/service');
     }
 });
 router.get('/testing', (req, res) => {
     if (req.user && req.user.role == 'testing') {
-        res.render('service_testing');
+        res.render('service_testing', { user : req.user.toJSON() });
     } else {
         res.redirect('/service');
     }
 });
 router.get('/member', (req, res) => {
     if (req.user && req.user.role == 'member') {
-        res.render('service_member');
+        res.render('service_member', { user : req.user.toJSON() });
     } else {
         res.redirect('/service');
     }
