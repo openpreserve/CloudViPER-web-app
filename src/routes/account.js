@@ -155,10 +155,14 @@ router.get('/sessions', (req, res) => {
             const sessionData = JSON.parse(session.data);
            const expiresAt = new Date(sessionData.cookie.expires); 
            const isExpired = Date.now() > expiresAt; 
+           let sessionUsername = 'unknown';
+           if (sessionData.passport && sessionData.passport.user){
+            sessionUsername = sessionData.passport.user;
+           }
 
            return{
               id: session.session_id,
-              username: sessionData.passport.user,
+              username: sessionUsername,
               loginTime: new Date(sessionData.cookie.expires).toLocaleString(),
               expiresAt: expiresAt.toLocaleString(), 
               status: isExpired ? 'active' : 'expired',
