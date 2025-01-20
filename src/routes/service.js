@@ -92,6 +92,7 @@ router.get('/new-instance', async (req, res) => {
             "VIRTUAL_HOST=" + instanceURL,
             "LETSENCRYPT_HOST=" + instanceURL,
             "LETSENCRYPT_EMAIL=sysadmin@openpreservation.org",
+            "PASSWORD="+ instanceUUID,
             "PUID=1000",
             "PGID=1000",
         ];
