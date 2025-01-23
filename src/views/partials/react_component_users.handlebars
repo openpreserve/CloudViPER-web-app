@@ -1,0 +1,93 @@
+    class UserList extends React.Component {
+      constructor(props) {
+        super(props);
+        this.state = {
+          users: [],
+          isLoading: true,
+          error: null,
+        };
+      }
+
+      componentDidMount() {
+        fetch('/account/users')
+          .then(response => response.json())
+          .then(data => this.setState({ users: data, isLoading: false }))
+          .catch(error => this.setState({ error, isLoading: false }));
+      }
+
+      handleRoleChange = (userId, newRole) => {
+        fetch(`/account/users/${userId}/role`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ role: newRole }),
+        })
+          .then(response => response.json())
+          .then(data => {
+            this.setState(prevState => ({
+              users: prevState.users.map(user =>
+                user.id === userId ? { ...user, role: newRole } : user
+              ),
+            }));
+          })
+          .catch(error => {
+            console.error('Error updating role:', error);
+          });
+      };
+
+      render() {
+        const { users, isLoading, error } = this.state;
+
+        if (isLoading) {
+          return <p>Loading users...</p>;
+        }
+
+        if (error) {
+          return <p>Error loading users: {error.message}</p>;
+        }
+
+        return (
+          <div>
+            <h1>User List</h1>
+            <table className="table table-striped">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Username</th>
+                  <th>Email</th>
+                  <th>Role</th>
+                  <th>OAuth Provider</th>
+                  <th>Created At</th>
+                  <th>Updated At</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.map(user => (
+                  <tr key={user.id}>
+                    <td>{user.id}</td>
+                    <td>{user.username}</td>
+                    <td>{user.email}</td>
+                    <td>
+                      <select
+                        className="form-control"
+                        value={user.role}
+                        onChange={e => this.handleRoleChange(user.id, e.target.value)}
+                      >
+                        <option value="user">User</option>
+                        <option value="testing">Testing</option>
+                        <option value="member">Member</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                    </td>
+                    <td>{user.oauthProvider}</td>
+                    <td>{new Date(user.createdAt).toLocaleString()}</td>
+                    <td>{new Date(user.updatedAt).toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      }
+    }

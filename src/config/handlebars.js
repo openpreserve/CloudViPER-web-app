@@ -1,7 +1,9 @@
 const { create } = require('express-handlebars');
+const path = require('path');
 
 const hbs = create({
-    // Specify helpers which are only registered on this instance.
+        partialsDir: path.join(__dirname, '../views/partials'),
+        // Specify helpers which are only registered on this instance.
         helpers: {
             ifEquals: (value1, value2, options) => {
                 if (value1 == value2) {
