@@ -22,10 +22,28 @@ function model(sequelize) {
             type: DataTypes.STRING,
             allowNull: true,
         },
+        kasmvncPassword:{
+            type: DataTypes.STRING,
+            allowNull: true,
+        },
+        statusKey:{
+            type: DataTypes.STRING,
+            allowNull: true,
+        },
         createdAt: {
             type: DataTypes.DATE,
             allowNull: false,
-            defaultValue: DataTypes.NOW, // Set a default value if needed
+            defaultValue: DataTypes.NOW,
+        },
+        createdAt: {
+            type: DataTypes.DATE,
+            allowNull: false,
+            defaultValue: DataTypes.NOW,
+        },
+        status: {
+            type: DataTypes.STRING,
+            allowNull: false,
+            defaultValue: 'initilising' //begin_cert, cert_issued, active, begin_delete, deleted,
         },
         createdAt: {
             type: DataTypes.DATE,

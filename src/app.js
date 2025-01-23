@@ -14,12 +14,12 @@ const PORT = process.env.PORT || 3000;
 
 // Begin server setup
 app.use( bodyParser.urlencoded({ extended: true}) );
-var path = require('path');
+let path = require('path');
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
 
 //  sessions
-var session_config = {
+let session_config = {
     name:"vipercloud.sid",
     cookie: { maxAge: ((4 * 24) * 60 * 60 * 1000) }, // 4 days
     store: new MySQLStore( configAuth.mysqlSessionAuth ),

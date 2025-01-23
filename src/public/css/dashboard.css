@@ -1,0 +1,32 @@
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+th, td {
+    border: 1px solid #ddd;
+    padding: 8px;
+}
+
+th {
+    background-color: #f2f2f2;
+    text-align: left;
+}
+
+.card-title{
+    font-size: 20px;
+}
+
+.center-image {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* height: 100%; */
+}
+  
+.card-img-custom {
+    /* width: 100px;
+    height: 100px; */
+    object-fit: cover;
+}
+  

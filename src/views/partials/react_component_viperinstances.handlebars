@@ -1,0 +1,133 @@
+class ViperInstanceList extends React.Component {
+      constructor(props) {
+        super(props);
+        this.state = {
+          instances: [],
+          isLoading: true,
+          error: null,
+        };
+      }
+
+      componentDidMount() {
+        this.fetchInstances();
+        this.interval = setInterval(this.fetchInstances, 6000); // 10 seconds interval
+      }
+
+      componentWillUnmount() {
+        clearInterval(this.interval);
+      }
+
+      fetchInstances = () => {
+        fetch('/service/viperinstances')
+          .then(response => response.json())
+          .then(data => this.setState({ instances: data, isLoading: false }))
+          .catch(error => this.setState({ error, isLoading: false }));
+      }
+
+      startNewInstance = () => {
+        fetch('/service/new-instance', { method: 'GET' })
+          .then(response => {
+            if (response.ok) {
+              this.fetchInstances();
+            }
+          })
+          .catch(error => console.error('Error starting new instance:', error));
+      }
+
+      removeInstance = (dockerid) => {
+        fetch(`/service/terminate-instance/${dockerid}`, { method: 'GET' })
+          .then(response => {
+            if (response.ok) {
+              this.setState(prevState => ({
+                instances: prevState.instances.filter(instance => instance.dockerid !== dockerid)
+              }));
+            }
+          })
+          .catch(error => console.error('Error terminating instance:', error));
+      }
+
+      formatUrl = (url) => {
+        return `https://${url}`;
+      }
+
+      render() {
+        const { instances, isLoading, error } = this.state;
+
+        if (isLoading) {
+          return <p>Loading instances...</p>;
+        }
+
+        if (error) {
+          return <p>Error loading instances: {error.message}</p>;
+        }
+
+        return (
+          <div>
+            <h1>Viper Instances</h1>
+            <div className="btn-container">
+              <button className="btn btn-primary" onClick={this.startNewInstance}>Start New Instance</button>
+            </div>
+
+            <table className="table table-striped">
+              <thead>
+                <tr>
+                    <th>Vipers:</th>
+                </tr>
+              </thead>
+              <tbody>
+                {instances.map(instance => (
+                  <tr key={instance.uuid}><td>
+
+                        {{!-- <row> --}}
+                        <div className="card mb-3">
+                        <div className="row">
+                            <div className="col-md-4 center-image">
+                            <img src="/images/apple-icon-180x180.png" className="card-img-custom" alt="Placeholder" />
+                            </div>
+                            <div className="col-md-8">
+                            <div className="card-body">
+                                <h5 className="card-title">{instance.name}</h5>
+                                <h6 className="card-subtitle mb-2 text-muted">{instance.dockerid}</h6>
+                                <p className="card-text">
+                                <small className="text-muted"><strong>STATUS: {instance.status}</strong></small><br/>
+                                <small className="text-muted"><strong>UUID: </strong>{instance.uuid}</small><br/>
+                  <small className="text-muted">
+                    <strong>URL: </strong>
+                    {instance.status === 'active' ? (
+                      <a href={this.formatUrl(instance.url)} target="_blank" rel="noopener noreferrer">{instance.url}</a>
+                    ) : (
+                      instance.url
+                    )}
+                  </small><br/>
+                                <small className="text-muted"><strong>Username: </strong>abc</small><br/>
+                                <small className="text-muted"><strong>Password: </strong>{instance.kasmvncPassword}</small><br/>
+                                <small className="text-muted"><strong>Created At: </strong>{new Date(instance.createdAt).toLocaleString()}</small><br/>
+                                <small className="text-muted"><strong>Owner: </strong>{instance.owner}</small>
+                                </p>
+                <button 
+                  className={`btn btn-danger ${instance.status === 'deleted' ? 'disabled' : ''}`} 
+                  onClick={() => this.removeInstance(instance.dockerid)} 
+                  disabled={instance.status === 'deleted'}
+                >
+                  Remove Instance
+                </button>
+                  <button
+                    className={`btn btn-primary ml-2 ${instance.status === 'active' ? '' : 'disabled'}`} 
+                    onClick={() => window.open(this.formatUrl(instance.url), '_blank')}
+                  >
+                    Launch Instance
+                  </button>
+                            </div>
+                            </div>
+                        </div>
+                        </div>
+                    {{!-- </row> --}}
+
+                  </td></tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      }
+    }

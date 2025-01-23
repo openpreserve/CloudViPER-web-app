@@ -101,7 +101,7 @@ router.get('/users', (req, res) => {
             res.status(500).json({ error: error });
         });
     } else {
-        res.status(403).send({ message: 'Error' });
+        res.status(403).send({message:"Error 3"});
     }
 });
 
@@ -120,25 +120,6 @@ router.put('/users/:id/role', (req, res) => {
         res.status(403).send({ message: 'Error updating role' });
     }
 });
-
-router.get('/users', (req, res) => {
-    if (req.user && req.user.role == 'admin') {
-        database.User.findAll().then((users) => {
-            // Remove 'salt' and 'hash' from each user
-            const safeUsers = users.map(user => {
-                const { salt, hash, ...safeUser } = user.toJSON(); // Use toJSON() to get a plain object
-                return safeUser;
-            });
-
-            res.json(safeUsers);
-        }).catch((error)=>{
-            res.status(500).json({ error: error });
-        });
-    } else {
-        res.status(403).send({message:"Error 3"});
-    }
-});
-  
 
 router.get('/sessions', (req, res) => {
     if (req.user && req.user.role == 'admin') {
