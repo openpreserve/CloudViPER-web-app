@@ -103,7 +103,12 @@ router.get('/new-instance', async (req, res) => {
             name: containerName,
             HostConfig: {
                 ShmSize: 1024 * 1024 * 1024,
-                Binds: ['/var/viper-docker-project/volumes/test-corpus/test-root/corpora:/config/Desktop/test-corpus:ro'],
+                Binds: [
+                    '/var/viper-docker-project/volumes/test-corpus/test-root/corpora:/config/Desktop/test-corpus:ro',
+                    '/var/viper-docker-project/viper-cloud-web-gui/volumes/scripts/install_scrot.sh:/usr/local/share/scripts/install_scrot.sh:ro',
+                    '/var/viper-docker-project/viper-cloud-web-gui/volumes/scripts/take_screenshot.sh:/usr/local/share/scripts/take_screenshot.sh:ro',
+                    '/var/viper-docker-project/viper-cloud-web-gui/volumes/scripts/screenshot_cron_job:/etc/cron.d/screenshot_cron_job:ro',
+                ],
                 // PortBindings: { '3000/tcp': [{ HostPort: '3000' }] },
             },
             ExposedPorts: { '3000/tcp': {}, '3001/tcp': {} },
@@ -131,6 +136,53 @@ router.get('/new-instance', async (req, res) => {
                     // res.json({'error2':err});
                     console.log('err: 2');
                 }
+
+                // Execute the commands to enable screen captures
+                try {
+                    const exec = await container.exec({
+                        AttachStdout: true, AttachStderr: true,
+                        Cmd: ['sh', '/usr/local/share/scripts/install_scrot.sh']
+                    });
+                    const stream = await exec.start({
+                        hijack: true, stdin: true
+                    });
+                    // Stream the output 
+                    stream.output.on('data', (data) => {
+                        console.log(data.toString());
+                    });
+                    // Wait for the command to finish 
+                    await new Promise((resolve) => {
+                        stream.output.on('end', resolve);
+                    });
+                    console.log('Enable Screen Captures');
+                } catch (execErr) { console.error('Error executing command:', execErr); }
+                
+                try {
+                container.exec({
+                    AttachStdout: true,
+                    AttachStderr: true,
+                    Cmd: [
+                      'sh', '-c', 
+                      'chmod 0644 /etc/cron.d/screenshot_cron_job && ' +
+                      'crontab /etc/cron.d/screenshot_cron_job && ' +
+                      '/etc/init.d/cron restart'
+                    ]
+                  }, (err, exec) => {
+                    if (err) {
+                      return console.error(err);
+                    }
+                    exec.start((err, stream) => {
+                      if (err) {
+                        return console.error(err);
+                      }
+              
+                      // Print output of the command
+                      stream.on('data', (data) => {
+                        console.log(data.toString());
+                      });
+                    });
+                  });
+                } catch (execErr) { console.error('Error executing command:', execErr); }
 
                 // Execute the command to delete the sudoers file 
                 try {
@@ -169,8 +221,8 @@ router.get('/new-instance', async (req, res) => {
                     await new Promise((resolve) => {
                         stream.output.on('end', resolve);
                     });
-                    console.log('Sudoers file deleted successfully');
-                } catch (execErr) { console.error('Error executing command:', execErr); }
+                    console.log('abc removed successfully');
+                } catch (execErr) { console.error('Error executing command:', execErr); }              
 
                 console.log('OK: 3');
                 console.log(data);
