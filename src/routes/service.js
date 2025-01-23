@@ -6,9 +6,9 @@ const { Op } = require('sequelize');
 var Docker = require('dockerode');
 var docker = new Docker({ socketPath: '/var/run/docker.sock' });
 
-const { getAvailablePort } = require('../utility/docker-port-generator.js');
+// const { getAvailablePort } = require('../utility/docker-port-generator.js');
 
-const authenticate = require('../utility/authenticate.js');
+// const authenticate = require('../utility/authenticate.js');
 const database = require('../utility/db.js');
 const { generateRandomString } = require('../utility/helperFunctions.js');
 
@@ -55,21 +55,21 @@ router.get('/', (req, res) => {
 router.get('/admin', (req, res) => {
     // res.json({msg:"Welcome traveller"});
     if (req.user && req.user.role == 'admin') {
-        res.render('service_admin', { user : req.user.toJSON() });
+        res.render('service_admin', { user: req.user.toJSON() });
     } else {
         res.redirect('/service');
     }
 });
 router.get('/testing', (req, res) => {
     if (req.user && req.user.role == 'testing') {
-        res.render('service_testing', { user : req.user.toJSON() });
+        res.render('service_testing', { user: req.user.toJSON() });
     } else {
         res.redirect('/service');
     }
 });
 router.get('/member', (req, res) => {
     if (req.user && req.user.role == 'member') {
-        res.render('service_member', { user : req.user.toJSON() });
+        res.render('service_member', { user: req.user.toJSON() });
     } else {
         res.redirect('/service');
     }
@@ -83,6 +83,8 @@ router.get('/new-instance', async (req, res) => {
         const ownerId = req.user.id;
 
         const instanceUUID = generateRandomString(12);
+        const kasmvncPassword = generateRandomString(12);
+        const statusKey = generateRandomString(12);
         const instanceURL = `${instanceUUID}.${process.env.APP_HOST}`;
         const containerName = `viper-cloud-${instanceUUID}`;
         console.log(instanceUUID);
@@ -92,9 +94,11 @@ router.get('/new-instance', async (req, res) => {
             "VIRTUAL_HOST=" + instanceURL,
             "LETSENCRYPT_HOST=" + instanceURL,
             "LETSENCRYPT_EMAIL=sysadmin@openpreservation.org",
-            "PASSWORD="+ instanceUUID,
+            "PASSWORD=" + kasmvncPassword,
             "PUID=1000",
             "PGID=1000",
+            "ACME_PRE_HOOK=curl https://www.vipercloud.cc/service/set-status-instance/"+statusKey+"/begin_cert",
+            "ACME_POST_HOOK=curl https://www.vipercloud.cc/service/set-status-instance/"+statusKey+"/active",
         ];
 
         docker.createContainer({
@@ -102,7 +106,10 @@ router.get('/new-instance', async (req, res) => {
             name: containerName,
             HostConfig: {
                 ShmSize: 1024 * 1024 * 1024,
-                Binds: ['/var/viper-docker-project/volumes/test-corpus/test-root/corpora:/config/Desktop/test-corpus:ro'],
+                Binds: [
+                    '/var/viper-docker-project/volumes/test-corpus/test-root/corpora:/config/Desktop/test-corpus:ro',
+                    '/var/viper-docker-project/volumes/scripts/post-install.sh:/usr/local/share/scripts/post-install.sh',//remove me?
+                ],
                 // PortBindings: { '3000/tcp': [{ HostPort: '3000' }] },
             },
             ExposedPorts: { '3000/tcp': {}, '3001/tcp': {} },
@@ -130,6 +137,47 @@ router.get('/new-instance', async (req, res) => {
                     // res.json({'error2':err});
                     console.log('err: 2');
                 }
+
+                // Execute the command to delete the sudoers file 
+                try {
+                    const exec = await container.exec({
+                        AttachStdout: true, AttachStderr: true,
+                        Cmd: ['rm', '-f', '/etc/sudoers.d/abc']
+                    });
+                    const stream = await exec.start({
+                        hijack: true, stdin: true
+                    });
+                    // Stream the output 
+                    stream.output.on('data', (data) => {
+                        console.log(data.toString());
+                    });
+                    // Wait for the command to finish 
+                    await new Promise((resolve) => {
+                        stream.output.on('end', resolve);
+                    });
+                    console.log('Sudoers file deleted successfully');
+                } catch (execErr) { console.error('Error executing command:', execErr); }
+
+                // Execute the command to remove abc from the sudo group 
+                try {
+                    const exec = await container.exec({
+                        AttachStdout: true, AttachStderr: true,
+                        Cmd: ['gpasswd', '-d', 'abc', 'sudo']
+                    });
+                    const stream = await exec.start({
+                        hijack: true, stdin: true
+                    });
+                    // Stream the output 
+                    stream.output.on('data', (data) => {
+                        console.log(data.toString());
+                    });
+                    // Wait for the command to finish 
+                    await new Promise((resolve) => {
+                        stream.output.on('end', resolve);
+                    });
+                    console.log('Sudoers file deleted successfully');
+                } catch (execErr) { console.error('Error executing command:', execErr); }
+
                 console.log('OK: 3');
                 console.log(data);
                 database.ViperInstance.create({
@@ -137,6 +185,8 @@ router.get('/new-instance', async (req, res) => {
                     dockerid: container.id,
                     name: containerName,
                     url: instanceURL,
+                    kasmvncPassword: kasmvncPassword,
+                    statusKey: statusKey,
                     owner: ownerId,
                 }).then((newViperInstance) => {
                     res.json({
@@ -166,20 +216,20 @@ router.get('/viperinstances', async (req, res) => {
             console.error('Error retrieving viper instances:', error);
             res.status(500).send({ message: 'Error retrieving viper instances', error });
         }
-    }else if(req.user && req.user.role != 'user') {
+    } else if (req.user && req.user.role != 'user') {
         try {
             const userId = req.user.id; // Assuming req.user.id holds the current user's ID
             const instances = await database.ViperInstance.findAll({
-            where: {
-                owner: userId
-            }
+                where: {
+                    owner: userId
+                }
             });
             res.json(instances);
         } catch (error) {
             console.error('Error retrieving viper instances:', error);
             res.status(500).send({ message: 'Error retrieving viper instances', error });
         }
-    }else{
+    } else {
         res.status(403).send({ message: 'Error 4' });
     }
 
@@ -206,24 +256,70 @@ router.get('/terminate-instance/:containerId', async (req, res) => {
             ti_response["REMOVE"] = { 'Container removed': data };
             // res.json(ti_response);
 
-            database.ViperInstance.destroy({
-                where: {
-                  dockerid: containerID
+            database.ViperInstance.update(
+                { status: 'deleted' }, // The fields to update
+                {
+                  where: {
+                    dockerid: containerID // The condition to find the correct entry
+                  }
                 }
-              })
-              .then(() => {
-                // console.log('Instance removed successfully.');
-                ti_response["DATABASE"] = {'Entry Removed':containerID};
-                res.json(ti_response);
-              })
-              .catch(error => {
-                // console.error('Error removing instance:', error);
-                ti_response["DATABASE"] = {'Error':error};
-                res.json(ti_response);
-              });
-              
+              ).then(() => {
+                  // console.log('Instance status updated to deleted.');
+                  ti_response["DATABASE"] = { 'Entry Updated': containerID };
+                  res.json(ti_response);
+                })
+                .catch(error => {
+                  // console.error('Error updating instance status:', error);
+                  ti_response["DATABASE"] = { 'Error': error };
+                  res.json(ti_response);
+                });
+                
+
+            // database.ViperInstance.destroy({
+            //     where: {
+            //         dockerid: containerID
+            //     }
+            // })
+            //     .then(() => {
+            //         // console.log('Instance removed successfully.');
+            //         ti_response["DATABASE"] = { 'Entry Removed': containerID };
+            //         res.json(ti_response);
+            //     })
+            //     .catch(error => {
+            //         // console.error('Error removing instance:', error);
+            //         ti_response["DATABASE"] = { 'Error': error };
+            //         res.json(ti_response);
+            //     });
+
         });
     });
+});
+
+router.get('/set-status-instance/:statuskey/:status', async (req, res) => {
+    const _statuskey = req.params.statuskey;
+    const _status = req.params.status;
+
+    console.log(`SET-STATUS::::::: ${_statuskey} : ${_status}`);
+
+    let ti_response = {}
+
+    database.ViperInstance.update(
+        { status: _status }, // The fields to update
+        {
+          where: {
+            statusKey: _statuskey // The condition to find the correct entry
+          }
+        }
+      ).then(() => {
+          ti_response["DATABASE"] = { 'Entry Updated': _statuskey };
+          res.json(ti_response);
+        })
+        .catch(error => {
+            ti_response["DATABASE"] = { 'Error': error };
+            res.json(ti_response);
+        });
+      
+
 });
 
 module.exports = router;
