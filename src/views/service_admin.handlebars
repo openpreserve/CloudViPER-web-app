@@ -1,7 +1,9 @@
+
   <div class="text-white">
       <h1>Admin Account</h1>
       <p>({{{user.email}}})</p>
   </div>
+
 
   <style>
     table {
@@ -26,15 +28,11 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.development.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/6.25.0/babel.min.js"></script>
 
-    <!-- React Components -->
-    <!-- <script src="/javascript/react/user_component.js"></script> -->
-
   <script type="text/babel">
 
     {{> react_component_users }}
     {{> react_component_sessions }}
     {{> react_component_viperinstances }}
-    
 
     class App extends React.Component {
       render() {

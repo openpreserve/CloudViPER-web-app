@@ -6,9 +6,6 @@ const { Op } = require('sequelize');
 var Docker = require('dockerode');
 var docker = new Docker({ socketPath: '/var/run/docker.sock' });
 
-// const { getAvailablePort } = require('../utility/docker-port-generator.js');
-
-// const authenticate = require('../utility/authenticate.js');
 const database = require('../utility/db.js');
 const { generateRandomString } = require('../utility/helperFunctions.js');
 
@@ -106,10 +103,7 @@ router.get('/new-instance', async (req, res) => {
             name: containerName,
             HostConfig: {
                 ShmSize: 1024 * 1024 * 1024,
-                Binds: [
-                    '/var/viper-docker-project/volumes/test-corpus/test-root/corpora:/config/Desktop/test-corpus:ro',
-                    '/var/viper-docker-project/volumes/scripts/post-install.sh:/usr/local/share/scripts/post-install.sh',//remove me?
-                ],
+                Binds: ['/var/viper-docker-project/volumes/test-corpus/test-root/corpora:/config/Desktop/test-corpus:ro'],
                 // PortBindings: { '3000/tcp': [{ HostPort: '3000' }] },
             },
             ExposedPorts: { '3000/tcp': {}, '3001/tcp': {} },
@@ -256,6 +250,7 @@ router.get('/terminate-instance/:containerId', async (req, res) => {
             ti_response["REMOVE"] = { 'Container removed': data };
             // res.json(ti_response);
 
+
             database.ViperInstance.update(
                 { status: 'deleted' }, // The fields to update
                 {
@@ -273,24 +268,6 @@ router.get('/terminate-instance/:containerId', async (req, res) => {
                   ti_response["DATABASE"] = { 'Error': error };
                   res.json(ti_response);
                 });
-                
-
-            // database.ViperInstance.destroy({
-            //     where: {
-            //         dockerid: containerID
-            //     }
-            // })
-            //     .then(() => {
-            //         // console.log('Instance removed successfully.');
-            //         ti_response["DATABASE"] = { 'Entry Removed': containerID };
-            //         res.json(ti_response);
-            //     })
-            //     .catch(error => {
-            //         // console.error('Error removing instance:', error);
-            //         ti_response["DATABASE"] = { 'Error': error };
-            //         res.json(ti_response);
-            //     });
-
         });
     });
 });
