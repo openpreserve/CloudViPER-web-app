@@ -14,7 +14,7 @@ var passport = require('passport');
 var bcrypt = require('bcrypt-nodejs');
 var crypto = require('crypto');
 
-const { sanitizeUsername } = require('../utility/helperFunctions.js');
+const { sanitizeUsername, generateUsername, generateRandomString } = require('../utility/helperFunctions.js');
 const emailRelay = require('../utility/emailRelay.js');
 var configAuth = require('../config/auth');
 // const { dfareporting } = require('googleapis/build/src/apis/dfareporting/index.js');
@@ -118,6 +118,28 @@ router.put('/users/:id/role', (req, res) => {
         .catch(error => res.status(500).send({ message: 'Error updating role', error }));
     }else{
         res.status(403).send({ message: 'Error updating role' });
+    }
+});
+
+router.post('/users/invite', (req, res) => {
+    if (req.user && req.user.role == 'admin') {
+        database.User.register(new database.User({
+            username: generateUsername(req.body.email),
+            role: req.body.role,
+            email: req.body.email,
+            oauthProvider: "vipercloud",
+            created: Date.now()
+        }), generateRandomString(25)/*password*/ , (err, user) => {
+            if (err) {
+                console.log(err);
+                res.status(500).json({ message: 'Error creating user.' });
+            } else {
+                mailer.sendInvitedEmail(req.body.email, generateUsername(req.body.email), req.user.username);
+                res.status(200).json({ message: 'New user invited', user: user.id });
+            }
+        });
+    } else {
+        res.status(403).send({message:"Error 33"});
     }
 });
 

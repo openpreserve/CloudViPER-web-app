@@ -30,3 +30,16 @@ th {
     object-fit: cover;
 }
   
+
+.form-inviteuser{
+    padding: 5px 20px;
+}
+
+.form-inviteuser div{
+    width:48%;
+    padding:3px;
+    display: inline-block;
+}
+.form-inviteuser button{
+    display: block;
+}

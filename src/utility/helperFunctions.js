@@ -3,6 +3,14 @@ module.exports = {
     sanitizeUsername : (name)=> {
         return name.toLowerCase().replace(/[^a-z0-9]/g, '');
     },
+    generateUsername : (email)=> {
+        if (email.includes('@')) {
+            const [emailName, domain] = email.split('@');
+            return emailName.toLowerCase().replace(/[^a-z0-9]/g, '');
+        } else {
+            return email.toLowerCase().replace(/[^a-z0-9]/g, '');
+        }
+    },    
     updateRoleIfAdmin : (email) => {
         const domain = email.split('@')[1];
         if (domain === 'openpreservation.org') {
