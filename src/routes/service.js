@@ -41,16 +41,9 @@ router.get('/', (req, res) => {
         res.redirect('/account/login');
     }
 
-
-    // res.render('admin_index', {
-    //     page_title: "ViPER Admin Portal",
-    //     form_h1: "Admin Portal",
-    //     form_p: "Manage container instances", 
-    //   });
 });
 
 router.get('/admin', (req, res) => {
-    // res.json({msg:"Welcome traveller"});
     if (req.user && req.user.role == 'admin') {
         res.render('service_admin', { user: req.user.toJSON() });
     } else {
