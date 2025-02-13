@@ -35,25 +35,10 @@ function model(sequelize) {
             allowNull: false,
             defaultValue: DataTypes.NOW,
         },
-        createdAt: {
-            type: DataTypes.DATE,
-            allowNull: false,
-            defaultValue: DataTypes.NOW,
-        },
         status: {
             type: DataTypes.STRING,
             allowNull: false,
             defaultValue: 'initilising' //begin_cert, cert_issued, active, begin_delete, deleted,
-        },
-        createdAt: {
-            type: DataTypes.DATE,
-            allowNull: false,
-            defaultValue: DataTypes.NOW, // Set a default value if needed
-        },
-        status: {
-            type: DataTypes.STRING,
-            allowNull: false,
-            defaultValue: 'active'
         },
     };
 
