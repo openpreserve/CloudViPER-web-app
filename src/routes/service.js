@@ -7,7 +7,7 @@ var Docker = require('dockerode');
 var docker = new Docker({ socketPath: '/var/run/docker.sock' });
 
 const database = require('../utility/db.js');
-const { generateRandomString } = require('../utility/helperFunctions.js');
+const { generateRandomString, runExec } = require('../utility/helperFunctions.js');
 
 /*
 ROLES:
