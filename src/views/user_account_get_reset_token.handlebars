@@ -6,31 +6,79 @@
     {{#if error_message}}
             {{#ifNotEquals error_message ""}}
             <div class="alert alert-danger" role="alert">
-                {{error_message}}
+                <p>There was an error!</p>
+                <p>{{error_message}}</p>
             </div>
             {{/ifNotEquals}}
     {{/if}}
 
-
-    <div class="container">
-        <div class="row">
-            <div class="col-md-4">
-                <form method="post" action="/account/reset-token" class="nps-form">
-                    <div class="mb-3">
-                        <input type="text" id="token" name="token" value="{{{token}}}" hidden>
-                        <label for="password" class="form-label text-white">New Password:</label>
-                        <input type="password" id="password" name="password" placeholder="password" required>
-                    </div>
-                    <div class="mb-3">
-                        <input class="btn btn-secondary" style="width:100%" type="submit" value="Reset Password">
-                    </div>
-                </form>
-
-                <p class="text-white">The admin section of the website uses functional cookies.</p>
-            </div>
-            <div class="col-md-4">
-                <h2>Password Reset</h2>
-                <p>Please enter a new password for this account.</p>
-            </div>
+<div class="container">
+    <div class="row">
+        <div class="col-md-4">
+            <form method="post" action="/account/reset-token" class="nps-form" onsubmit="return validatePassword()">
+                <div class="mb-3">
+                    <input type="text" id="token" name="token" value="{{{token}}}" hidden>
+                    <label for="password" class="form-label text-white">New Password:</label>
+                    <input type="password" id="password" name="password" placeholder="password" required>
+                </div>
+                <div class="mb-3">
+                    <label for="confirm-password" class="form-label text-white">Confirm Password:</label>
+                    <input type="password" id="confirm-password" name="confirm-password" placeholder="confirm password" required>
+                </div>
+                <div class="mb-3">
+                    <input type="checkbox" id="show-password" onclick="togglePasswordVisibility()"> Show Password
+                </div>
+                <div class="mb-3">
+                    <input class="btn btn-secondary" style="width:100%" type="submit" value="Reset Password">
+                </div>
+            </form>
+            <div id="AlertMessageDiv"></div>
+            <p class="text-white">The admin section of the website uses functional cookies.</p>
+        </div>
+        <div class="col-md-4">
+            <h2>Password Reset</h2>
+            <p>Please enter a new password for this account.</p>
         </div>
     </div>
+</div>
+
+<script>
+function validatePassword() {
+    var password = document.getElementById("password").value;
+    var confirmPassword = document.getElementById("confirm-password").value;
+    var alertMessageDiv = document.getElementById("AlertMessageDiv");
+
+    alertMessageDiv.innerHTML = "";  // Clear previous messages
+    document.getElementById("password").style.backgroundColor = "";
+    document.getElementById("confirm-password").style.backgroundColor = "";
+
+    if (password.length < 8) {
+        alertMessageDiv.innerHTML = '<div class="alert alert-danger" role="alert">Password must be at least 8 characters long.</div>';
+        document.getElementById("password").style.backgroundColor = "pink";
+        document.getElementById("confirm-password").style.backgroundColor = "pink";
+        return false;
+    }
+
+    if (password !== confirmPassword) {
+        alertMessageDiv.innerHTML = '<div class="alert alert-danger" role="alert">Passwords do not match.</div>';
+        document.getElementById("password").style.backgroundColor = "pink";
+        document.getElementById("confirm-password").style.backgroundColor = "pink";
+        return false;
+    }
+
+    return true;
+}
+
+function togglePasswordVisibility() {
+    var passwordField = document.getElementById("password");
+    var confirmPasswordField = document.getElementById("confirm-password");
+    if (passwordField.type === "password" && confirmPasswordField.type === "password") {
+        passwordField.type = "text";
+        confirmPasswordField.type = "text";
+    } else {
+        passwordField.type = "password";
+        confirmPasswordField.type = "password";
+    }
+}
+</script>
+
