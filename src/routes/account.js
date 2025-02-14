@@ -265,12 +265,9 @@ router.post('/reset-password', (req, res) => {
             resetPasswordToken: token,
             resetPasswordExpires: Date.now() + 3600000,
         }).then(() => {
-            text = `You are receiving this message because you have requested the reset of the password for your account.\n\n
-                Please click on the following link, or paste this into your browser to complete the process:\n\n
-                https://www.vipercloud.cc/account/reset-token/${token}\n\n
-                If you did not request this, please ignore this email and your password will remain unchanged.\n`
 
-            emailRelay.sendResetEmail(email, text);
+
+            emailRelay.sendResetEmail(email, user.username, token);
             res.render('user_account_post_reset_password');
 
         }).catch(err => {
