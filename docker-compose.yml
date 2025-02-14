@@ -22,7 +22,8 @@ services:
     networks:
       - viper-gui
       - ingress-proxy
-    command: ["sh", "-c", "npm install && npm install -g nodemon && nodemon app.js"]
+    command: ["node app.js"]
+    # command: ["sh", "-c", "npm install && npm install -g nodemon && nodemon app.js"]
     
   mysqldb:
     image: mysql:5.7
