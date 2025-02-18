@@ -26,7 +26,7 @@ services:
       - mysqldb
     networks:
       - viper-gui
-      # - ingress-proxy
+      - ingress-proxy
     ##########################################
     # This command for production  
     command: [ "node", "app.js" ]
