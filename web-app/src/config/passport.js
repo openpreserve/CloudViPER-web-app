@@ -2,11 +2,11 @@ var GoogleStrategy = require('passport-google-oauth20').Strategy;
 var LocalStrategy = require('passport-local').Strategy;
 
 // var LocalAccount = require('../models/localaccount');
-const database = require('../utility/db.js');
+const database = require('../utility/db');
 
 // load the auth variables
-var configAuth = require('./auth');
-var mailer = require('../utility/emailRelay.js');
+var configAuth = require('./auth.js');
+var mailer = require('../utility/emailRelay');
 const { sanitizeUsername, updateRoleIfAdmin } = require('../utility/helperFunctions.js');
 
 
