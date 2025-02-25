@@ -43,3 +43,18 @@ th {
 .form-inviteuser button{
     display: block;
 }
+#react-root{
+    background:#fff; 
+    padding: 5px;
+}
+.fw-bold{
+    font-weight: bold;
+    text-align: center;
+    display: block;
+}
+
+.fw-bold i {
+    font-size: 0.8em; /* Adjust size */
+    vertical-align: middle; /* Align vertically */
+    margin-left: 5px;
+}

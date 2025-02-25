@@ -64,6 +64,17 @@ class ViperInstanceList extends React.Component {
         return (
           <div>
             <h1>Viper Instances</h1>
+            <p class="alert alert-info">
+              <h3>Information about instances:</h3>
+              Here you can interact with your cloud viper instances. A cloud viper instance will be created on demand for you to test and experiment with. 
+              When you click the "Start" button below the desktop will boot up behind the scenes, and once the initialization is complete you can follow 
+              the links to use the instance of cloud viper. You will need the username and password shown in the details below to log into your instance.
+              The initialization process should only take about a minute, but depending on load can take longer. We are very interested in this part of the 
+              process - so if you find the instance does not appear to start, or takes a long time, please report this back in your feedback.
+              <br />
+              <a target="_blank" class="fw-bold" href="https://docs.google.com/forms/d/e/1FAIpQLSffd7Af_LOp1I8_bTA-tA0LQ1hbFgSyVkAxKEq_D0GkNbSX4A/viewform">Bug reports and feedback!<i class="fas fa-external-link-alt ms-1"></i></a>
+              <br />Or you can email me at <strong>darren@openpreservation.org</strong> using the subject line <strong>"Cloud Viper Testing"</strong>.
+            </p>
             <div className="btn-container">
               <button className="btn btn-primary" onClick={this.startNewInstance}>Start New Instance</button>
             </div>
