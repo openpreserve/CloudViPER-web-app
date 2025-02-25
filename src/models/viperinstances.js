@@ -40,6 +40,11 @@ function model(sequelize) {
             allowNull: false,
             defaultValue: 'initilising' //begin_cert, cert_issued, active, begin_delete, deleted,
         },
+        logs: {  // New field for logs
+            type: DataTypes.JSON,
+            allowNull: true,
+            defaultValue: [], // Initialize as an empty array
+        },
     };
 
     return sequelize.define('ViperInstances', attributes);

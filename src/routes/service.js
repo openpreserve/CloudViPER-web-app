@@ -175,6 +175,7 @@ router.get('/new-instance', async (req, res) => {
                     kasmvncPassword: kasmvncPassword,
                     statusKey: statusKey,
                     owner: ownerId,
+                    logs: [ { timestamp: new Date(), message: "Created"} ],
                 }).then((newViperInstance) => {
                     res.json({
                         'container': {
@@ -243,15 +244,21 @@ router.get('/terminate-instance/:containerId', async (req, res) => {
             ti_response["REMOVE"] = { 'Container removed': data };
             // res.json(ti_response);
 
-
-            database.ViperInstance.update(
-                { status: 'deleted' }, // The fields to update
-                {
-                  where: {
-                    dockerid: containerID // The condition to find the correct entry
-                  }
+            database.ViperInstance.findOne({
+                where: {
+                    dockerid: containerID
                 }
-              ).then(() => {
+            }).then(instance => {
+                if (!instance) {
+                    console.error('Instance not found');
+                    return; // Or throw an error if you prefer
+                }
+            
+                instance.logs = [...instance.logs, { timestamp: new Date(), message: 'Status changed to deleted' }];
+                instance.status = 'deleted'; 
+            
+                return instance.save(); // Save both the logs and the status
+            }).then(() =>{
                   // console.log('Instance status updated to deleted.');
                   ti_response["DATABASE"] = { 'Entry Updated': containerID };
                   res.json(ti_response);
@@ -273,14 +280,22 @@ router.get('/set-status-instance/:statuskey/:status', async (req, res) => {
 
     let ti_response = {}
 
-    database.ViperInstance.update(
-        { status: _status }, // The fields to update
-        {
-          where: {
-            statusKey: _statuskey // The condition to find the correct entry
-          }
+
+    database.ViperInstance.findOne({
+        where: {
+            statusKey: _statuskey
         }
-      ).then(() => {
+    }).then(instance => {
+        if (!instance) {
+            console.error('Instance not found');
+            return; // Or throw an error if you prefer
+        }
+    
+        instance.logs = [...instance.logs, { timestamp: new Date(), message: 'Set Status to: '+_status }];
+        instance.status = _status; // Update the status as well
+    
+        return instance.save(); // Save both the logs and the status
+    }).then(() => {
           ti_response["DATABASE"] = { 'Entry Updated': _statuskey };
           res.json(ti_response);
         })
