@@ -1,6 +1,6 @@
 // config/auth.js
 
-module.exports = {
+const auth = {
     'googleAuth':
     {
         clientID: process.env.GOOGLE_AUTH_CLIENT_ID,
@@ -17,3 +17,5 @@ module.exports = {
         database: process.env.DB_NAME,
     },
 };
+
+export default auth;

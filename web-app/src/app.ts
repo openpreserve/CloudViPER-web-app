@@ -1,16 +1,20 @@
-const express = require('express');
-const exphbs = require("./config/handlebars");
-const dotenv = require('dotenv').config();
-const bodyParser = require('body-parser');
-const expressSession = require('express-session');
+import express, { Application } from 'express';
+import exphbs from './config/handlebars';
+import dotenv from 'dotenv';
+import bodyParser from 'body-parser';
+import expressSession from 'express-session';
 const MySQLStore = require('express-mysql-session')(expressSession);
-const passport = require('passport');
-const flash = require('connect-flash');
+// import MySQLStore from 'express-mysql-session';
+import passport from 'passport';
+import flash from 'connect-flash';
 
-var configAuth = require('./config/auth');
+import configAuth from './config/auth';
 
-const app = express();
-const PORT = process.env.PORT || 3000;
+dotenv.config();
+
+const app: Application = express();
+const PORT: number = parseInt(process.env.PORT || '3000', 10);
+const secure_cookie = (process.env.NODE_ENV === 'production') ? true || false : false;
 
 // Begin server setup
 app.use( bodyParser.urlencoded({ extended: true}) );
@@ -18,18 +22,8 @@ let path = require('path');
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
 
-//  sessions
-let session_config = {
-    name:"vipercloud.sid",
-    cookie: { maxAge: ((4 * 24) * 60 * 60 * 1000) }, // 4 days
-    store: new MySQLStore( configAuth.mysqlSessionAuth ),
-    secret: process.env.APP_COOKIE_SECRET, // Replace with your own secret key
-    resave: false,
-    saveUninitialized: false,
-}
 // Prod specific 
 if (process.env.NODE_ENV === 'production') {
-    session_config.cookie.secure = true;
     app.use((req, res, next)=>{
         //force https
         if (req.headers['x-forwarded-proto'] !== 'https') {
@@ -38,6 +32,16 @@ if (process.env.NODE_ENV === 'production') {
         next();
     });
 }
+
+// Sessions
+let session_config: expressSession.SessionOptions = {
+    name: "vipercloud.sid",
+    cookie: { maxAge: ((4 * 24) * 60 * 60 * 1000), secure: secure_cookie }, // 4 days
+    store: MySQLStore(configAuth.mysqlSessionAuth),
+    secret: process.env.APP_COOKIE_SECRET || 'default_secret', // Replace with your own secret key
+    resave: false,
+    saveUninitialized: false,
+};
 
 // Add session to app
 const sessionMW = expressSession(session_config);

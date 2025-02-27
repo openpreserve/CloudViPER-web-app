@@ -1,24 +1,22 @@
-const { create } = require('express-handlebars');
-const path = require('path');
+import { create } from 'express-handlebars';
+import path from 'path';
 
 const hbs = create({
-        partialsDir: path.join(__dirname, '../views/partials'),
-        // Specify helpers which are only registered on this instance.
-        helpers: {
-            ifEquals: (value1, value2, options) => {
-                if (value1 == value2) {
-                    return options.fn(this);             
-                }
-                return options.inverse(this);
-            },
-            ifNotEquals: (value1, value2, options) => {
-                if (value1 != value2) {
-                    return options.fn(this);             
-                }
-                return options.inverse(this);
+    partialsDir: path.join(__dirname, '../views/partials'),
+    helpers: {
+        ifEquals: (value1: any, value2: any, options: any) => {
+            if (value1 == value2) {
+                return options.fn(this);
             }
-       }
+            return options.inverse(this);
+        },
+        ifNotEquals: (value1: any, value2: any, options: any) => {
+            if (value1 != value2) {
+                return options.fn(this);
+            }
+            return options.inverse(this);
+        }
+    }
 });
 
-// Register the custom helper directly on the handlebars instance used by express-handlebars
-module.exports =  hbs;
+export default hbs;

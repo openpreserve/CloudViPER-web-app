@@ -1,17 +1,20 @@
-const dotenv = require('dotenv').config();
-const mysql = require('mysql2/promise');
-const { Sequelize } = require('sequelize');
+import dotenv from 'dotenv';
+import mysql from 'mysql2/promise';
+import { Sequelize } from 'sequelize';
+import userModel from '../models/user';
+import viperInstanceModel from '../models/viperinstances';
 
+dotenv.config();
 
-module.exports = db = {};
+const db: any = {};
 
 initialize();
 
 async function initialize() {
     const sequelize = new Sequelize(
-        process.env.DB_NAME,
-        process.env.DB_USER, //'root', 
-        process.env.DB_PASSWORD,
+        process.env.DB_NAME!,
+        process.env.DB_USER!, //'root', 
+        process.env.DB_PASSWORD!,
         {
             host: process.env.DB_HOST,
             dialect: 'mysql',
@@ -20,9 +23,11 @@ async function initialize() {
     );
 
     // init models and add them to the exported db object
-    db.User = require('../models/user')(sequelize);
-    db.ViperInstance = require('../models/viperinstances')(sequelize);
+    db.User = userModel(sequelize);
+    db.ViperInstance = viperInstanceModel(sequelize);
 
     // sync all models with database
     await sequelize.sync({ alter: true });
 }
+
+export default db;

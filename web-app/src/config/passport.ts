@@ -1,84 +1,96 @@
-var GoogleStrategy = require('passport-google-oauth20').Strategy;
-var LocalStrategy = require('passport-local').Strategy;
+import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
+import { Strategy as LocalStrategy } from 'passport-local';
+import { PassportStatic } from 'passport';
+import database from '../utility/db';
+import configAuth from './auth';
+import emailRelay from '../utility/emailRelay';
+import helperFunctions from '../utility/helperFunctions';
 
-// var LocalAccount = require('../models/localaccount');
-const database = require('../utility/db');
-
-// load the auth variables
-var configAuth = require('./auth.js');
-var mailer = require('../utility/emailRelay');
-const { sanitizeUsername, updateRoleIfAdmin } = require('../utility/helperFunctions.js');
-
-
-module.exports = (passport) => {
+export default (passport: PassportStatic) => {
     passport.use(database.User.createStrategy());
     passport.use(new LocalStrategy(database.User.authenticate()));
 
-    passport.serializeUser((user, done) => {
+    passport.serializeUser((user: any, done: (err: any, id?: any) => void) => {
         done(null, user.email);
     });
     
-    passport.deserializeUser((email, done) => {
-        database.User.findOne({ where: { email: email} }).then((user) => {
+    passport.deserializeUser((email: string, done: (err: any, user?: any) => void) => {
+        interface User {
+            email: string;
+            oauthID?: string;
+            username?: string;
+            role?: string;
+            save: () => Promise<User>;
+        }
+
+        interface DoneFunction {
+            (err: any, user?: User | null): void;
+        }
+
+        database.User.findOne({ where: { email: email } }).then((user: User | null) => {
             done(null, user);
         }).catch(done);
     });
     
     passport.use(new GoogleStrategy(configAuth.googleAuth, 
-        (accessToken, refreshToken, profile, done) => {
+        (accessToken: string, refreshToken: string, profile: any, done: (err: any, user?: any) => void) => {
             const _email = profile.emails[0].value || '';
-        
-            // First, find a user with the provided oauthID
+            interface User {
+                email: string;
+                oauthID?: string;
+                username?: string;
+                role?: string;
+                save: () => Promise<User>;
+            }
+
+            interface Profile {
+                id: string;
+                displayName: string;
+                emails: { value: string }[];
+            }
+
+            interface DoneFunction {
+                (err: any, user?: User | null): void;
+            }
+
             database.User.findOne({ where: { oauthID: profile.id } })
-            .then(user => {
+            .then((user: User | null) => {
                 if (user) {
                     // If the user with the oauthID exists, return the user
                     return done(null, user);
                 } else {
                     // If no user with the oauthID exists, look for a user with the same email
                     database.User.findOne({ where: { email: _email } })
-                    .then(existingUser => {
+                    .then((existingUser: User | null) => {
                         if (existingUser) {
-                            // Update the existing user with Google profile info
-                            existingUser.update({
-                                oauthID: profile.id,
-                                oauthProvider: 'google',
-                                profile_pic: profile.photos[0].value,
-                                oauthProfile: profile
-                            }).then(updatedUser => {
+                            // Update the existing user with the oauthID
+                            existingUser.oauthID = profile.id;
+                            existingUser.save().then((updatedUser: User) => {
                                 return done(null, updatedUser);
-                            }).catch(err => {
-                                console.log("GooglePassport update err: ", err);
-                                return done(null, false, { message: err.message });
+                            }).catch((err: any) => {
+                                return done(err);
                             });
                         } else {
-                            // Create a new user with the Google profile info
-                            database.User.create({
-                                oauthID: profile.id,
+                            // If no user with the same email exists, create a new user
+                            const newUser = database.User.build({
+                                username: helperFunctions.sanitizeUsername(profile.displayName),
                                 email: _email,
-                                name: profile.displayName,
-                                username: sanitizeUsername(profile.displayName),
-                                oauthProvider: 'google',
-                                profile_pic: profile.photos[0].value,
-                                role: updateRoleIfAdmin(_email),
-                                created: Date.now()
-                            }).then(newUser => {
-                                mailer.sendWelcomeEmail(_email, sanitizeUsername(profile.displayName));
-                                return done(null, newUser);
-                            }).catch(err => {
-                                console.log("GooglePassport create err: ", err);
-                                return done(null, false, { message: err.message });
+                                oauthID: profile.id,
+                                role: helperFunctions.updateRoleIfAdmin(_email)
+                            });
+                            newUser.save().then((savedUser: User) => {
+                                return done(null, savedUser);
+                            }).catch((err: any) => {
+                                return done(err);
                             });
                         }
-                    }).catch(err => {
-                        console.log("GooglePassport find by email err: ", err);
+                    }).catch((err: any) => {
                         return done(err);
                     });
                 }
-            }).catch(err => {
-                console.log("GooglePassport find by oauthID err: ", err);
+            }).catch((err: any) => {
                 return done(err);
             });
-        }));
-
-}; //module exports
+        }
+    ));
+};

@@ -1,12 +1,13 @@
 // utility/email-relay.js
 
-const sgMail = require('@sendgrid/mail')
-sgMail.setApiKey(process.env.SENDGRID_API_KEY)
+import sgMail from '@sendgrid/mail';
+
+sgMail.setApiKey(process.env.SENDGRID_API_KEY!);
 
 const _footer =  '<h3>&nbsp;-&nbsp;ViPER Cloud team</h3><div style="font-size: 12px; color: grey; text-align: center; padding: 10px;">This is an unmanaged email account, and as a result cannot recieve messages, do not reply to this message. If you need help and support, please reach out to <strong>sysadmin@openpreservation.org</strong></div>';
 
-module.exports = {
-    sendWelcomeEmail : function(in_email, in_username){
+const emailRelay = {
+    sendWelcomeEmail : (in_email: string, in_username: string)=>{
         sgMail.send({
             to: in_email, 
             from: 'no-reply@vipercloud.cc',
@@ -20,11 +21,11 @@ module.exports = {
         }).then(() => {
           console.log('Email sent')
         })
-        .catch((error) => {
+        .catch((error: any) => {
           console.error(error)
         });
     },
-    sendInvitedEmail : function(in_email, in_username, in_invitee){
+    sendInvitedEmail : (in_email: string, in_username: string, in_invitee: string)=>{
       sgMail.send({
           to: in_email, 
           from: 'no-reply@vipercloud.cc',
@@ -45,11 +46,11 @@ module.exports = {
       }).then(() => {
         console.log('Email sent')
       })
-      .catch((error) => {
+      .catch((error: any) => {
         console.error(error)
       });
     },
-    sendResetEmail : function(in_email, in_username, in_token){
+    sendResetEmail : (in_email: string, in_username: string, in_token: string)=>{
       sgMail.send({
           to: in_email, 
           from: 'no-reply@vipercloud.cc',
@@ -72,8 +73,10 @@ module.exports = {
       }).then(() => {
         console.log('Email sent')
       })
-      .catch((error) => {
+      .catch((error: any) => {
         console.error(error)
       });
   },
 };
+
+export default emailRelay;

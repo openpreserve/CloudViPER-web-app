@@ -1,5 +1,5 @@
-const passport = require('passport');
-const Sequelize = require('sequelize'); //this is passed in as lowercase sequelize.... refactor?
+import passport from 'passport';
+import { Sequelize, DataTypes, Model, Optional } from 'sequelize';
 const passportLocalSequelize = require('passport-local-sequelize');
 
 /*
@@ -13,57 +13,77 @@ admin - viper and user management
 
 */
 
-function model(sequelize) {
-    const attributes = {
-        username: { type: Sequelize.STRING, allowNull: false },
-        email: { type: Sequelize.STRING, allowNull: false, validate: { isEmail: true } },
-        title: { type: Sequelize.STRING, allowNull: true },
-        firstName: { type: Sequelize.STRING, allowNull: true },
-        lastName: { type: Sequelize.STRING, allowNull: true },
-        role: { type: Sequelize.STRING, allowNull: false },
+interface UserAttributes {
+    id: number;
+    username: string;
+    email: string;
+    title?: string;
+    firstName?: string;
+    lastName?: string;
+    role: string;
+    oauthID?: string;
+    oauthProvider?: string;
+    salt?: object;
+    hash?: object;
+    resetPasswordToken?: string;
+    resetPasswordExpires?: Date;
+    oauthProfile?: object;
+}
 
-        oauthID: { type: Sequelize.STRING },
-        oauthProvider: { type: Sequelize.STRING },
+interface UserCreationAttributes extends Optional<UserAttributes, 'id'> {}
 
-        salt: { type: Sequelize.JSON },
-        hash: { type: Sequelize.JSON },
+class User extends Model<UserAttributes, UserCreationAttributes> implements UserAttributes {
+    public id!: number;
+    public username!: string;
+    public email!: string;
+    public title?: string;
+    public firstName?: string;
+    public lastName?: string;
+    public role!: string;
+    public oauthID?: string;
+    public oauthProvider?: string;
+    public salt?: object;
+    public hash?: object;
+    public resetPasswordToken?: string;
+    public resetPasswordExpires?: Date;
+    public oauthProfile?: object;
+}
 
-        resetPasswordToken: { type: Sequelize.STRING },
-        resetPasswordExpires: { type: Sequelize.DATE },
-        oauthProfile: { type: Sequelize.JSON },
-
-    };
-
-    const options = {
-        defaultScope: {
-            // exclude password hash by default
-            attributes: { exclude: ['passwordHash'] }
+function model(sequelize: Sequelize) {
+    User.init(
+        {
+            id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
+            username: { type: DataTypes.STRING, allowNull: false },
+            email: { type: DataTypes.STRING, allowNull: false, validate: { isEmail: true } },
+            title: { type: DataTypes.STRING, allowNull: true },
+            firstName: { type: DataTypes.STRING, allowNull: true },
+            lastName: { type: DataTypes.STRING, allowNull: true },
+            role: { type: DataTypes.STRING, allowNull: false },
+            oauthID: { type: DataTypes.STRING },
+            oauthProvider: { type: DataTypes.STRING },
+            salt: { type: DataTypes.JSON },
+            hash: { type: DataTypes.JSON },
+            resetPasswordToken: { type: DataTypes.STRING },
+            resetPasswordExpires: { type: DataTypes.DATE },
+            oauthProfile: { type: DataTypes.JSON },
         },
-        scopes: {
-            // include hash with this scope
-            withHash: { attributes: {}, }
-        },
-        indexes: [
-            {
-                unique: true,
-                fields: ['username']
+        {
+            sequelize,
+            modelName: 'User',
+            defaultScope: {
+                // exclude password hash by default
+                attributes: { exclude: ['hash'] },
             },
-            {
-                unique: true,
-                fields: ['email']
-            },
-        ]
-    };
+        }
+    );
 
-    var User = sequelize.define('User', attributes, options);
     passportLocalSequelize.attachToUser(User, {
         usernameField: 'username',
         hashField: 'hash',
-        saltField: 'salt'
+        saltField: 'salt',
     });
 
     return User;
 }
 
-
-module.exports = model;
+export default model;

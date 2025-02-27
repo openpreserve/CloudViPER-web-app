@@ -1,19 +1,22 @@
-const express = require('express');
+import express, { Request, Response } from 'express';
+import bodyParser from 'body-parser';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
 const router = express.Router();
-const bodyParser = require('body-parser');
-const dotenv = require('dotenv').config();
 
 /* GET home page. */
-router.get('/', (req, res)=>{
+router.get('/', (req: Request, res: Response) => {
   res.redirect("/account/login");
 });
 
-router.get('/privacy-policy', (req, res)=>{
+router.get('/privacy-policy', (req: Request, res: Response) => {
   res.send("Privacy Policy Coming Soon");
 });
 
-router.get('/terms', (req, res)=>{
+router.get('/terms', (req: Request, res: Response) => {
   res.send("Terms and Conditions Coming Soon");
 });
 
-module.exports = router;
+export default router;
