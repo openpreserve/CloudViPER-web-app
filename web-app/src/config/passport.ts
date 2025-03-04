@@ -1,4 +1,5 @@
-import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
+import express, { Request, Response } from 'express';
+import { Strategy as GoogleStrategy, StrategyOptionsWithRequest, Profile, VerifyCallback } from 'passport-google-oauth20';
 import { Strategy as LocalStrategy } from 'passport-local';
 import { PassportStatic } from 'passport';
 import database from '../utility/db';
@@ -31,9 +32,20 @@ export default (passport: PassportStatic) => {
             done(null, user);
         }).catch(done);
     });
-    
-    passport.use(new GoogleStrategy(configAuth.googleAuth, 
-        (accessToken: string, refreshToken: string, profile: any, done: (err: any, user?: any) => void) => {
+
+    const googleStrategyOptions: StrategyOptionsWithRequest = {
+            clientID: configAuth.googleAuth.clientID || '',
+            clientSecret: configAuth.googleAuth.clientSecret || '',
+            callbackURL: configAuth.googleAuth.callbackURL,
+            passReqToCallback: true
+    };  
+
+    passport.use( new GoogleStrategy(googleStrategyOptions,
+        async (req: Request, accessToken: string, refreshToken: string, profile: Profile, done: VerifyCallback) => {
+            if (!profile.emails || profile.emails.length === 0) {
+                return done(new Error('No email found in profile'), false);
+            }
+
             const _email = profile.emails[0].value || '';
             interface User {
                 email: string;
@@ -91,6 +103,7 @@ export default (passport: PassportStatic) => {
             }).catch((err: any) => {
                 return done(err);
             });
-        }
-    ));
+        })
+    );
 };
+    

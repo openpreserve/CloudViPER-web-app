@@ -34,6 +34,14 @@ interface User {
     // Add other properties as needed
 }
 
+function userToJson(_user:User){
+    return {
+        id: _user.id,
+        username: _user.username,
+        role: _user.role,
+    }
+}
+
 interface SafeUser {
     id: number;
     username: string;
@@ -62,7 +70,7 @@ router.get('/', (req: Request, res: Response) => {
             default:
                 res.render('user_account_index', {
                     // csrfToken: req.csrfToken(),
-                    user: req.user ? req.user.toJSON() : {},
+                    user: userToJson(user),
                     alertSuccess: alertSuccess
                 });
         }
@@ -115,7 +123,7 @@ router.get('/users', (req: Request, res: Response) => {
         database.User.findAll().then((users: User[]) => {
             // Remove 'salt' and 'hash' from each user
             const safeUsers: SafeUser[] = users.map(user => {
-                const { salt, hash, ...safeUser } = user.toJSON() as any; // Use toJSON() to get a plain object
+                const { salt, hash, ...safeUser } = userToJson(user) as any; // Use toJSON() to get a plain object
                 return safeUser as SafeUser;
             });
 

@@ -150,11 +150,11 @@ router.get('/new-instance', async (req: Request, res: Response) => {
             Env: string[];
         }
 
-        interface DockerContainer {
-            id: string;
-            start: (callback: (err: Error | null, data: any) => void) => void;
-            exec: (options: DockerExecOptions) => Promise<DockerExec>;
-        }
+        // interface DockerContainer extends Docker.Container {
+        //     id: string;
+        //     start: (callback: (err: Error | null, data: any) => void) => void;
+        //     exec: (options: DockerExecOptions) => Promise<DockerExec>;
+        // }
 
         interface DockerExecOptions {
             AttachStdout: boolean;
@@ -186,12 +186,17 @@ router.get('/new-instance', async (req: Request, res: Response) => {
                 }
             },
             Env: envVars,
-        } as DockerContainerOptions, (err: Error | null, container: DockerContainer) => {
+        } as DockerContainerOptions, (err: Error, container: Docker.Container | undefined) => {
             if (err) {
                 console.log('err: 1:');
                 console.log(err);
                 res.json({ 'error1': err });
             }
+            
+            if (!container) {
+                return res.status(500).json({ message: 'Container creation failed' });
+            }
+
             container.start(async (err: Error | null, data: any) => {
                 if (err) {
                     console.log('err: 2');
@@ -206,11 +211,11 @@ router.get('/new-instance', async (req: Request, res: Response) => {
                     const stream = await exec.start({
                         hijack: true, stdin: true
                     });
-                    stream.output.on('data', (data: any) => {
+                    stream.on('data', (data: any) => {
                         console.log(data.toString());
                     });
                     await new Promise((resolve) => {
-                        stream.output.on('end', resolve);
+                        stream.on('end', resolve);
                     });
                     console.log('Sudoers file deleted successfully');
                 } catch (execErr) { console.error('Error executing command:', execErr); }
@@ -223,11 +228,11 @@ router.get('/new-instance', async (req: Request, res: Response) => {
                     const stream = await exec.start({
                         hijack: true, stdin: true
                     });
-                    stream.output.on('data', (data: any) => {
+                    stream.on('data', (data: any) => {
                         console.log(data.toString());
                     });
                     await new Promise((resolve) => {
-                        stream.output.on('end', resolve);
+                        stream.on('end', resolve);
                     });
                     console.log('Sudoers file deleted successfully');
                 } catch (execErr) { console.error('Error executing command:', execErr); }
