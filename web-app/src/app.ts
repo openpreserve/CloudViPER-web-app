@@ -2,15 +2,15 @@ import express, { Application } from 'express';
 import exphbs from './config/handlebars';
 import dotenv from 'dotenv';
 import bodyParser from 'body-parser';
-import expressSession from 'express-session';
-const MySQLStore = require('express-mysql-session')(expressSession);
-// import MySQLStore from 'express-mysql-session';
 import passport from 'passport';
 import flash from 'connect-flash';
 
 import configAuth from './config/auth';
 
 dotenv.config();
+
+import session from 'express-session'
+const MySQLStore = require('express-mysql-session')(session);
 
 const app: Application = express();
 const PORT: number = parseInt(process.env.PORT || '3000', 10);
@@ -34,24 +34,26 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 // Sessions
-let session_config: expressSession.SessionOptions = {
+let session_config: session.SessionOptions = {
     name: "vipercloud.sid",
     cookie: { maxAge: ((4 * 24) * 60 * 60 * 1000), secure: secure_cookie }, // 4 days
-    store: MySQLStore(configAuth.mysqlSessionAuth),
+    store: new MySQLStore(configAuth.mysqlSessionAuth),
     secret: process.env.APP_COOKIE_SECRET || 'default_secret', // Replace with your own secret key
     resave: false,
     saveUninitialized: false,
 };
 
 // Add session to app
-const sessionMW = expressSession(session_config);
+const sessionMW = session(session_config);
 app.use(sessionMW);
 app.use(flash());
 
 // Configure passport
 app.use(passport.initialize());
 app.use(passport.session());
-require('./config/passport.js')(passport);
+import configurePassport from './config/passport';
+configurePassport(passport);
+
 
 
 // View Engine
@@ -61,9 +63,13 @@ app.set('view engine', 'handlebars');
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Add routes
-app.use('/', require('./routes/home'));
-app.use('/account', require('./routes/account'));
-app.use('/service', require('./routes/service'));
+// Add routes
+import homeRouter from './routes/home';
+import accountRouter from './routes/account';
+import serviceRouter from './routes/service';
+app.use('/', homeRouter);
+app.use('/account', accountRouter);
+app.use('/service', serviceRouter);
 
 if (process.env.NODE_ENV === 'production') {
     app.use(function (req, res, next) {
