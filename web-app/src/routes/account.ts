@@ -8,6 +8,7 @@ import crypto from 'crypto';
 import helperFunctions from '../utility/helperFunctions';
 import emailRelay from '../utility/emailRelay';
 import configAuth from '../config/auth';
+import { create } from 'express-handlebars';
 
 dotenv.config();
 
@@ -30,6 +31,9 @@ interface User {
     id: number;
     username: string;
     role: string;
+    email: string;
+    updatedAt?: Date;
+    createdAt?: Date;
     toJSON?: () => object;
     // Add other properties as needed
 }
@@ -39,6 +43,9 @@ function userToJson(_user:User){
         id: _user.id,
         username: _user.username,
         role: _user.role,
+        email: _user.email,
+        updatedAt: _user.updatedAt,
+        createdAt: _user.createdAt,
     }
 }
 
@@ -47,6 +54,8 @@ interface SafeUser {
     username: string;
     email: string;
     role: string;
+    updatedAt?: Date;
+    createdAt?: Date;
     // Add other properties as needed
 }
 
