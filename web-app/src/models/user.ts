@@ -28,6 +28,8 @@ interface UserAttributes {
     resetPasswordToken?: string;
     resetPasswordExpires?: Date;
     oauthProfile?: object;
+    createdAt?: Date;
+    updatedAt?: Date;
 }
 
 interface UserCreationAttributes extends Optional<UserAttributes, 'id'> {}
@@ -47,6 +49,8 @@ class User extends Model<UserAttributes, UserCreationAttributes> implements User
     public resetPasswordToken?: string;
     public resetPasswordExpires?: Date;
     public oauthProfile?: object;
+    public createdAt?: Date;
+    public updatedAt?: Date;
 }
 
 function model(sequelize: Sequelize) {
@@ -66,6 +70,8 @@ function model(sequelize: Sequelize) {
             resetPasswordToken: { type: DataTypes.STRING },
             resetPasswordExpires: { type: DataTypes.DATE },
             oauthProfile: { type: DataTypes.JSON },
+            createdAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
+            updatedAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
         },
         {
             sequelize,
@@ -74,6 +80,7 @@ function model(sequelize: Sequelize) {
                 // exclude password hash by default
                 attributes: { exclude: ['hash'] },
             },
+            timestamps: true, // Enable timestamps
         }
     );
 
