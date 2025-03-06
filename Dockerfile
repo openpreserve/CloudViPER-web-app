@@ -3,7 +3,7 @@ FROM node:22-alpine3.19
 # Set the working directory
 WORKDIR /usr/src/app
 
-COPY ./src/ ./
+COPY ./web-app/dist/ ./
 
 # Install dependencies
 RUN npm install
