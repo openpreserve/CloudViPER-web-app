@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import { Op } from 'sequelize';
 import Docker from 'dockerode';
 import database from '../utility/db';
+import ViperInstance from '../models/viperInstance';
 import helperFunctions from '../utility/helperFunctions';
 
 dotenv.config();
@@ -29,19 +30,19 @@ interface User {
     // Add other properties as needed
 }
 
-interface ViperInstance {
-    id: number;
-    uuid: string;
-    dockerid: string;
-    name: string;
-    url: string;
-    kasmvncPassword: string;
-    statusKey: string;
-    owner: number;
-    status: string;
-    logs: LogEntry[];
-    save: () => Promise<void>;
-}
+// interface ViperInstance {
+//     id: number;
+//     uuid: string;
+//     dockerid: string;
+//     name: string;
+//     url: string;
+//     kasmvncPassword: string;
+//     statusKey: string;
+//     owner: number;
+//     status: string;
+//     logs: LogEntry[];
+//     save: () => Promise<void>;
+// }
 
 
 interface LogEntry {
@@ -246,8 +247,7 @@ router.get('/new-instance', async (req: Request, res: Response) => {
                         url: string;
                     };
                 }
-
-                database.ViperInstance.create({
+                ViperInstance.create({
                     uuid: instanceUUID,
                     dockerid: container.id,
                     name: containerName,
@@ -256,7 +256,8 @@ router.get('/new-instance', async (req: Request, res: Response) => {
                     statusKey: statusKey,
                     owner: ownerId,
                     logs: [ { timestamp: new Date(), message: "Created"} ],
-                } as ViperInstance).then((newViperInstance: ViperInstance) => {
+                    status: 'created'
+                }).then((newViperInstance: ViperInstance) => {
                     res.json({
                         container: {
                             id: container.id,
@@ -278,7 +279,7 @@ router.get('/viperinstances', async (req: Request, res: Response) => {
     const user = req.user as User | undefined;
     if (user && user.role == 'admin') {
         try {
-            const instances = await database.ViperInstance.findAll();
+            const instances = await ViperInstance.findAll();
             res.json(instances);
         } catch (error) {
             console.error('Error retrieving viper instances:', error);
@@ -287,7 +288,7 @@ router.get('/viperinstances', async (req: Request, res: Response) => {
     } else if (user && user.role != 'user') {
         try {
             const userId = user.id; // Assuming req.user.id holds the current user's ID
-            const instances = await database.ViperInstance.findAll({
+            const instances = await ViperInstance.findAll({
                 where: {
                     owner: userId
                 }
@@ -326,7 +327,7 @@ router.get('/terminate-instance/:containerId', async (req: Request, res: Respons
                 [key: string]: any;
             }
 
-            database.ViperInstance.findOne({
+            ViperInstance.findOne({
                 where: {
                     dockerid: containerID
                 }
@@ -336,7 +337,7 @@ router.get('/terminate-instance/:containerId', async (req: Request, res: Respons
                     return; // Or throw an error if you prefer
                 }
 
-                instance.logs = [...instance.logs, { timestamp: new Date(), message: 'Status changed to deleted' }];
+                instance.logs = [...(Array.isArray(instance.logs) ? instance.logs : []), { timestamp: new Date(), message: 'Status changed to deleted' }];
                 instance.status = 'deleted';
 
                 return instance.save(); // Save both the logs and the status
@@ -365,7 +366,7 @@ router.get('/set-status-instance/:statuskey/:status', async (req, res) => {
         [key: string]: any;
     }
 
-    database.ViperInstance.findOne({
+    ViperInstance.findOne({
         where: {
             statusKey: _statuskey
         }
@@ -375,7 +376,7 @@ router.get('/set-status-instance/:statuskey/:status', async (req, res) => {
             return; // Or throw an error if you prefer
         }
 
-        instance.logs = [...instance.logs, { timestamp: new Date(), message: 'Set Status to: ' + _status }];
+        instance.logs = [...(Array.isArray(instance.logs) ? instance.logs : []), { timestamp: new Date(), message: 'Set Status to: ' + _status }];
         instance.status = _status; // Update the status as well
 
         return instance.save(); // Save both the logs and the status

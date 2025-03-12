@@ -1,59 +1,130 @@
-import passport from 'passport';
-import { Sequelize, DataTypes, Model, Optional } from 'sequelize';
-const passportLocalSequelize = require('passport-local-sequelize');
+import { Sequelize, DataTypes, Model } from 'sequelize';
+import crypto from 'crypto';
+import sequelize from '../utility/db';
+import { Strategy as LocalStrategy } from 'passport-local';
 
-/*
-ROLES:
+const options = {
+    saltlen: 32,
+    iterations: 25000,
+    keylen: 512,
+    digest: 'sha256',
+    usernameField: 'username',
+    hashField: 'hash',
+    saltField: 'salt',
+    missingPasswordError: 'Password argument not set!',
+    incorrectPasswordError: 'Incorrect password',
+    incorrectUsernameError: 'Incorrect username',
+    noSaltValueStoredError: 'Authentication not possible. No salt value stored in db!',
+    userExistsError: 'User already exists with %s',
+    missingUsernameError: 'Field %s is not set',
+};
 
-user - nothing
-testing - can run one viper
-member - can run one viper
-subscriber - pays for use
-admin - viper and user management
-
-*/
-
-interface UserAttributes {
-    id: number;
-    username: string;
-    email: string;
-    title?: string;
-    firstName?: string;
-    lastName?: string;
-    role: string;
-    oauthID?: string;
-    oauthProvider?: string;
-    salt?: object;
-    hash?: object;
-    resetPasswordToken?: string;
-    resetPasswordExpires?: Date;
-    oauthProfile?: object;
-    createdAt?: Date;
-    updatedAt?: Date;
-}
-
-interface UserCreationAttributes extends Optional<UserAttributes, 'id'> {}
-
-class User extends Model<UserAttributes, UserCreationAttributes> implements UserAttributes {
+class User extends Model {
     public id!: number;
     public username!: string;
     public email!: string;
+    public hash!: string;
+    public salt!: string;
+    public resetPasswordToken!: string | null;
+    public resetPasswordExpires!: Date | null;
     public title?: string;
     public firstName?: string;
     public lastName?: string;
     public role!: string;
     public oauthID?: string;
     public oauthProvider?: string;
-    public salt?: object;
-    public hash?: object;
-    public resetPasswordToken?: string;
-    public resetPasswordExpires?: Date;
     public oauthProfile?: object;
-    public createdAt?: Date;
-    public updatedAt?: Date;
+
+    public setPassword(password: string): Promise<void> {
+        return new Promise((resolve, reject) => {
+            if (!password) {
+                return reject(new Error(options.missingPasswordError));
+            }
+
+            crypto.randomBytes(options.saltlen, (err, buf) => {
+                if (err) {
+                    return reject(err);
+                }
+
+                const salt = buf.toString('hex');
+
+                crypto.pbkdf2(password, salt, options.iterations, options.keylen, options.digest, (err, hashRaw) => {
+                    if (err) {
+                        return reject(err);
+                    }
+
+                    this.hash = Buffer.from(hashRaw).toString('hex');
+                    this.salt = salt;
+
+                    resolve();
+                });
+            });
+        });
+    }
+
+    public authenticate(password: string): Promise<User | boolean> {
+        return new Promise((resolve, reject) => {
+            if (!this.salt) {
+                return reject(new Error(options.noSaltValueStoredError));
+            }
+
+            crypto.pbkdf2(password, this.salt, options.iterations, options.keylen, options.digest, (err, hashRaw) => {
+                if (err) {
+                    return reject(err);
+                }
+
+                const hash = Buffer.from(hashRaw).toString('hex');
+
+                if (hash === this.hash) {
+                    resolve(this);
+                } else {
+                    resolve(false);
+                }
+            });
+        });
+    }
+
+    public static createStrategy() {
+        return new LocalStrategy({ usernameField: options.usernameField }, (username, password, done) => {
+            this.findOne({ where: { [options.usernameField]: username } })
+                .then((user: User | null) => {
+                    if (!user) {
+                        return done(null, false, { message: options.incorrectUsernameError });
+                    }
+
+                    user.authenticate(password)
+                        .then((authenticatedUser) => {
+                            if (authenticatedUser) {
+                                return done(null, user);
+                            } else {
+                                return done(null, false, { message: options.incorrectPasswordError });
+                            }
+                        })
+                        .catch(done);
+                })
+                .catch(done);
+        });
+    }
+
+    public static register(user: User, password: string): Promise<User> {
+        return new Promise((resolve, reject) => {
+            this.findOne({ where: { [options.usernameField]: (user as any)[options.usernameField] } })
+                .then((existingUser: User | null) => {
+                    if (existingUser) {
+                        return reject(new Error(options.userExistsError.replace('%s', (user as any)[options.usernameField])));
+                    }
+
+                    user.setPassword(password)
+                        .then(() => user.save())
+                        .then(resolve)
+                        .catch(reject);
+                })
+                .catch(reject);
+        });
+    }
 }
 
-function model(sequelize: Sequelize) {
+export const initUserModel = (sequelize: Sequelize) => {
     User.init(
         {
             id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
@@ -65,32 +136,19 @@ function model(sequelize: Sequelize) {
             role: { type: DataTypes.STRING, allowNull: false },
             oauthID: { type: DataTypes.STRING },
             oauthProvider: { type: DataTypes.STRING },
-            salt: { type: DataTypes.JSON },
-            hash: { type: DataTypes.JSON },
+            salt: { type: DataTypes.STRING },
+            hash: { type: DataTypes.STRING },
             resetPasswordToken: { type: DataTypes.STRING },
             resetPasswordExpires: { type: DataTypes.DATE },
             oauthProfile: { type: DataTypes.JSON },
-            createdAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
-            updatedAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
         },
         {
             sequelize,
             modelName: 'User',
-            defaultScope: {
-                // exclude password hash by default
-                attributes: { exclude: ['hash'] },
-            },
-            timestamps: true, // Enable timestamps
         }
     );
 
-    passportLocalSequelize.attachToUser(User, {
-        usernameField: 'username',
-        hashField: 'hash',
-        saltField: 'salt',
-    });
-
     return User;
-}
+};
 
-export default model;
+export default User;

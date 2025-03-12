@@ -1,14 +1,18 @@
 import express, { Request, Response } from 'express';
 import dotenv from 'dotenv';
-import { Op } from 'sequelize';
+import { DATE, Op } from 'sequelize';
 import database from '../utility/db';
+import DatabaseUser from '../models/user';
 import mysql from 'mysql2';
 import passport from 'passport';
+import { Strategy as LocalStrategy } from 'passport-local';
+import passportLocalSequelize from 'passport-local-sequelize';
 import crypto from 'crypto';
 import helperFunctions from '../utility/helperFunctions';
 import emailRelay from '../utility/emailRelay';
 import configAuth from '../config/auth';
 import { create } from 'express-handlebars';
+
 
 dotenv.config();
 
@@ -27,7 +31,9 @@ admin - viper and user management
 
 */
 
-interface User {
+
+
+interface SessionUser {
     id: number;
     username: string;
     role: string;
@@ -38,7 +44,7 @@ interface User {
     // Add other properties as needed
 }
 
-function userToJson(_user:User){
+function userToJson(_user:SessionUser){
     return {
         id: _user.id,
         username: _user.username,
@@ -60,7 +66,7 @@ interface SafeUser {
 }
 
 router.get('/', (req: Request, res: Response) => {
-    const user = req.user as User | undefined;
+    const user = req.user as SessionUser | undefined;
     if (user) {
         const alertSuccess = req.flash('alert-success');
         //console.log( JSON.stringify(user) );
@@ -93,17 +99,17 @@ router.post('/update', (req: Request, res: Response) => {
     const _action = req.body.action;
     const _userid = req.body.userid;
 
-    const user = req.user as User | undefined;
+    const user = req.user as SessionUser | undefined;
 
     if (user && (user.role == 'admin' || user.id == _userid)) {
         switch (_action) {
             case 'get':
                 interface FindUserResponse {
                     message?: string;
-                    user?: User;
+                    user?: SessionUser;
                 }
 
-                database.User.findOne({ where: { id: _userid } }).then((user: User | null) => {
+                DatabaseUser.findOne({ where: { id: _userid } }).then((user: DatabaseUser | null) => {
                     if (!user) {
                         const response: FindUserResponse = { message: 'Not found.' };
                         return res.status(400).json(response);
@@ -126,13 +132,13 @@ router.post('/update', (req: Request, res: Response) => {
 });
 
 router.get('/users', (req: Request, res: Response) => {
-    const user = req.user as User | undefined;
+    const user = req.user as SessionUser | undefined;
 
     if (user && user.role == 'admin') {
-        database.User.findAll().then((users: User[]) => {
+        DatabaseUser.findAll().then((users: DatabaseUser[]) => {
             // Remove 'salt' and 'hash' from each user
             const safeUsers: SafeUser[] = users.map(user => {
-                const { salt, hash, ...safeUser } = userToJson(user) as any; // Use toJSON() to get a plain object
+                const { salt, hash, ...safeUser } = user.toJSON() as any; // Use toJSON() to get a plain object
                 return safeUser as SafeUser;
             });
 
@@ -146,14 +152,14 @@ router.get('/users', (req: Request, res: Response) => {
 });
 
 router.put('/users/:id/role', (req: Request, res: Response) => {
-    if (req.user && (req.user as User).role == 'admin') {
+    if (req.user && (req.user as SessionUser).role == 'admin') {
         const userId = req.params.id;
         const newRole = req.body.role;
 
         console.error(req.body);
         console.error(`${userId} - ${newRole}`);
 
-        database.User.update({ role: newRole }, { where: { id: userId } })
+        DatabaseUser.update({ role: newRole }, { where: { id: userId } })
             .then(() => res.status(200).send({ message: 'Role updated successfully' }))
             .catch((error: Error) => res.status(500).send({ message: 'Error updating role', error }));
     } else {
@@ -162,18 +168,23 @@ router.put('/users/:id/role', (req: Request, res: Response) => {
 });
 
 router.post('/users/invite', (req: Request, res: Response) => {
-    if (req.user && (req.user as User).role == 'admin') {
-        database.User.register(new database.User({
+    if (req.user && (req.user as SessionUser).role == 'admin') {
+        const newUser = DatabaseUser.build({
             username: helperFunctions.generateUsername(req.body.email),
             role: req.body.role,
             email: req.body.email,
             oauthProvider: "vipercloud",
             created: Date.now()
-        }), helperFunctions.generateRandomString(25)/*password*/, (err: Error, user: User) => {
-            if (err) {
+        });
+
+        newUser.setPassword(helperFunctions.generateRandomString(25)/*password*/).then(() => {
+            newUser.save().then((user: DatabaseUser) => {
+                res.status(200).send({ message: 'User invited successfully', user });
+            }).catch((err: Error) => {
                 return res.status(500).send({ message: 'Error inviting user', err });
-            }
-            res.status(200).send({ message: 'User invited successfully', user });
+            });
+        }).catch((err: Error) => {
+            return res.status(500).send({ message: 'Error setting password', err });
         });
     } else {
         res.status(403).send({ message: 'Unauthorized' });
@@ -181,7 +192,7 @@ router.post('/users/invite', (req: Request, res: Response) => {
 });
 
 router.get('/sessions', (req: Request, res: Response) => {
-    if (req.user && (req.user as User).role == 'admin') {
+    if (req.user && (req.user as SessionUser).role == 'admin') {
         const connection = mysql.createConnection(configAuth.mysqlSessionAuth);
         const query = 'SELECT session_id, expires, data FROM sessions';
 
@@ -230,28 +241,36 @@ interface RegisterUserRequest extends Request {
 }
 
 router.post('/register', (req: RegisterUserRequest, res: Response) => {
-    database.User.register(new database.User({
+    DatabaseUser.create({
         username: helperFunctions.sanitizeUsername(req.body.username),
         role: "user",
         email: req.body.email,
         oauthProvider: "vipercloud",
         created: Date.now()
-    }), req.body.password, (err: Error, user: User) => {
-        if (err) {
-            console.log(err);
-            res.status(500).json({ message: 'Error creating user.' });
-        } else {
-            emailRelay.sendWelcomeEmail(req.body.email, helperFunctions.sanitizeUsername(req.body.username));
-            req.flash('alert-success', 'Thanks for setting up a ViPER account - you may need to contact an admin to get full access to the services on offer.');
-            req.login(user, (err: Error) => {
-                if (err) {
-                    console.log(err);
-                    res.status(500).json({ message: 'Error logging in user.' });
-                } else {
-                    res.redirect('/account');
-                }
+    }).then((user: DatabaseUser) => {
+        user.setPassword(req.body.password).then(() => {
+            user.save().then(() => {
+                emailRelay.sendWelcomeEmail(req.body.email, helperFunctions.sanitizeUsername(req.body.username));
+                req.flash('alert-success', 'Thanks for setting up a ViPER account - you may need to contact an admin to get full access to the services on offer.');
+                req.login(user, (err: Error) => {
+                    if (err) {
+                        console.log(err);
+                        res.status(500).json({ message: 'Error logging in user.' });
+                    } else {
+                        res.redirect('/account');
+                    }
+                });
+            }).catch((err: Error) => {
+                console.log(err);
+                res.status(500).json({ message: 'Error saving user.' });
             });
-        }
+        }).catch((err: Error) => {
+            console.log(err);
+            res.status(500).json({ message: 'Error setting password.' });
+        });
+    }).catch((err: Error) => {
+        console.log(err);
+        res.status(500).json({ message: 'Error creating user.' });
     });
 });
 
@@ -298,7 +317,7 @@ router.post('/reset-password', (req: Request, res: Response) => {
     const { email } = req.body;
     const token = crypto.randomBytes(20).toString('hex');
 
-    interface ResetPasswordUser extends User {
+    interface ResetPasswordUser extends SessionUser {
         resetPasswordToken: string | null;
         resetPasswordExpires: number | null;
         update: (fields: Partial<ResetPasswordUser>) => Promise<void>;
@@ -308,7 +327,7 @@ router.post('/reset-password', (req: Request, res: Response) => {
         message?: string;
     }
 
-    database.User.findOne({ where: { email } }).then((user: ResetPasswordUser | null) => {
+    DatabaseUser.findOne({ where: { email } }).then((user: DatabaseUser | null) => {
         if (!user) {
             // return res.status(400).json({ message: 'No account with that email address exists.' });
             // For security reasons, don't return information that leaks info about the service and users...
@@ -335,7 +354,7 @@ router.post('/reset-password', (req: Request, res: Response) => {
 
 router.get('/reset-token/:token', (req: Request, res: Response) => {
     const _token = req.params.token;
-    interface ResetTokenUser extends User {
+    interface ResetTokenUser extends SessionUser {
         resetPasswordToken: string | null;
         resetPasswordExpires: number | null;
     }
@@ -344,7 +363,7 @@ router.get('/reset-token/:token', (req: Request, res: Response) => {
         message?: string;
     }
 
-    database.User.findOne({ where: { resetPasswordToken: _token, resetPasswordExpires: { [Op.gt]: Date.now() } } }).then((user: ResetTokenUser | null) => {
+    DatabaseUser.findOne({ where: { resetPasswordToken: _token, resetPasswordExpires: { [Op.gt]: Date.now() } } }).then((user: DatabaseUser | null) => {
         if (!user) {
             const response: ResetTokenResponse = { message: 'Password reset token is invalid or has expired.' };
             return res.status(400).json(response);
@@ -362,13 +381,6 @@ router.get('/reset-token/:token', (req: Request, res: Response) => {
 router.post('/reset-token', (req: Request, res: Response) => {
     const _token = req.body.token;
 
-    interface ResetTokenUser extends User {
-        setPassword: (password: string, callback: (err: Error | null, user: ResetTokenUser) => void) => void;
-        resetPasswordToken: string | null;
-        resetPasswordExpires: number | null;
-        save: () => Promise<void>;
-    }
-
     interface ResetTokenRequest extends Request {
         body: {
             token: string;
@@ -378,30 +390,43 @@ router.post('/reset-token', (req: Request, res: Response) => {
 
     interface ResetTokenResponse {
         message?: string;
+        error?: Error;
     }
 
-    database.User.findOne({ where: { resetPasswordToken: _token, resetPasswordExpires: { [Op.gt]: Date.now() } } }).then((user: ResetTokenUser | null) => {
+
+    // database.User.update({ resetPasswordToken: null, resetPasswordExpires: null }, { where: { resetPasswordToken: _token, resetPasswordExpires: { [Op.gt]: Date.now() } } })
+    // .setPassword(req.body.password)
+    // .then(() => res.render('user_account_post_reset_token') )
+    // .catch((error: Error) => {
+    //     console.log("Error saving user: ", error);
+    //     const response: ResetTokenResponse = { message: 'Error saving user.', error: error };
+    //     res.status(500).json(response);
+    // });
+
+    DatabaseUser.findOne({ where: { resetPasswordToken: _token, resetPasswordExpires: { [Op.gt]: Date.now() } } }).then((user: DatabaseUser | null) => {
         if (!user) {
             const response: ResetTokenResponse = { message: 'Password reset token is invalid or has expired.' };
             return res.status(400).json(response);
         }
 
-        user.setPassword(req.body.password, (err: Error | null, updatedUser: ResetTokenUser) => {
-            if (err) {
-                console.log("Error setting new password: ", err);
-                const response: ResetTokenResponse = { message: 'Error setting new password.' };
-                return res.status(500).json(response);
-            }
-            updatedUser.resetPasswordToken = null; // Clear the reset token
-            updatedUser.resetPasswordExpires = null; // Clear the reset token
-            updatedUser.save().then(() => {
+        user.setPassword(req.body.password) //(err: Error | null, updatedUser: DatabaseUser ) => {
+        .then(() => {
+            user.resetPasswordToken = null; // Clear the reset token
+            user.resetPasswordExpires = null; // Clear the reset token
+
+            user.save().then(() => {
                 res.render('user_account_post_reset_token');
             }).catch((saveErr: Error) => {
                 console.log("Error saving user: ", saveErr);
                 const response: ResetTokenResponse = { message: 'Error saving user.' };
                 res.status(500).json(response);
             });
+        }).catch((err: Error) => {
+                console.log("Error setting new password: ", err);
+                const response: ResetTokenResponse = { message: 'Error setting new password.' };
+                res.status(500).json(response);
         });
+
     }).catch((err: Error) => {
         console.log("Error finding user by token: ", err);
         const response: ResetTokenResponse = { message: 'Error finding user.' };

@@ -5,8 +5,10 @@ import bodyParser from 'body-parser';
 import passport from 'passport';
 import flash from 'connect-flash';
 
-import configAuth from './config/auth';
+import { User, ViperInstance } from './models'; // Import the models to ensure they are initialized
+import sequelize from './utility/db';
 
+import configAuth from './config/auth';
 dotenv.config();
 
 import session from 'express-session'
@@ -87,7 +89,11 @@ app.use(function(req, res ) {
     res.json({"error":{code:404,status:"not found"}});
 });
 
-// Start the server
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+// Sync DB and Start the server
+sequelize.sync().then(() => {
+    app.listen(PORT, () => {
+        console.log(`Server running on port ${PORT}`);
+    });
+}).catch((err) => {
+    console.error('Unable to connect to the database:', err);
 });

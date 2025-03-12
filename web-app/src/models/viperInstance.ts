@@ -1,21 +1,6 @@
-import { Sequelize, DataTypes, Model, Optional } from 'sequelize';
+import { Sequelize, DataTypes, Model } from 'sequelize';
 
-interface ViperInstanceAttributes {
-    owner?: string;
-    uuid?: string;
-    dockerid?: string;
-    name?: string;
-    url?: string;
-    kasmvncPassword?: string;
-    statusKey?: string;
-    createdAt?: Date;
-    status: string;
-    logs?: object;
-}
-
-interface ViperInstanceCreationAttributes extends Optional<ViperInstanceAttributes, 'status'> {}
-
-class ViperInstance extends Model<ViperInstanceAttributes, ViperInstanceCreationAttributes> implements ViperInstanceAttributes {
+class ViperInstance extends Model {
     public owner?: string;
     public uuid?: string;
     public dockerid?: string;
@@ -28,7 +13,7 @@ class ViperInstance extends Model<ViperInstanceAttributes, ViperInstanceCreation
     public logs?: object;
 }
 
-function model(sequelize: Sequelize) {
+export const initViperInstanceModel = (sequelize: Sequelize) => {
     ViperInstance.init(
         {
             owner: {
@@ -81,6 +66,6 @@ function model(sequelize: Sequelize) {
     );
 
     return ViperInstance;
-}
+};
 
-export default model;
+export default ViperInstance;
