@@ -1,18 +1,13 @@
 import express, { Request, Response } from 'express';
 import dotenv from 'dotenv';
-import { DATE, Op } from 'sequelize';
-import database from '../utility/db';
-import DatabaseUser from '../models/user';
+import { Op } from 'sequelize';
+import db from '../models/';
 import mysql from 'mysql2';
 import passport from 'passport';
-import { Strategy as LocalStrategy } from 'passport-local';
-import passportLocalSequelize from 'passport-local-sequelize';
 import crypto from 'crypto';
 import helperFunctions from '../utility/helperFunctions';
 import emailRelay from '../utility/emailRelay';
 import configAuth from '../config/auth';
-import { create } from 'express-handlebars';
-
 
 dotenv.config();
 
@@ -31,28 +26,22 @@ admin - viper and user management
 
 */
 
-
-
-interface SessionUser {
+function userAsJSON(user: any): object {
+    try{
+        return {
+            id: user.id,
+            username: user.username,
+            role: user.role
+        };
+    } catch (err) {
+        console.error("Error converting user to JSON: ", err);
+        return {};
+    }
+}
+interface AccountUser {
     id: number;
     username: string;
     role: string;
-    email: string;
-    updatedAt?: Date;
-    createdAt?: Date;
-    toJSON?: () => object;
-    // Add other properties as needed
-}
-
-function userToJson(_user:SessionUser){
-    return {
-        id: _user.id,
-        username: _user.username,
-        role: _user.role,
-        email: _user.email,
-        updatedAt: _user.updatedAt,
-        createdAt: _user.createdAt,
-    }
 }
 
 interface SafeUser {
@@ -60,13 +49,11 @@ interface SafeUser {
     username: string;
     email: string;
     role: string;
-    updatedAt?: Date;
-    createdAt?: Date;
     // Add other properties as needed
 }
 
 router.get('/', (req: Request, res: Response) => {
-    const user = req.user as SessionUser | undefined;
+    const user = req.user as AccountUser | undefined;
     if (user) {
         const alertSuccess = req.flash('alert-success');
         //console.log( JSON.stringify(user) );
@@ -85,7 +72,7 @@ router.get('/', (req: Request, res: Response) => {
             default:
                 res.render('user_account_index', {
                     // csrfToken: req.csrfToken(),
-                    user: userToJson(user),
+                    user: req.user ? userAsJSON( req.user ) : {},
                     alertSuccess: alertSuccess
                 });
         }
@@ -99,20 +86,21 @@ router.post('/update', (req: Request, res: Response) => {
     const _action = req.body.action;
     const _userid = req.body.userid;
 
-    const user = req.user as SessionUser | undefined;
+    const user = req.user as AccountUser | undefined;
 
     if (user && (user.role == 'admin' || user.id == _userid)) {
         switch (_action) {
             case 'get':
                 interface FindUserResponse {
                     message?: string;
-                    user?: SessionUser;
+                    user?: AccountUser;
                 }
 
-                DatabaseUser.findOne({ where: { id: _userid } }).then((user: DatabaseUser | null) => {
+                db.User.findOne({ where: { id: _userid } }).then((user: any | null) => {
                     if (!user) {
                         const response: FindUserResponse = { message: 'Not found.' };
-                        return res.status(400).json(response);
+                        res.status(400).json(response);
+                        return;
                     }
                     res.json(user);
                 }).catch((err: Error) => {
@@ -132,17 +120,19 @@ router.post('/update', (req: Request, res: Response) => {
 });
 
 router.get('/users', (req: Request, res: Response) => {
-    const user = req.user as SessionUser | undefined;
+    const user = req.user as AccountUser | undefined;
 
     if (user && user.role == 'admin') {
-        DatabaseUser.findAll().then((users: DatabaseUser[]) => {
-            // Remove 'salt' and 'hash' from each user
-            const safeUsers: SafeUser[] = users.map(user => {
-                const { salt, hash, ...safeUser } = user.toJSON() as any; // Use toJSON() to get a plain object
-                return safeUser as SafeUser;
-            });
+        db.User.findAll().then((users: any[]) => {
+            // // Remove 'salt' and 'hash' from each user
+            // const safeUsers: SafeUser[] = users.map(user => {
+            //     const { salt, hash, ...safeUser } = userAsJSON(user) as any; // Use toJSON() to get a plain object
+            //     return safeUser as SafeUser;
+            // });
 
-            res.json(safeUsers);
+            // res.json(safeUsers);
+
+            res.json(users);
         }).catch((error: Error) => {
             res.status(500).json({ error: error.message });
         });
@@ -152,14 +142,14 @@ router.get('/users', (req: Request, res: Response) => {
 });
 
 router.put('/users/:id/role', (req: Request, res: Response) => {
-    if (req.user && (req.user as SessionUser).role == 'admin') {
+    if (req.user && (req.user as AccountUser).role == 'admin') {
         const userId = req.params.id;
         const newRole = req.body.role;
 
         console.error(req.body);
         console.error(`${userId} - ${newRole}`);
 
-        DatabaseUser.update({ role: newRole }, { where: { id: userId } })
+        db.User.update({ role: newRole }, { where: { id: userId } })
             .then(() => res.status(200).send({ message: 'Role updated successfully' }))
             .catch((error: Error) => res.status(500).send({ message: 'Error updating role', error }));
     } else {
@@ -168,23 +158,18 @@ router.put('/users/:id/role', (req: Request, res: Response) => {
 });
 
 router.post('/users/invite', (req: Request, res: Response) => {
-    if (req.user && (req.user as SessionUser).role == 'admin') {
-        const newUser = DatabaseUser.build({
+    if (req.user && (req.user as AccountUser).role == 'admin') {   
+        db.User.register({
             username: helperFunctions.generateUsername(req.body.email),
             role: req.body.role,
             email: req.body.email,
             oauthProvider: "vipercloud",
-            created: Date.now()
-        });
-
-        newUser.setPassword(helperFunctions.generateRandomString(25)/*password*/).then(() => {
-            newUser.save().then((user: DatabaseUser) => {
-                res.status(200).send({ message: 'User invited successfully', user });
-            }).catch((err: Error) => {
-                return res.status(500).send({ message: 'Error inviting user', err });
-            });
+            // created: Date.now()
+        }, helperFunctions.generateRandomString(25)/*password*/).then((user: AccountUser) => {
+            emailRelay.sendInvitedEmail(req.body.email, helperFunctions.generateUsername(req.body.email), (req.user as SafeUser).username);
+            res.status(200).send({ message: 'User invited successfully', user });
         }).catch((err: Error) => {
-            return res.status(500).send({ message: 'Error setting password', err });
+                return res.status(500).send({ message: 'Error inviting user', err });
         });
     } else {
         res.status(403).send({ message: 'Unauthorized' });
@@ -192,7 +177,7 @@ router.post('/users/invite', (req: Request, res: Response) => {
 });
 
 router.get('/sessions', (req: Request, res: Response) => {
-    if (req.user && (req.user as SessionUser).role == 'admin') {
+    if (req.user && (req.user as AccountUser).role == 'admin') {
         const connection = mysql.createConnection(configAuth.mysqlSessionAuth);
         const query = 'SELECT session_id, expires, data FROM sessions';
 
@@ -227,52 +212,38 @@ router.get('/sessions', (req: Request, res: Response) => {
     }
 });
 
-router.get('/register', (req: Request, res: Response) => {
-    res.render('user_account_register');
-});
+// Removed the routes for register and register post
+// These routes are disabled during the Testing Phase of the app development
 
+// router.get('/register', (req: Request, res: Response) => {
+//     res.render('user_account_register');
+// });
 
-interface RegisterUserRequest extends Request {
-    body: {
-        username: string;
-        email: string;
-        password: string;
-    };
-}
+// router.post('/register', (req: Request, res: Response) => {
+//     db.User.register({
+//         username: helperFunctions.sanitizeUsername(req.body.username),
+//         role: "user",
+//         email: req.body.email,
+//         oauthProvider: "vipercloud",
+//         // createdAt: Date.now()
+//     }, req.body.password).then((user: User) => {
+//         emailRelay.sendWelcomeEmail(req.body.email, helperFunctions.sanitizeUsername(req.body.username));
+//         req.flash('alert-success', 'Thanks for setting up a ViPER account - you may need to contact an admin to get full access to the services on offer.');
+//         req.login(user, (err: Error) => {
+//             if (err) {
+//                 console.log(err);
+//                 res.status(500).json({ message: 'Error logging in user.' });
+//             } else {
+//                 res.redirect('/account');
+//             }
+//         });
 
-router.post('/register', (req: RegisterUserRequest, res: Response) => {
-    DatabaseUser.create({
-        username: helperFunctions.sanitizeUsername(req.body.username),
-        role: "user",
-        email: req.body.email,
-        oauthProvider: "vipercloud",
-        created: Date.now()
-    }).then((user: DatabaseUser) => {
-        user.setPassword(req.body.password).then(() => {
-            user.save().then(() => {
-                emailRelay.sendWelcomeEmail(req.body.email, helperFunctions.sanitizeUsername(req.body.username));
-                req.flash('alert-success', 'Thanks for setting up a ViPER account - you may need to contact an admin to get full access to the services on offer.');
-                req.login(user, (err: Error) => {
-                    if (err) {
-                        console.log(err);
-                        res.status(500).json({ message: 'Error logging in user.' });
-                    } else {
-                        res.redirect('/account');
-                    }
-                });
-            }).catch((err: Error) => {
-                console.log(err);
-                res.status(500).json({ message: 'Error saving user.' });
-            });
-        }).catch((err: Error) => {
-            console.log(err);
-            res.status(500).json({ message: 'Error setting password.' });
-        });
-    }).catch((err: Error) => {
-        console.log(err);
-        res.status(500).json({ message: 'Error creating user.' });
-    });
-});
+//     }).catch((err: Error) => {
+//         console.log(err);
+//         res.status(500).json({ message: 'Error creating user.' });
+//     });
+// });
+
 
 router.get('/login', (req: Request, res: Response) => {
     //Force log out? redirect if already logged in?
@@ -317,17 +288,7 @@ router.post('/reset-password', (req: Request, res: Response) => {
     const { email } = req.body;
     const token = crypto.randomBytes(20).toString('hex');
 
-    interface ResetPasswordUser extends SessionUser {
-        resetPasswordToken: string | null;
-        resetPasswordExpires: number | null;
-        update: (fields: Partial<ResetPasswordUser>) => Promise<void>;
-    }
-
-    interface ResetPasswordResponse {
-        message?: string;
-    }
-
-    DatabaseUser.findOne({ where: { email } }).then((user: DatabaseUser | null) => {
+    db.User.findOne({ where: { email } }).then((user: any | null) => {
         if (!user) {
             // return res.status(400).json({ message: 'No account with that email address exists.' });
             // For security reasons, don't return information that leaks info about the service and users...
@@ -354,19 +315,15 @@ router.post('/reset-password', (req: Request, res: Response) => {
 
 router.get('/reset-token/:token', (req: Request, res: Response) => {
     const _token = req.params.token;
-    interface ResetTokenUser extends SessionUser {
-        resetPasswordToken: string | null;
-        resetPasswordExpires: number | null;
-    }
-
     interface ResetTokenResponse {
         message?: string;
     }
 
-    DatabaseUser.findOne({ where: { resetPasswordToken: _token, resetPasswordExpires: { [Op.gt]: Date.now() } } }).then((user: DatabaseUser | null) => {
+    db.User.findOne({ where: { resetPasswordToken: _token, resetPasswordExpires: { [Op.gt]: Date.now() } } }).then((user: any | null) => {
         if (!user) {
             const response: ResetTokenResponse = { message: 'Password reset token is invalid or has expired.' };
-            return res.status(400).json(response);
+            res.status(400).json(response);
+            return;
         }
         res.render('user_account_get_reset_token', {
             token: _token,
@@ -378,60 +335,48 @@ router.get('/reset-token/:token', (req: Request, res: Response) => {
     });
 });
 
-router.post('/reset-token', (req: Request, res: Response) => {
+router.post('/reset-token', async (req: Request, res: Response): Promise<void> => {
     const _token = req.body.token;
-
-    interface ResetTokenRequest extends Request {
-        body: {
-            token: string;
-            password: string;
-        };
-    }
-
     interface ResetTokenResponse {
         message?: string;
-        error?: Error;
     }
 
-
-    // database.User.update({ resetPasswordToken: null, resetPasswordExpires: null }, { where: { resetPasswordToken: _token, resetPasswordExpires: { [Op.gt]: Date.now() } } })
-    // .setPassword(req.body.password)
-    // .then(() => res.render('user_account_post_reset_token') )
-    // .catch((error: Error) => {
-    //     console.log("Error saving user: ", error);
-    //     const response: ResetTokenResponse = { message: 'Error saving user.', error: error };
-    //     res.status(500).json(response);
-    // });
-
-    DatabaseUser.findOne({ where: { resetPasswordToken: _token, resetPasswordExpires: { [Op.gt]: Date.now() } } }).then((user: DatabaseUser | null) => {
+    try {
+        const user = await db.User.findOne({ where: { resetPasswordToken: _token, resetPasswordExpires: { [Op.gt]: Date.now() } } });
         if (!user) {
             const response: ResetTokenResponse = { message: 'Password reset token is invalid or has expired.' };
-            return res.status(400).json(response);
+            res.status(400).json(response);
+            return;
         }
 
-        user.setPassword(req.body.password) //(err: Error | null, updatedUser: DatabaseUser ) => {
-        .then(() => {
-            user.resetPasswordToken = null; // Clear the reset token
-            user.resetPasswordExpires = null; // Clear the reset token
+        try {
+            await user.setPassword(req.body.password);
+            user.resetPasswordToken = ''; // Clear the reset token
+            user.resetPasswordExpires = new Date(); // Clear the reset token
+            await user.save();
 
-            user.save().then(() => {
-                res.render('user_account_post_reset_token');
-            }).catch((saveErr: Error) => {
-                console.log("Error saving user: ", saveErr);
-                const response: ResetTokenResponse = { message: 'Error saving user.' };
-                res.status(500).json(response);
+            // Log the user in
+            req.login(user, (err: Error) => {
+                if (err) {
+                    console.log("Error logging in user: ", err);
+                    const response: ResetTokenResponse = { message: 'Error logging in user.' };
+                    res.status(500).json(response);
+                    return;
+                }
+                // Redirect to the dashboard
+                res.redirect('/service');
             });
-        }).catch((err: Error) => {
-                console.log("Error setting new password: ", err);
-                const response: ResetTokenResponse = { message: 'Error setting new password.' };
-                res.status(500).json(response);
-        });
-
-    }).catch((err: Error) => {
+        } catch (err) {
+            console.log("Error setting new password: ", err);
+            const response: ResetTokenResponse = { message: 'Error setting new password.' };
+            res.status(500).json(response);
+            return;
+        }
+    } catch (err) {
         console.log("Error finding user by token: ", err);
         const response: ResetTokenResponse = { message: 'Error finding user.' };
         res.status(500).json(response);
-    });
+    }
 });
 
 

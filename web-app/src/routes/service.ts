@@ -1,9 +1,8 @@
 import express, { Request, Response } from 'express';
 import dotenv from 'dotenv';
-import { Op } from 'sequelize';
 import Docker from 'dockerode';
-import database from '../utility/db';
-import ViperInstance from '../models/viperInstance';
+import db from '../models';
+import getPort from 'get-port';
 import helperFunctions from '../utility/helperFunctions';
 
 dotenv.config();
@@ -21,11 +20,10 @@ subscriber - pays for use
 admin - viper and user management
 
 */
-
-
-interface User {
+interface ServiceUser {
     id: number;
     username: string;
+    email: string;
     role: string;
     // Add other properties as needed
 }
@@ -45,22 +43,23 @@ interface User {
 // }
 
 
-interface LogEntry {
-    timestamp: Date;
-    message: string;
-}
+// interface LogEntry {
+//     timestamp: Date;
+//     message: string;
+// }
 
-function userToJson(_user:User){
+function userToJson(_user: ServiceUser){
     return {
         id: _user.id,
         username: _user.username,
+        email: _user.email,
         role: _user.role,
     }
 }
 
 /* GET home page. */
 router.get('/', (req: Request, res: Response) => {
-    const user = req.user as User | undefined;
+    const user = req.user as ServiceUser | undefined;
     if (user) {
         switch (user.role) {
             case 'admin':
@@ -82,7 +81,7 @@ router.get('/', (req: Request, res: Response) => {
 });
 
 router.get('/admin', (req: Request, res: Response) => {
-    const user = req.user as User | undefined;
+    const user = req.user as ServiceUser | undefined;
     if (user && user.role == 'admin') {
         res.render('service_admin', { user: userToJson(user) });
     } else {
@@ -90,7 +89,7 @@ router.get('/admin', (req: Request, res: Response) => {
     }
 });
 router.get('/testing', (req: Request, res: Response) => {
-    const user = req.user as User | undefined;
+    const user = req.user as ServiceUser | undefined;
     if (user && user.role == 'testing') {
         res.render('service_testing', { user: userToJson(user) });
     } else {
@@ -98,7 +97,7 @@ router.get('/testing', (req: Request, res: Response) => {
     }
 });
 router.get('/member', (req: Request, res: Response) => {
-    const user = req.user as User | undefined;
+    const user = req.user as ServiceUser | undefined;
     if (user && user.role == 'member') {
         res.render('service_member', { user: userToJson(user) });
     } else {
@@ -107,7 +106,7 @@ router.get('/member', (req: Request, res: Response) => {
 });
 
 router.get('/new-instance', async (req: Request, res: Response) => {
-    const user = req.user as User | undefined;
+    const user = req.user as ServiceUser | undefined;
     // const availablePort = await getAvailablePort();
     // const portString = `${availablePort}/tcp`;
 
@@ -139,6 +138,9 @@ router.get('/new-instance', async (req: Request, res: Response) => {
             HostConfig: {
                 ShmSize: number;
                 Binds: string[];
+                PortBindings?: {
+                    [port: string]: [{ HostPort: string }];
+                };
             };
             ExposedPorts: {
                 [port: string]: {};
@@ -151,11 +153,11 @@ router.get('/new-instance', async (req: Request, res: Response) => {
             Env: string[];
         }
 
-        // interface DockerContainer extends Docker.Container {
-        //     id: string;
-        //     start: (callback: (err: Error | null, data: any) => void) => void;
-        //     exec: (options: DockerExecOptions) => Promise<DockerExec>;
-        // }
+        interface DockerContainer {
+            id: string;
+            start: () => Promise<void>;
+            exec: (options: DockerExecOptions) => Promise<DockerExec>;
+        }
 
         interface DockerExecOptions {
             AttachStdout: boolean;
@@ -173,113 +175,115 @@ router.get('/new-instance', async (req: Request, res: Response) => {
             };
         }
 
-        docker.createContainer({
-            Image: 'darrendignam/opf-viper-cloud:v0.0.10',
-            name: containerName,
-            HostConfig: {
-                ShmSize: 1024 * 1024 * 1024,
-                Binds: ['/var/viper-docker-project/volumes/test-corpus/test-root/corpora:/config/Desktop/test-corpus:ro'],
-            },
-            ExposedPorts: { '3000/ttcp': {}, '3001/tcp': {} },
-            NetworkingConfig: {
-                EndpointsConfig: {
-                    'ingress-proxy': {}
-                }
-            },
-            Env: envVars,
-        } as DockerContainerOptions, (err: Error, container: Docker.Container | undefined) => {
-            if (err) {
-                console.log('err: 1:');
-                console.log(err);
-                res.json({ 'error1': err });
-            }
-            
-            if (!container) {
-                return res.status(500).json({ message: 'Container creation failed' });
-            }
+        try {
+            // Find an available port
+            const availablePort = await getPort();
+            const portString = `${availablePort}/tcp`;
 
-            container.start(async (err: Error | null, data: any) => {
-                if (err) {
-                    console.log('err: 2');
-                    console.log(err);
-                }
+            let _DockerContainerOptions: DockerContainerOptions = {
+                Image: 'darrendignam/opf-viper-cloud:v0.0.10',
+                name: containerName,
+                HostConfig: {
+                    ShmSize: 1024 * 1024 * 1024,
+                    Binds: ['/var/viper-docker-project/volumes/test-corpus/test-root/corpora:/config/Desktop/test-corpus:ro'],
+                    ...(process.env.NODE_ENV === 'dev' && { PortBindings: { '3000/tcp': [{ HostPort: `${availablePort}` }] } })
+                },
+                ExposedPorts: { '3000/tcp': {}, '3001/tcp': {} },
+                NetworkingConfig: {
+                    EndpointsConfig: {
+                        ...(process.env.NODE_ENV === 'prod' && { 'ingress-proxy': {} })
+                    }
+                },
+                Env: envVars,
+            };
 
-                try {
-                    const exec = await container.exec({
-                        AttachStdout: true, AttachStderr: true,
-                        Cmd: ['rm', '-f', '/etc/sudoers.d/abc']
-                    } as DockerExecOptions);
-                    const stream = await exec.start({
-                        hijack: true, stdin: true
-                    });
-                    stream.on('data', (data: any) => {
-                        console.log(data.toString());
-                    });
-                    await new Promise((resolve) => {
-                        stream.on('end', resolve);
-                    });
-                    console.log('Sudoers file deleted successfully');
-                } catch (execErr) { console.error('Error executing command:', execErr); }
+            const container = await docker.createContainer(_DockerContainerOptions);
+            await container.start();
 
-                try {
-                    const exec = await container.exec({
-                        AttachStdout: true, AttachStderr: true,
-                        Cmd: ['gpasswd', '-d', 'abc', 'sudo']
-                    } as DockerExecOptions);
-                    const stream = await exec.start({
-                        hijack: true, stdin: true
-                    });
-                    stream.on('data', (data: any) => {
-                        console.log(data.toString());
-                    });
-                    await new Promise((resolve) => {
-                        stream.on('end', resolve);
-                    });
-                    console.log('Sudoers file deleted successfully');
-                } catch (execErr) { console.error('Error executing command:', execErr); }
-
-                console.log('OK: 3');
-                console.log(data);
-                interface ViperInstanceResponse {
-                    container: {
-                        id: string;
-                        uuid: string;
-                        url: string;
-                    };
-                }
-                ViperInstance.create({
-                    uuid: instanceUUID,
-                    dockerid: container.id,
-                    name: containerName,
-                    url: instanceURL,
-                    kasmvncPassword: kasmvncPassword,
-                    statusKey: statusKey,
-                    owner: ownerId,
-                    logs: [ { timestamp: new Date(), message: "Created"} ],
-                    status: 'created'
-                }).then((newViperInstance: ViperInstance) => {
-                    res.json({
-                        container: {
-                            id: container.id,
-                            uuid: instanceUUID,
-                            url: instanceURL,
-                        }
-                    } as ViperInstanceResponse);
-                }).catch((error: Error) => {
-                    res.status(500).json({ error: 'Error creating ViperInstance', details: error });
+            try {
+                const exec = await container.exec({
+                    AttachStdout: true, AttachStderr: true,
+                    Cmd: ['rm', '-f', '/etc/sudoers.d/abc']
+                } as DockerExecOptions);
+                const stream = await exec.start({
+                    hijack: true, stdin: true
                 });
+                stream.on('data', (data: any) => {
+                    console.log(data.toString());
+                });
+                await new Promise((resolve) => {
+                    stream.on('end', resolve);
+                });
+                console.log('Sudoers file deleted successfully');
+            } catch (execErr) { console.error('Error executing command:', execErr); }
+
+            try {
+                const exec = await container.exec({
+                    AttachStdout: true, AttachStderr: true,
+                    Cmd: ['gpasswd', '-d', 'abc', 'sudo']
+                } as DockerExecOptions);
+                const stream = await exec.start({
+                    hijack: true, stdin: true
+                });
+                stream.on('data', (data: any) => {
+                    console.log(data.toString());
+                });
+                await new Promise((resolve) => {
+                    stream.on('end', resolve);
+                });
+                console.log('Sudoers file deleted successfully');
+            } catch (execErr) { console.error('Error executing command:', execErr); }
+
+            console.log('OK: 3');
+
+            interface ViperInstanceResponse {
+                container: {
+                    id: string;
+                    uuid: string;
+                    url: string;
+                };
+            }
+
+            const newViperInstance = await db.ViperInstance.create({
+                uuid: instanceUUID,
+                dockerid: container.id,
+                name: containerName,
+                url: instanceURL,
+                kasmvncPassword: kasmvncPassword,
+                statusKey: statusKey,
+                owner: ownerId,
+                status: 'created',
+                logs: [ { timestamp: new Date(), message: "Created"} ],
             });
-        });
+
+            res.json({
+                container: {
+                    id: container.id,
+                    uuid: instanceUUID,
+                    url: instanceURL,
+                }
+            } as ViperInstanceResponse);
+        } catch (err) {
+            console.log('Error creating or starting container:', err);
+            await db.Log.create({
+                eventType: 'Error',
+                message: 'Error creating or starting container',
+                eventDescription: (err as Error).toString(),
+                userId: user.id,
+                createdAt: new Date(),
+            });
+            res.status(500).json({ error: 'Error creating or starting container' });
+        }
     } else {
-        res.json({ "error": "Authentication" })
+        res.json({ "error": "Authentication" });
     }
 });
 
 router.get('/viperinstances', async (req: Request, res: Response) => {
-    const user = req.user as User | undefined;
+    const user = req.user as ServiceUser | undefined;
     if (user && user.role == 'admin') {
         try {
-            const instances = await ViperInstance.findAll();
+            const instances = await db.ViperInstance.findAll();
             res.json(instances);
         } catch (error) {
             console.error('Error retrieving viper instances:', error);
@@ -288,7 +292,7 @@ router.get('/viperinstances', async (req: Request, res: Response) => {
     } else if (user && user.role != 'user') {
         try {
             const userId = user.id; // Assuming req.user.id holds the current user's ID
-            const instances = await ViperInstance.findAll({
+            const instances = await db.ViperInstance.findAll({
                 where: {
                     owner: userId
                 }
@@ -327,17 +331,17 @@ router.get('/terminate-instance/:containerId', async (req: Request, res: Respons
                 [key: string]: any;
             }
 
-            ViperInstance.findOne({
+            db.ViperInstance.findOne({
                 where: {
                     dockerid: containerID
                 }
-            }).then((instance: ViperInstance | null) => {
+            }).then((instance: any | null) => {
                 if (!instance) {
                     console.error('Instance not found');
                     return; // Or throw an error if you prefer
                 }
 
-                instance.logs = [...(Array.isArray(instance.logs) ? instance.logs : []), { timestamp: new Date(), message: 'Status changed to deleted' }];
+                instance.logs = [...instance.logs, { timestamp: new Date(), message: 'Status changed to deleted' }];
                 instance.status = 'deleted';
 
                 return instance.save(); // Save both the logs and the status
@@ -366,17 +370,17 @@ router.get('/set-status-instance/:statuskey/:status', async (req, res) => {
         [key: string]: any;
     }
 
-    ViperInstance.findOne({
+    db.ViperInstance.findOne({
         where: {
             statusKey: _statuskey
         }
-    }).then((instance: ViperInstance | null) => {
+    }).then((instance: any | null) => {
         if (!instance) {
             console.error('Instance not found');
             return; // Or throw an error if you prefer
         }
 
-        instance.logs = [...(Array.isArray(instance.logs) ? instance.logs : []), { timestamp: new Date(), message: 'Set Status to: ' + _status }];
+        instance.logs = [...instance.logs, { timestamp: new Date(), message: 'Set Status to: ' + _status }];
         instance.status = _status; // Update the status as well
 
         return instance.save(); // Save both the logs and the status
