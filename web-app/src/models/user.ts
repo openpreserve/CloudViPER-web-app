@@ -1,6 +1,10 @@
-import passport from 'passport';
-import { Sequelize, DataTypes, Model, Optional } from 'sequelize';
-const passportLocalSequelize = require('passport-local-sequelize');
+'use strict';
+
+import { Model, DataTypes, Sequelize } from 'sequelize';
+
+// import passport from 'passport';
+// import { Sequelize, DataTypes, Model, Optional } from 'sequelize';
+// const passportLocalSequelize = require('passport-local-sequelize');
 
 /*
 ROLES:
@@ -28,28 +32,35 @@ interface UserAttributes {
     resetPasswordToken?: string;
     resetPasswordExpires?: Date;
     oauthProfile?: object;
+    createdAt: Date;
+    updatedAt: Date;
 }
 
-interface UserCreationAttributes extends Optional<UserAttributes, 'id'> {}
+module.exports = (sequelize: Sequelize) => {
+    class User extends Model<UserAttributes> implements UserAttributes {
+        public id!: number;
+        public username!: string;
+        public email!: string;
+        public title?: string;
+        public firstName?: string;
+        public lastName?: string;
+        public role!: string;
+        public oauthID?: string;
+        public oauthProvider?: string;
+        public salt?: object;
+        public hash?: object;
+        public resetPasswordToken?: string;
+        public resetPasswordExpires?: Date;
+        public oauthProfile?: object;
+        // public isActive!: boolean;
+        public readonly createdAt!: Date;
+        public readonly updatedAt!: Date;
 
-class User extends Model<UserAttributes, UserCreationAttributes> implements UserAttributes {
-    public id!: number;
-    public username!: string;
-    public email!: string;
-    public title?: string;
-    public firstName?: string;
-    public lastName?: string;
-    public role!: string;
-    public oauthID?: string;
-    public oauthProvider?: string;
-    public salt?: object;
-    public hash?: object;
-    public resetPasswordToken?: string;
-    public resetPasswordExpires?: Date;
-    public oauthProfile?: object;
-}
+        static associate(models: any) {
+        // define association here
+        }    
+    }
 
-function model(sequelize: Sequelize) {
     User.init(
         {
             id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
@@ -66,6 +77,8 @@ function model(sequelize: Sequelize) {
             resetPasswordToken: { type: DataTypes.STRING },
             resetPasswordExpires: { type: DataTypes.DATE },
             oauthProfile: { type: DataTypes.JSON },
+            createdAt: { type: DataTypes.DATE },
+            updatedAt: { type: DataTypes.DATE },
         },
         {
             sequelize,
@@ -77,13 +90,11 @@ function model(sequelize: Sequelize) {
         }
     );
 
-    passportLocalSequelize.attachToUser(User, {
-        usernameField: 'username',
-        hashField: 'hash',
-        saltField: 'salt',
-    });
+    // passportLocalSequelize.attachToUser(User, {
+    //     usernameField: 'username',
+    //     hashField: 'hash',
+    //     saltField: 'salt',
+    // });
 
     return User;
 }
-
-export default model;
