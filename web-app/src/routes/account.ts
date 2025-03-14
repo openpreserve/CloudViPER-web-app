@@ -1,7 +1,7 @@
 import express, { Request, Response } from 'express';
 import dotenv from 'dotenv';
 import { Op } from 'sequelize';
-import database from '../utility/db';
+import db from '../models/';
 import mysql from 'mysql2';
 import passport from 'passport';
 import crypto from 'crypto';
@@ -26,12 +26,22 @@ admin - viper and user management
 
 */
 
+function userAsJSON(user: any): object {
+    try{
+        return {
+            id: user.id,
+            username: user.username,
+            role: user.role
+        };
+    } catch (err) {
+        console.error("Error converting user to JSON: ", err);
+        return {};
+    }
+}
 interface User {
     id: number;
     username: string;
     role: string;
-    toJSON?: () => object;
-    // Add other properties as needed
 }
 
 interface SafeUser {
@@ -62,7 +72,7 @@ router.get('/', (req: Request, res: Response) => {
             default:
                 res.render('user_account_index', {
                     // csrfToken: req.csrfToken(),
-                    user: req.user ? req.user.toJSON() : {},
+                    user: req.user ? userAsJSON( req.user ) : {},
                     alertSuccess: alertSuccess
                 });
         }
@@ -86,7 +96,7 @@ router.post('/update', (req: Request, res: Response) => {
                     user?: User;
                 }
 
-                database.User.findOne({ where: { id: _userid } }).then((user: User | null) => {
+                db.User.findOne({ where: { id: _userid } }).then((user: any | null) => {
                     if (!user) {
                         const response: FindUserResponse = { message: 'Not found.' };
                         return res.status(400).json(response);
@@ -112,10 +122,10 @@ router.get('/users', (req: Request, res: Response) => {
     const user = req.user as User | undefined;
 
     if (user && user.role == 'admin') {
-        database.User.findAll().then((users: User[]) => {
+        db.User.findAll().then((users: User[]) => {
             // Remove 'salt' and 'hash' from each user
             const safeUsers: SafeUser[] = users.map(user => {
-                const { salt, hash, ...safeUser } = user.toJSON() as any; // Use toJSON() to get a plain object
+                const { salt, hash, ...safeUser } = userAsJSON(user) as any; // Use toJSON() to get a plain object
                 return safeUser as SafeUser;
             });
 
@@ -136,7 +146,7 @@ router.put('/users/:id/role', (req: Request, res: Response) => {
         console.error(req.body);
         console.error(`${userId} - ${newRole}`);
 
-        database.User.update({ role: newRole }, { where: { id: userId } })
+        db.User.update({ role: newRole }, { where: { id: userId } })
             .then(() => res.status(200).send({ message: 'Role updated successfully' }))
             .catch((error: Error) => res.status(500).send({ message: 'Error updating role', error }));
     } else {
@@ -146,7 +156,7 @@ router.put('/users/:id/role', (req: Request, res: Response) => {
 
 router.post('/users/invite', (req: Request, res: Response) => {
     if (req.user && (req.user as User).role == 'admin') {
-        database.User.register(new database.User({
+        db.User.register(new db.User({
             username: helperFunctions.generateUsername(req.body.email),
             role: req.body.role,
             email: req.body.email,
@@ -213,7 +223,7 @@ router.post('/register', (req: Request, res: Response) => {
     }
 
     router.post('/register', (req: RegisterUserRequest, res: Response) => {
-        database.User.register(new database.User({
+        db.User.register(new db.User({
             username: helperFunctions.sanitizeUsername(req.body.username),
             role: "user",
             email: req.body.email,
@@ -282,17 +292,7 @@ router.post('/reset-password', (req: Request, res: Response) => {
     const { email } = req.body;
     const token = crypto.randomBytes(20).toString('hex');
 
-    interface ResetPasswordUser extends User {
-        resetPasswordToken: string | null;
-        resetPasswordExpires: number | null;
-        update: (fields: Partial<ResetPasswordUser>) => Promise<void>;
-    }
-
-    interface ResetPasswordResponse {
-        message?: string;
-    }
-
-    database.User.findOne({ where: { email } }).then((user: ResetPasswordUser | null) => {
+    db.User.findOne({ where: { email } }).then((user: any | null) => {
         if (!user) {
             // return res.status(400).json({ message: 'No account with that email address exists.' });
             // For security reasons, don't return information that leaks info about the service and users...
@@ -319,16 +319,11 @@ router.post('/reset-password', (req: Request, res: Response) => {
 
 router.get('/reset-token/:token', (req: Request, res: Response) => {
     const _token = req.params.token;
-    interface ResetTokenUser extends User {
-        resetPasswordToken: string | null;
-        resetPasswordExpires: number | null;
-    }
-
     interface ResetTokenResponse {
         message?: string;
     }
 
-    database.User.findOne({ where: { resetPasswordToken: _token, resetPasswordExpires: { [Op.gt]: Date.now() } } }).then((user: ResetTokenUser | null) => {
+    db.User.findOne({ where: { resetPasswordToken: _token, resetPasswordExpires: { [Op.gt]: Date.now() } } }).then((user: any | null) => {
         if (!user) {
             const response: ResetTokenResponse = { message: 'Password reset token is invalid or has expired.' };
             return res.status(400).json(response);
@@ -345,32 +340,17 @@ router.get('/reset-token/:token', (req: Request, res: Response) => {
 
 router.post('/reset-token', (req: Request, res: Response) => {
     const _token = req.body.token;
-
-    interface ResetTokenUser extends User {
-        setPassword: (password: string, callback: (err: Error | null, user: ResetTokenUser) => void) => void;
-        resetPasswordToken: string | null;
-        resetPasswordExpires: number | null;
-        save: () => Promise<void>;
-    }
-
-    interface ResetTokenRequest extends Request {
-        body: {
-            token: string;
-            password: string;
-        };
-    }
-
     interface ResetTokenResponse {
         message?: string;
     }
 
-    database.User.findOne({ where: { resetPasswordToken: _token, resetPasswordExpires: { [Op.gt]: Date.now() } } }).then((user: ResetTokenUser | null) => {
+    db.User.findOne({ where: { resetPasswordToken: _token, resetPasswordExpires: { [Op.gt]: Date.now() } } }).then((user: any | null) => {
         if (!user) {
             const response: ResetTokenResponse = { message: 'Password reset token is invalid or has expired.' };
             return res.status(400).json(response);
         }
 
-        user.setPassword(req.body.password, (err: Error | null, updatedUser: ResetTokenUser) => {
+        user.setPassword(req.body.password, (err: Error | null, updatedUser: any) => {
             if (err) {
                 console.log("Error setting new password: ", err);
                 const response: ResetTokenResponse = { message: 'Error setting new password.' };

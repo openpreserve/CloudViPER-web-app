@@ -2,8 +2,8 @@ import express, { Application } from 'express';
 import exphbs from './config/handlebars';
 import dotenv from 'dotenv';
 import bodyParser from 'body-parser';
-import expressSession from 'express-session';
-const MySQLStore = require('express-mysql-session')(expressSession);
+// import expressSession from 'express-session';
+
 // import MySQLStore from 'express-mysql-session';
 import passport from 'passport';
 import flash from 'connect-flash';
@@ -34,25 +34,28 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 // Sessions
-let session_config: expressSession.SessionOptions = {
+import session from 'express-session'
+const MySQLStore = require('express-mysql-session')(session);
+const SQLStore = new MySQLStore(configAuth.mysqlSessionAuth);
+let session_config: session.SessionOptions = {
     name: "vipercloud.sid",
     cookie: { maxAge: ((4 * 24) * 60 * 60 * 1000), secure: secure_cookie }, // 4 days
-    store: MySQLStore(configAuth.mysqlSessionAuth),
+    store: SQLStore,
     secret: process.env.APP_COOKIE_SECRET || 'default_secret', // Replace with your own secret key
     resave: false,
     saveUninitialized: false,
 };
 
 // Add session to app
-const sessionMW = expressSession(session_config);
+const sessionMW = session(session_config);
 app.use(sessionMW);
 app.use(flash());
 
 // Configure passport
 app.use(passport.initialize());
 app.use(passport.session());
-require('./config/passport.js')(passport);
-
+import configurePassport from './config/passport';
+configurePassport(passport);
 
 // View Engine
 app.set('views', path.join(__dirname, 'views'));
@@ -65,6 +68,7 @@ app.use('/', require('./routes/home'));
 app.use('/account', require('./routes/account'));
 app.use('/service', require('./routes/service'));
 
+//Prod SSL Stuff
 if (process.env.NODE_ENV === 'production') {
     app.use(function (req, res, next) {
         console.log( req.headers.host );
