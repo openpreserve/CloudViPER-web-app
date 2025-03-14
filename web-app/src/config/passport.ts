@@ -23,23 +23,6 @@ export default (passport: PassportStatic) => {
     passport.use(new GoogleStrategy(configAuth.googleAuth, 
         (accessToken: string, refreshToken: string, profile: any, done: (err: any, user?: any) => void) => {
             const _email = profile.emails[0].value || '';
-            // interface User {
-            //     email: string;
-            //     oauthID?: string;
-            //     username?: string;
-            //     role?: string;
-            //     save: () => Promise<User>;
-            // }
-
-            // interface Profile {
-            //     id: string;
-            //     displayName: string;
-            //     emails: { value: string }[];
-            // }
-
-            // interface DoneFunction {
-            //     (err: any, user?: User | null): void;
-            // }
 
             db.User.findOne({ where: { oauthID: profile.id } })
             .then((user: any | null) => {
