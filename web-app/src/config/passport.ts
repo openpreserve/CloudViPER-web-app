@@ -6,9 +6,36 @@ import configAuth from './auth';
 import emailRelay from '../utility/emailRelay';
 import helperFunctions from '../utility/helperFunctions';
 
+const options = {
+    usernameField: 'email',
+    incorrectUsernameError: 'Incorrect username',
+    incorrectPasswordError: 'Incorrect password',
+}
+
 export default (passport: PassportStatic) => {
-    passport.use(db.User.createStrategy());
-    passport.use(new LocalStrategy(db.User.authenticate()));
+    //passport.use(db.User.createStrategy());
+ 
+    // passport.use(new LocalStrategy({ usernameField: options.usernameField }, (username, password, done) => {
+    //     db.User.findOne({ where: { [options.usernameField]: username } })
+    //         .then((user: any | null) => {
+    //             if (!user) {
+    //                 return done(null, false, { message: options.incorrectUsernameError });
+    //             }
+
+    //             user.authenticate(password)
+    //                 .then((authenticatedUser: any) => {
+    //                     if (authenticatedUser) {
+    //                         return done(null, user);
+    //                     } else {
+    //                         return done(null, false, { message: options.incorrectPasswordError });
+    //                     }
+    //                 })
+    //                 .catch(done);
+    //         })
+    //         .catch(done);
+    // }));
+    
+    // passport.use(new LocalStrategy(db.User.authenticate()));
 
     passport.serializeUser((user: any, done: (err: any, id?: any) => void) => {
         done(null, user.email);

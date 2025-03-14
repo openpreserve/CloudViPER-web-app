@@ -118,28 +118,6 @@ module.exports = (sequelize: Sequelize) => {
             });
         }
 
-        public static createStrategy() {
-            return new LocalStrategy({ usernameField: options.usernameField }, (username, password, done) => {
-                this.findOne({ where: { [options.usernameField]: username } })
-                    .then((user: User | null) => {
-                        if (!user) {
-                            return done(null, false, { message: options.incorrectUsernameError });
-                        }
-
-                        user.authenticate(password)
-                            .then((authenticatedUser) => {
-                                if (authenticatedUser) {
-                                    return done(null, user);
-                                } else {
-                                    return done(null, false, { message: options.incorrectPasswordError });
-                                }
-                            })
-                            .catch(done);
-                    })
-                    .catch(done);
-            });
-        }
-
         static associate(models: any) {
             // define association here
         }
