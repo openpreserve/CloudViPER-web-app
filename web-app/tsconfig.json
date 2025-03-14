@@ -7,6 +7,8 @@
       "strict": true,
       "esModuleInterop": true,
       "typeRoots": ["./node_modules/@types", "./typings"],
+      "inlineSources": true,
+      "sourceMap": true,
     },
     "include": ["src/**/*"]
 }
