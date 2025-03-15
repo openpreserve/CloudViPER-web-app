@@ -4,10 +4,10 @@
   "description": "Container orchestrator app for the Viper Cloud project",
   "main": "app.js",
   "scripts": {
-    "start": "node app.js",
+    "start": "node dist/app.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "compile": "tsc",
-    "build": "gulp",
+    "build": "gulp build",
     "build_npm": "tsc && npm run copy-views",
     "copy-views": "copyfiles -u 1 'src/views/**/*' 'src/views/*' 'dist/views'"
   },
@@ -28,6 +28,7 @@
     "express-handlebars": "^8.0.1",
     "express-mysql-session": "^3.0.3",
     "express-session": "^1.18.1",
+    "get-port": "^7.1.0",
     "googleapis": "^144.0.0",
     "memorystore": "^1.6.7",
     "mysql2": "^3.10.3",
@@ -37,7 +38,8 @@
     "passport-google-oauth20": "^2.0.0",
     "passport-local": "^1.0.0",
     "passport-local-sequelize": "^0.9.1",
-    "sequelize": "^6.37.3"
+    "sequelize": "^6.37.3",
+    "util": "^0.12.5"
   },
   "devDependencies": {
     "@types/connect-flash": "^0.0.40",
@@ -47,11 +49,12 @@
     "@types/express-session": "^1.18.1",
     "@types/node": "^22.13.4",
     "@types/passport": "^1.0.17",
-    "copyfiles": "^2.4.1",
+    "del": "^8.0.0",
     "gulp": "^5.0.0",
-    "gulp-clean": "^0.4.0",
     "gulp-copy": "^5.0.0",
+    "gulp-sourcemaps": "^3.0.0",
     "gulp-typescript": "^6.0.0-alpha.1",
+    "ts-node": "^10.9.2",
     "typescript": "^5.7.3"
   }
 }
