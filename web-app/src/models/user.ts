@@ -2,7 +2,7 @@
 
 import { Sequelize, DataTypes, Model } from 'sequelize';
 import crypto from 'crypto';
-import { Strategy as LocalStrategy } from 'passport-local';
+// import { Strategy as LocalStrategy } from 'passport-local';
 
 const options = {
     saltlen: 32,

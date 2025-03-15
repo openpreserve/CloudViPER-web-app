@@ -10,7 +10,7 @@ import flash from 'connect-flash';
 
 import configAuth from './config/auth';
 
-dotenv.config();
+dotenv.config({ path: "./.env" });
 
 const app: Application = express();
 const PORT: number = parseInt(process.env.PORT || '3000', 10);
@@ -55,6 +55,7 @@ app.use(flash());
 app.use(passport.initialize());
 app.use(passport.session());
 import configurePassport from './config/passport';
+// import { default } from './config/passport';
 configurePassport(passport);
 
 // View Engine
@@ -64,9 +65,9 @@ app.set('view engine', 'handlebars');
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Add routes
-app.use('/', require('./routes/home'));
-app.use('/account', require('./routes/account'));
-app.use('/service', require('./routes/service'));
+app.use('/', require('./routes/home').default);
+app.use('/account', require('./routes/account').default);
+app.use('/service', require('./routes/service').default);
 
 //Prod SSL Stuff
 if (process.env.NODE_ENV === 'production') {
