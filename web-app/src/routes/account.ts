@@ -214,40 +214,31 @@ router.get('/register', (req: Request, res: Response) => {
 });
 
 router.post('/register', (req: Request, res: Response) => {
-    interface RegisterUserRequest extends Request {
-        body: {
-            username: string;
-            email: string;
-            password: string;
-        };
-    }
-
-    router.post('/register', (req: RegisterUserRequest, res: Response) => {
-        db.User.register(new db.User({
-            username: helperFunctions.sanitizeUsername(req.body.username),
-            role: "user",
-            email: req.body.email,
-            oauthProvider: "vipercloud",
-            created: Date.now()
-        }), req.body.password, (err: Error, user: User) => {
-            if (err) {
-                console.log(err);
-                res.status(500).json({ message: 'Error creating user.' });
-            } else {
-                emailRelay.sendWelcomeEmail(req.body.email, helperFunctions.sanitizeUsername(req.body.username));
-                req.flash('alert-success', 'Thanks for setting up a ViPER account - you may need to contact an admin to get full access to the services on offer.');
-                req.login(user, (err: Error) => {
-                    if (err) {
-                        console.log(err);
-                        res.status(500).json({ message: 'Error logging in user.' });
-                    } else {
-                        res.redirect('/account');
-                    }
-                });
-            }
-        });
+    db.User.register(new db.User({
+        username: helperFunctions.sanitizeUsername(req.body.username),
+        role: "user",
+        email: req.body.email,
+        oauthProvider: "vipercloud",
+        created: Date.now()
+    }), req.body.password, (err: Error, user: User) => {
+        if (err) {
+            console.log(err);
+            res.status(500).json({ message: 'Error creating user.' });
+        } else {
+            emailRelay.sendWelcomeEmail(req.body.email, helperFunctions.sanitizeUsername(req.body.username));
+            req.flash('alert-success', 'Thanks for setting up a ViPER account - you may need to contact an admin to get full access to the services on offer.');
+            req.login(user, (err: Error) => {
+                if (err) {
+                    console.log(err);
+                    res.status(500).json({ message: 'Error logging in user.' });
+                } else {
+                    res.redirect('/account');
+                }
+            });
+        }
     });
 });
+
 
 router.get('/login', (req: Request, res: Response) => {
     //Force log out? redirect if already logged in?
