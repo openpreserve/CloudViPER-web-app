@@ -1,0 +1,48 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "Launch Program",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "program": "${workspaceFolder}/web-app/src/app.ts",
+            "outFiles": [
+                "${workspaceFolder}/web-app/dist/**/*.js"
+            ],
+            "runtimeArgs": [
+                "--require",
+                "ts-node/register"
+            ],
+            "envFile": "${workspaceFolder}/web-app/.env",
+            "args": [
+               "${workspaceFolder}/web-app/src/app.ts"
+            ],
+            "console": "integratedTerminal"
+        },
+        {
+            "type": "node",
+            "request": "attach",
+            "name": "Attach to Running Node.js Process",
+            "port": 9229,
+            "address": "localhost",
+            "restart": true, // Use with caution.
+            "outFiles": [
+                "${workspaceFolder}/web-app/dist/**/*.js"
+            ],
+            "sourceMaps": true,
+            "smartStep": true,
+            // "processId": "${command:PickProcess}", // Use if you know the PID. More reliable.
+            "skipFiles": [
+                "<node_internals>/**"
+                // "node_modules/**" // Add any node modules to skip if wanted.
+            ],
+            "localRoot": "${workspaceFolder}/web-app/dist", // Add if local and remote paths differ.
+            // "remoteRoot": "/app/dist", // Add if local and remote paths differ.
+            // "comments": "Attaches to a running Node.js process on port 9229. Source maps enable TypeScript debugging.",
+        }
+    ]
+}
