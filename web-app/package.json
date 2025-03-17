@@ -9,7 +9,7 @@
     "compile": "tsc",
     "build": "gulp build",
     "build_npm": "tsc && npm run copy-views",
-    "copy-views": "copyfiles -u 1 'src/views/**/*' 'src/views/*' 'dist/views'"    
+    "copy-views": "copyfiles -u 1 'src/views/**/*' 'src/views/*' 'dist/views'"
   },
   "author": "Darren Dignam",
   "license": "Apache-2.0",
@@ -37,7 +37,8 @@
     "passport-google-oauth20": "^2.0.0",
     "passport-local": "^1.0.0",
     "passport-local-sequelize": "^0.9.1",
-    "sequelize": "^6.37.3"
+    "sequelize": "^6.37.3",
+    "util": "^0.12.5"
   },
   "devDependencies": {
     "@types/connect-flash": "^0.0.40",
