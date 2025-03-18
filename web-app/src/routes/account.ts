@@ -156,17 +156,16 @@ router.put('/users/:id/role', (req: Request, res: Response) => {
 
 router.post('/users/invite', (req: Request, res: Response) => {
     if (req.user && (req.user as User).role == 'admin') {
-        db.User.register(new db.User({
+        db.User.register({
             username: helperFunctions.generateUsername(req.body.email),
             role: req.body.role,
             email: req.body.email,
             oauthProvider: "vipercloud",
-            created: Date.now()
-        }), helperFunctions.generateRandomString(25)/*password*/, (err: Error, user: User) => {
-            if (err) {
-                return res.status(500).send({ message: 'Error inviting user', err });
-            }
+            // created: Date.now()
+        }, helperFunctions.generateRandomString(25)/*password*/).then((user: User) => {
             res.status(200).send({ message: 'User invited successfully', user });
+        }).catch((err: Error) => {
+                return res.status(500).send({ message: 'Error inviting user', err });
         });
     } else {
         res.status(403).send({ message: 'Unauthorized' });
@@ -214,28 +213,27 @@ router.get('/register', (req: Request, res: Response) => {
 });
 
 router.post('/register', (req: Request, res: Response) => {
-    db.User.register(new db.User({
+    db.User.register({
         username: helperFunctions.sanitizeUsername(req.body.username),
         role: "user",
         email: req.body.email,
         oauthProvider: "vipercloud",
-        created: Date.now()
-    }), req.body.password, (err: Error, user: User) => {
-        if (err) {
-            console.log(err);
-            res.status(500).json({ message: 'Error creating user.' });
-        } else {
-            emailRelay.sendWelcomeEmail(req.body.email, helperFunctions.sanitizeUsername(req.body.username));
-            req.flash('alert-success', 'Thanks for setting up a ViPER account - you may need to contact an admin to get full access to the services on offer.');
-            req.login(user, (err: Error) => {
-                if (err) {
-                    console.log(err);
-                    res.status(500).json({ message: 'Error logging in user.' });
-                } else {
-                    res.redirect('/account');
-                }
-            });
-        }
+        // createdAt: Date.now()
+    }, req.body.password).then((user: User) => {
+        emailRelay.sendWelcomeEmail(req.body.email, helperFunctions.sanitizeUsername(req.body.username));
+        req.flash('alert-success', 'Thanks for setting up a ViPER account - you may need to contact an admin to get full access to the services on offer.');
+        req.login(user, (err: Error) => {
+            if (err) {
+                console.log(err);
+                res.status(500).json({ message: 'Error logging in user.' });
+            } else {
+                res.redirect('/account');
+            }
+        });
+
+    }).catch((err: Error) => {
+        console.log(err);
+        res.status(500).json({ message: 'Error creating user.' });
     });
 });
 
