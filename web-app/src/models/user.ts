@@ -2,7 +2,18 @@
 
 import { Sequelize, DataTypes, Model } from 'sequelize';
 import crypto from 'crypto';
-// import { Strategy as LocalStrategy } from 'passport-local';
+import util from 'util';
+
+/*
+ROLES:
+
+user - nothing
+testing - can run one viper
+member - can run one viper
+subscriber - pays for use
+admin - viper and user management
+
+*/
 
 const options = {
     saltlen: 32,
@@ -20,19 +31,8 @@ const options = {
     missingUsernameError: 'Field %s is not set',
 };
 
-/*
-ROLES:
-
-user - nothing
-testing - can run one viper
-member - can run one viper
-subscriber - pays for use
-admin - viper and user management
-
-*/
-
 interface UserAttributes {
-    id: number;
+    id?: number;
     username: string;
     email: string;
     title?: string;
@@ -46,11 +46,11 @@ interface UserAttributes {
     resetPasswordToken?: string;
     resetPasswordExpires?: Date;
     oauthProfile?: object;
-    createdAt: Date;
-    updatedAt: Date;
+    createdAt?: Date;
+    updatedAt?: Date;
 }
 
-module.exports = (sequelize: Sequelize) => {
+export default (sequelize: Sequelize) => {
     class User extends Model<UserAttributes> implements UserAttributes {
         public id!: number;
         public username!: string;
@@ -68,6 +68,26 @@ module.exports = (sequelize: Sequelize) => {
         public oauthProfile?: object;
         public readonly createdAt!: Date;
         public readonly updatedAt!: Date;
+
+        public static async register(userDetails: Partial<UserAttributes>, password: string): Promise<User> {
+            if (!userDetails.email) {
+                throw new Error(util.format(options.missingUsernameError, options.usernameField));
+            }
+            const user = this.build(userDetails as UserAttributes);
+
+            if (!user.email) {
+                throw new Error(util.format(options.missingUsernameError, options.usernameField));
+            }
+
+            const existingUser = await this.findOne({ where: { email: user.email } });
+            if (existingUser) {
+                throw new Error(util.format(options.userExistsError, user.email));
+            }
+
+            await user.setPassword(password);
+            await user.save();
+            return user;
+        }    
 
         public setPassword(password: string): Promise<void> {
             return new Promise((resolve, reject) => {
@@ -88,6 +108,7 @@ module.exports = (sequelize: Sequelize) => {
                         }
 
                         this.hash = Buffer.from(hashRaw).toString('hex');
+                        console.log("Hash: ", this.hash);
                         this.salt = salt;
 
                         resolve();
@@ -118,6 +139,19 @@ module.exports = (sequelize: Sequelize) => {
             });
         }
 
+        static async authenticateUser(email: string, password: string): Promise<User | boolean> {
+            try {
+                const user = await User.findOne({ where: { email } });
+                if (!user) {
+                    return false;
+                }
+                return user.authenticate(password);
+            } catch (error) {
+                console.error("Authentication Error:", error);
+                return false;
+            }
+        }
+
         static associate(models: any) {
             // define association here
         }
@@ -135,7 +169,7 @@ module.exports = (sequelize: Sequelize) => {
             oauthID: { type: DataTypes.STRING },
             oauthProvider: { type: DataTypes.STRING },
             salt: { type: DataTypes.STRING },
-            hash: { type: DataTypes.STRING },
+            hash: { type: DataTypes.TEXT },
             resetPasswordToken: { type: DataTypes.STRING },
             resetPasswordExpires: { type: DataTypes.DATE },
             oauthProfile: { type: DataTypes.JSON },
