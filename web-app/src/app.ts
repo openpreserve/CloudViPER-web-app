@@ -1,16 +1,15 @@
 import express, { Application } from 'express';
 import exphbs from './config/handlebars';
-import dotenv from 'dotenv';
 import bodyParser from 'body-parser';
-// import expressSession from 'express-session';
-
-// import MySQLStore from 'express-mysql-session';
 import passport from 'passport';
 import flash from 'connect-flash';
 
 import configAuth from './config/auth';
 
-dotenv.config({ path: "./.env" });
+import dotenv from 'dotenv';
+dotenv.config({ path: `${__dirname}/.env` });
+
+console.log(`DB USER: ${process.env.DB_USER}`);
 
 const app: Application = express();
 const PORT: number = parseInt(process.env.PORT || '3000', 10);
