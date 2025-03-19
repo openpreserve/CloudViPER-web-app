@@ -181,7 +181,7 @@ export default (sequelize: Sequelize) => {
             modelName: 'User',
             defaultScope: {
                 // exclude password hash by default
-                attributes: { exclude: ['hash'] },
+                attributes: { exclude: ['salt', 'hash'] },
             },
         }
     );

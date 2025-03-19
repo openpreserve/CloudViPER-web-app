@@ -7,8 +7,8 @@ import emailRelay from '../utility/emailRelay';
 import helperFunctions from '../utility/helperFunctions';
 
 const options = {
-    // usernameField: 'email',
-    usernameField: 'username',
+    usernameField: 'email',
+    // usernameField: 'username',
     incorrectUsernameError: 'Incorrect username',
     incorrectPasswordError: 'Incorrect password',
 }
