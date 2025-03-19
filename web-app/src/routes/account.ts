@@ -208,34 +208,34 @@ router.get('/sessions', (req: Request, res: Response) => {
     }
 });
 
-router.get('/register', (req: Request, res: Response) => {
-    res.render('user_account_register');
-});
+// router.get('/register', (req: Request, res: Response) => {
+//     res.render('user_account_register');
+// });
 
-router.post('/register', (req: Request, res: Response) => {
-    db.User.register({
-        username: helperFunctions.sanitizeUsername(req.body.username),
-        role: "user",
-        email: req.body.email,
-        oauthProvider: "vipercloud",
-        // createdAt: Date.now()
-    }, req.body.password).then((user: User) => {
-        emailRelay.sendWelcomeEmail(req.body.email, helperFunctions.sanitizeUsername(req.body.username));
-        req.flash('alert-success', 'Thanks for setting up a ViPER account - you may need to contact an admin to get full access to the services on offer.');
-        req.login(user, (err: Error) => {
-            if (err) {
-                console.log(err);
-                res.status(500).json({ message: 'Error logging in user.' });
-            } else {
-                res.redirect('/account');
-            }
-        });
+// router.post('/register', (req: Request, res: Response) => {
+//     db.User.register({
+//         username: helperFunctions.sanitizeUsername(req.body.username),
+//         role: "user",
+//         email: req.body.email,
+//         oauthProvider: "vipercloud",
+//         // createdAt: Date.now()
+//     }, req.body.password).then((user: User) => {
+//         emailRelay.sendWelcomeEmail(req.body.email, helperFunctions.sanitizeUsername(req.body.username));
+//         req.flash('alert-success', 'Thanks for setting up a ViPER account - you may need to contact an admin to get full access to the services on offer.');
+//         req.login(user, (err: Error) => {
+//             if (err) {
+//                 console.log(err);
+//                 res.status(500).json({ message: 'Error logging in user.' });
+//             } else {
+//                 res.redirect('/account');
+//             }
+//         });
 
-    }).catch((err: Error) => {
-        console.log(err);
-        res.status(500).json({ message: 'Error creating user.' });
-    });
-});
+//     }).catch((err: Error) => {
+//         console.log(err);
+//         res.status(500).json({ message: 'Error creating user.' });
+//     });
+// });
 
 
 router.get('/login', (req: Request, res: Response) => {
