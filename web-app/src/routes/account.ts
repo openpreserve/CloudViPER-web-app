@@ -348,7 +348,18 @@ router.post('/reset-token', async (req: Request, res: Response): Promise<void> =
             user.resetPasswordToken = ''; // Clear the reset token
             user.resetPasswordExpires = new Date(); // Clear the reset token
             await user.save();
-            res.render('user_account_post_reset_token');
+
+            // Log the user in
+            req.login(user, (err: Error) => {
+                if (err) {
+                    console.log("Error logging in user: ", err);
+                    const response: ResetTokenResponse = { message: 'Error logging in user.' };
+                    res.status(500).json(response);
+                    return;
+                }
+                // Redirect to the dashboard
+                res.redirect('/service');
+            });
         } catch (err) {
             console.log("Error setting new password: ", err);
             const response: ResetTokenResponse = { message: 'Error setting new password.' };
