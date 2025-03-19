@@ -7,7 +7,7 @@
             {{#ifNotEquals error_message ""}}
             <div class="alert alert-danger" role="alert">
                 <p>{{error_message}}</p>
-                <p>Login Failed! (Remember to login with your username - not your email address)</p>
+                {{!-- <p>Login Failed! (Remember to login with your username - not your email address)</p> --}}
             </div>
             {{/ifNotEquals}}
     {{/if}}
@@ -18,8 +18,8 @@
             <div class="col-md-4">
             <form method="post" action="/account/login" class="nps-form">
                 <div class="mb-3">
-                    <label for="username" class="form-label text-white">Username:</label>
-                    <input type="text" id="username" name="username" placeholder="Username" required>
+                    <label for="email" class="form-label text-white">email:</label>
+                    <input type="text" id="email" name="email" placeholder="email" required>
 
                     <label for="password" class="form-label text-white">Password:</label>
                     <input type="password" id="password" name="password" placeholder="Password" required>
