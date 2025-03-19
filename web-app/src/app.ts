@@ -3,6 +3,7 @@ import exphbs from './config/handlebars';
 import bodyParser from 'body-parser';
 import passport from 'passport';
 import flash from 'connect-flash';
+import db from './models';
 
 import configAuth from './config/auth';
 
@@ -80,6 +81,28 @@ if (process.env.NODE_ENV === 'production') {
     });
 }
 
+// Middleware to log session creation
+app.use((req, res, next) => {
+    if (!req.session) {
+        return next();
+    }
+
+    const logData = {
+        eventType: 'Session Creation',
+        eventDescription: 'A new session has been created.',
+        userId: req.user ? req.user.toString() : null,
+        browserInfo: req.headers['user-agent'] || null,
+        ipAddress: req.headers['x-forwarded-for'] || req.socket.remoteAddress || null,
+    };
+
+    db.Log.create(logData)
+        .then(() => next())
+        .catch(err => {
+            console.error('Failed to log session creation:', err);
+            next();
+        });
+});
+
 // catch 404 and forward to error handler
 app.use(function(req, res ) {
     res.json({"error":{code:404,status:"not found"}});
@@ -89,3 +112,4 @@ app.use(function(req, res ) {
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
+
