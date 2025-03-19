@@ -54,5 +54,5 @@ db.sequelize.sync({ alter: true }).then(() => {
   console.log('Database synchronized with { alter: true }');
 });
 
-export { usermodel, vipermodel, logmodel }; // Export logsmodel
+export { usermodel, vipermodel, logmodel }; 
 export default db;
