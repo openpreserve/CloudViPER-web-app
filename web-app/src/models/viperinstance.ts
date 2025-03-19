@@ -47,7 +47,7 @@ export default (sequelize: Sequelize) => {
         kasmvncPassword: { type: DataTypes.STRING, allowNull: true },
         statusKey: { type: DataTypes.STRING, allowNull: true },
         createdAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
-        status: { type: DataTypes.STRING, allowNull: false },
+        status: { type: DataTypes.STRING, allowNull: false, defaultValue: 'initilising' },
         logs: { type: DataTypes.JSON, allowNull: true, defaultValue: [] }, // Initialize as an empty array
     }, {
         sequelize,
