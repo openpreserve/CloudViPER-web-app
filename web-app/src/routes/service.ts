@@ -265,8 +265,8 @@ router.get('/new-instance', async (req: Request, res: Response) => {
         } catch (err) {
             console.log('Error creating or starting container:', err);
             await db.Log.create({
+                eventType: 'Error',
                 message: 'Error creating or starting container',
-                eventType: '',
                 eventDescription: (err as Error).toString(),
                 userId: user.id,
                 createdAt: new Date(),

@@ -4,6 +4,7 @@ class Log extends Model {
     public id!: number;
     public eventType!: string;
     public eventDescription!: string;
+    public message!: string;
     public userId!: number | null;
     public viperInstanceId!: number | null;
     public browserInfo!: string | null;
@@ -28,6 +29,10 @@ export default (sequelize: Sequelize) => {
             eventDescription: {
                 type: DataTypes.TEXT,
                 allowNull: false,
+            },
+            message: {
+                type: DataTypes.STRING,
+                allowNull: true,
             },
             userId: {
                 type: DataTypes.INTEGER.UNSIGNED,
