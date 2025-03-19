@@ -38,7 +38,7 @@ function userAsJSON(user: any): object {
         return {};
     }
 }
-interface User {
+interface AccountUser {
     id: number;
     username: string;
     role: string;
@@ -53,7 +53,7 @@ interface SafeUser {
 }
 
 router.get('/', (req: Request, res: Response) => {
-    const user = req.user as User | undefined;
+    const user = req.user as AccountUser | undefined;
     if (user) {
         const alertSuccess = req.flash('alert-success');
         //console.log( JSON.stringify(user) );
@@ -86,14 +86,14 @@ router.post('/update', (req: Request, res: Response) => {
     const _action = req.body.action;
     const _userid = req.body.userid;
 
-    const user = req.user as User | undefined;
+    const user = req.user as AccountUser | undefined;
 
     if (user && (user.role == 'admin' || user.id == _userid)) {
         switch (_action) {
             case 'get':
                 interface FindUserResponse {
                     message?: string;
-                    user?: User;
+                    user?: AccountUser;
                 }
 
                 db.User.findOne({ where: { id: _userid } }).then((user: any | null) => {
@@ -120,7 +120,7 @@ router.post('/update', (req: Request, res: Response) => {
 });
 
 router.get('/users', (req: Request, res: Response) => {
-    const user = req.user as User | undefined;
+    const user = req.user as AccountUser | undefined;
 
     if (user && user.role == 'admin') {
         db.User.findAll().then((users: any[]) => {
@@ -142,7 +142,7 @@ router.get('/users', (req: Request, res: Response) => {
 });
 
 router.put('/users/:id/role', (req: Request, res: Response) => {
-    if (req.user && (req.user as User).role == 'admin') {
+    if (req.user && (req.user as AccountUser).role == 'admin') {
         const userId = req.params.id;
         const newRole = req.body.role;
 
@@ -158,14 +158,14 @@ router.put('/users/:id/role', (req: Request, res: Response) => {
 });
 
 router.post('/users/invite', (req: Request, res: Response) => {
-    if (req.user && (req.user as User).role == 'admin') {   
+    if (req.user && (req.user as AccountUser).role == 'admin') {   
         db.User.register({
             username: helperFunctions.generateUsername(req.body.email),
             role: req.body.role,
             email: req.body.email,
             oauthProvider: "vipercloud",
             // created: Date.now()
-        }, helperFunctions.generateRandomString(25)/*password*/).then((user: User) => {
+        }, helperFunctions.generateRandomString(25)/*password*/).then((user: AccountUser) => {
             emailRelay.sendInvitedEmail(req.body.email, helperFunctions.generateUsername(req.body.email), (req.user as SafeUser).username);
             res.status(200).send({ message: 'User invited successfully', user });
         }).catch((err: Error) => {
@@ -177,7 +177,7 @@ router.post('/users/invite', (req: Request, res: Response) => {
 });
 
 router.get('/sessions', (req: Request, res: Response) => {
-    if (req.user && (req.user as User).role == 'admin') {
+    if (req.user && (req.user as AccountUser).role == 'admin') {
         const connection = mysql.createConnection(configAuth.mysqlSessionAuth);
         const query = 'SELECT session_id, expires, data FROM sessions';
 
