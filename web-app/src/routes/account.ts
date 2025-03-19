@@ -156,7 +156,7 @@ router.put('/users/:id/role', (req: Request, res: Response) => {
 });
 
 router.post('/users/invite', (req: Request, res: Response) => {
-    if (req.user && (req.user as User).role == 'admin') {
+    if (req.user && (req.user as User).role == 'admin') {   
         db.User.register({
             username: helperFunctions.generateUsername(req.body.email),
             role: req.body.role,
@@ -164,6 +164,7 @@ router.post('/users/invite', (req: Request, res: Response) => {
             oauthProvider: "vipercloud",
             // created: Date.now()
         }, helperFunctions.generateRandomString(25)/*password*/).then((user: User) => {
+            emailRelay.sendInvitedEmail(req.body.email, helperFunctions.generateUsername(req.body.email), (req.user as SafeUser).username);
             res.status(200).send({ message: 'User invited successfully', user });
         }).catch((err: Error) => {
                 return res.status(500).send({ message: 'Error inviting user', err });
@@ -208,6 +209,9 @@ router.get('/sessions', (req: Request, res: Response) => {
         res.status(403).send({ message: 'Error 2' });
     }
 });
+
+// Removed the routes for register and register post
+// These routes are disabled during the Testing Phase of the app development
 
 // router.get('/register', (req: Request, res: Response) => {
 //     res.render('user_account_register');
