@@ -47,7 +47,7 @@ Object.keys(db).forEach((modelName: string) => {
 });
 
 db.sequelize.sync({ alter: true }).then(() => {
-  console.log('Drop and Resync with { force: true }');
+  console.log('Database synchronized with { alter: true }');
 });
 
 export { usermodel, vipermodel };
