@@ -1,6 +1,5 @@
 import express, { Request, Response } from 'express';
 import dotenv from 'dotenv';
-// import { Op } from 'sequelize';
 import Docker from 'dockerode';
 import db from '../models';
 import getPort from 'get-port';
@@ -21,7 +20,7 @@ subscriber - pays for use
 admin - viper and user management
 
 */
-interface User {
+interface ServiceUser {
     id: number;
     username: string;
     email: string;
@@ -44,12 +43,12 @@ interface User {
 // }
 
 
-interface LogEntry {
-    timestamp: Date;
-    message: string;
-}
+// interface LogEntry {
+//     timestamp: Date;
+//     message: string;
+// }
 
-function userToJson(_user: User){
+function userToJson(_user: ServiceUser){
     return {
         id: _user.id,
         username: _user.username,
@@ -60,7 +59,7 @@ function userToJson(_user: User){
 
 /* GET home page. */
 router.get('/', (req: Request, res: Response) => {
-    const user = req.user as User | undefined;
+    const user = req.user as ServiceUser | undefined;
     if (user) {
         switch (user.role) {
             case 'admin':
@@ -82,7 +81,7 @@ router.get('/', (req: Request, res: Response) => {
 });
 
 router.get('/admin', (req: Request, res: Response) => {
-    const user = req.user as User | undefined;
+    const user = req.user as ServiceUser | undefined;
     if (user && user.role == 'admin') {
         res.render('service_admin', { user: userToJson(user) });
     } else {
@@ -90,7 +89,7 @@ router.get('/admin', (req: Request, res: Response) => {
     }
 });
 router.get('/testing', (req: Request, res: Response) => {
-    const user = req.user as User | undefined;
+    const user = req.user as ServiceUser | undefined;
     if (user && user.role == 'testing') {
         res.render('service_testing', { user: userToJson(user) });
     } else {
@@ -98,7 +97,7 @@ router.get('/testing', (req: Request, res: Response) => {
     }
 });
 router.get('/member', (req: Request, res: Response) => {
-    const user = req.user as User | undefined;
+    const user = req.user as ServiceUser | undefined;
     if (user && user.role == 'member') {
         res.render('service_member', { user: userToJson(user) });
     } else {
@@ -107,7 +106,7 @@ router.get('/member', (req: Request, res: Response) => {
 });
 
 router.get('/new-instance', async (req: Request, res: Response) => {
-    const user = req.user as User | undefined;
+    const user = req.user as ServiceUser | undefined;
     // const availablePort = await getAvailablePort();
     // const portString = `${availablePort}/tcp`;
 
@@ -281,7 +280,7 @@ router.get('/new-instance', async (req: Request, res: Response) => {
 });
 
 router.get('/viperinstances', async (req: Request, res: Response) => {
-    const user = req.user as User | undefined;
+    const user = req.user as ServiceUser | undefined;
     if (user && user.role == 'admin') {
         try {
             const instances = await db.ViperInstance.findAll();
