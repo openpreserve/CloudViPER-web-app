@@ -8,7 +8,7 @@ import dotenv from 'dotenv';
 import configAuth from '../config/auth';
 import User from './user';
 import ViperInstance from './viperinstance';
-import Logs from './log'; // Import the Logs model
+import Log from './log'; // Import the Logs model
 
 dotenv.config({ path: "../.env" });
 
@@ -26,14 +26,14 @@ sequelize = new Sequelize(database, username, password, config);
 
 const usermodel = User(sequelize);
 const vipermodel = ViperInstance(sequelize);
-const logsmodel = Logs(sequelize); // Initialize the Logs model
+const logmodel = Log(sequelize); // Initialize the Logs model
 
 interface DB {
   sequelize: Sequelize;
   Sequelize: typeof Sequelize;
   User: typeof usermodel;
   ViperInstance: typeof vipermodel;
-  Logs: typeof logsmodel; // Add Logs to the DB interface
+  Log: typeof logmodel; // Add Logs to the DB interface
 }
 
 const db: DB = {
@@ -41,7 +41,7 @@ const db: DB = {
   Sequelize,
   User: usermodel,
   ViperInstance: vipermodel,
-  Logs: logsmodel, // Add Logs to the db object
+  Log: logmodel, // Add Logs to the db object
 };
 
 Object.keys(db).forEach((modelName: string) => {
@@ -54,5 +54,5 @@ db.sequelize.sync({ alter: true }).then(() => {
   console.log('Database synchronized with { alter: true }');
 });
 
-export { usermodel, vipermodel, logsmodel }; // Export logsmodel
+export { usermodel, vipermodel, logmodel }; // Export logsmodel
 export default db;

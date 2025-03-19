@@ -264,7 +264,14 @@ router.get('/new-instance', async (req: Request, res: Response) => {
             } as ViperInstanceResponse);
         } catch (err) {
             console.log('Error creating or starting container:', err);
-            res.status(500).json({ error: 'Error creating or starting container', details: err });
+            await db.Log.create({
+                message: 'Error creating or starting container',
+                eventType: '',
+                eventDescription: (err as Error).toString(),
+                userId: user.id,
+                createdAt: new Date(),
+            });
+            res.status(500).json({ error: 'Error creating or starting container' });
         }
     } else {
         res.json({ "error": "Authentication" });
