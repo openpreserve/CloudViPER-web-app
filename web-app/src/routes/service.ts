@@ -190,7 +190,7 @@ router.get('/new-instance', async (req: Request, res: Response) => {
                 ExposedPorts: { '3000/tcp': {}, '3001/tcp': {} },
                 NetworkingConfig: {
                     EndpointsConfig: {
-                        'ingress-proxy': {}
+                        ...(process.env.NODE_ENV === 'prod' && { 'ingress-proxy': {} })
                     }
                 },
                 Env: envVars,
