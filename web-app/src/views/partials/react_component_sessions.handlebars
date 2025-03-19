@@ -44,9 +44,10 @@ class SessionList extends React.Component {
                   <tr key={session.id}>
                     <td>{session.id}</td>
                     <td>{session.username}</td>
-                    <td>{new Date(session.loginTime).toLocaleString()}</td>
-                    {{!-- <td>{new Date(session.expiresAt).toLocaleString()}</td>
-                    <td>{session.status}</td> --}}
+                    <td>{session.expiresAt}</td>
+                    {{!-- <td>{new Date(session.loginTime).toLocaleString()}</td> --}}
+                    {{!-- <td>{new Date(session.expiresAt).toLocaleString()}</td> --}}
+                    {{!-- <td>{session.status}</td> --}}
                   </tr>
                 ))}
               </tbody>
