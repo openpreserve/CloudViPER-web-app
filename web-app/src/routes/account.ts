@@ -99,7 +99,8 @@ router.post('/update', (req: Request, res: Response) => {
                 db.User.findOne({ where: { id: _userid } }).then((user: any | null) => {
                     if (!user) {
                         const response: FindUserResponse = { message: 'Not found.' };
-                        return res.status(400).json(response);
+                        res.status(400).json(response);
+                        return;
                     }
                     res.json(user);
                 }).catch((err: Error) => {
@@ -315,7 +316,8 @@ router.get('/reset-token/:token', (req: Request, res: Response) => {
     db.User.findOne({ where: { resetPasswordToken: _token, resetPasswordExpires: { [Op.gt]: Date.now() } } }).then((user: any | null) => {
         if (!user) {
             const response: ResetTokenResponse = { message: 'Password reset token is invalid or has expired.' };
-            return res.status(400).json(response);
+            res.status(400).json(response);
+            return;
         }
         res.render('user_account_get_reset_token', {
             token: _token,
@@ -327,39 +329,37 @@ router.get('/reset-token/:token', (req: Request, res: Response) => {
     });
 });
 
-router.post('/reset-token', (req: Request, res: Response) => {
+router.post('/reset-token', async (req: Request, res: Response): Promise<void> => {
     const _token = req.body.token;
     interface ResetTokenResponse {
         message?: string;
     }
 
-    db.User.findOne({ where: { resetPasswordToken: _token, resetPasswordExpires: { [Op.gt]: Date.now() } } }).then((user: any | null) => {
+    try {
+        const user = await db.User.findOne({ where: { resetPasswordToken: _token, resetPasswordExpires: { [Op.gt]: Date.now() } } });
         if (!user) {
             const response: ResetTokenResponse = { message: 'Password reset token is invalid or has expired.' };
-            return res.status(400).json(response);
+            res.status(400).json(response);
+            return;
         }
 
-        user.setPassword(req.body.password, (err: Error | null, updatedUser: any) => {
-            if (err) {
-                console.log("Error setting new password: ", err);
-                const response: ResetTokenResponse = { message: 'Error setting new password.' };
-                return res.status(500).json(response);
-            }
-            updatedUser.resetPasswordToken = null; // Clear the reset token
-            updatedUser.resetPasswordExpires = null; // Clear the reset token
-            updatedUser.save().then(() => {
-                res.render('user_account_post_reset_token');
-            }).catch((saveErr: Error) => {
-                console.log("Error saving user: ", saveErr);
-                const response: ResetTokenResponse = { message: 'Error saving user.' };
-                res.status(500).json(response);
-            });
-        });
-    }).catch((err: Error) => {
+        try {
+            await user.setPassword(req.body.password);
+            user.resetPasswordToken = ''; // Clear the reset token
+            user.resetPasswordExpires = new Date(); // Clear the reset token
+            await user.save();
+            res.render('user_account_post_reset_token');
+        } catch (err) {
+            console.log("Error setting new password: ", err);
+            const response: ResetTokenResponse = { message: 'Error setting new password.' };
+            res.status(500).json(response);
+            return;
+        }
+    } catch (err) {
         console.log("Error finding user by token: ", err);
         const response: ResetTokenResponse = { message: 'Error finding user.' };
         res.status(500).json(response);
-    });
+    }
 });
 
 

@@ -107,8 +107,9 @@ export default (sequelize: Sequelize) => {
                             return reject(err);
                         }
 
-                        this.hash = Buffer.from(hashRaw).toString('hex');
-                        console.log("Hash: ", this.hash);
+                        const new_hash = Buffer.from(hashRaw).toString('hex');
+                        this.hash = new_hash;
+                        // console.log("New Hash: ", new_hash);
                         this.salt = salt;
 
                         resolve();
