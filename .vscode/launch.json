@@ -1,7 +1,25 @@
 {
     "version": "0.2.0",
     "configurations": [
-
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "Launch Program (ts-node)",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "runtimeArgs": [
+                "--require",
+                "ts-node/register"
+            ],
+            "args": [
+                "src/app.ts"
+            ],
+            "cwd": "${workspaceFolder}/web-app",
+            "console": "integratedTerminal",
+            "sourceMaps": true,
+            "envFile": "${workspaceFolder}/web-app/dist/.env"
+        },
         {
             "type": "node",
             "request": "launch",
@@ -17,11 +35,13 @@
                 "--require",
                 "ts-node/register"
             ],
-            "envFile": "${workspaceFolder}/web-app/.env",
+            "envFile": "${workspaceFolder}/web-app/dist/.env",
             "args": [
                "${workspaceFolder}/web-app/src/app.ts"
             ],
-            "console": "integratedTerminal"
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}/web-app", // Set the working directory
+            "sourceMaps": true // Enable source maps
         },
         {
             "type": "node",

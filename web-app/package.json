@@ -54,6 +54,7 @@
     "gulp-copy": "^5.0.0",
     "gulp-sourcemaps": "^3.0.0",
     "gulp-typescript": "^6.0.0-alpha.1",
+    "ts-node": "^10.9.2",
     "typescript": "^5.7.3"
   }
 }
