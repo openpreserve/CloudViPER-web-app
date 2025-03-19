@@ -123,14 +123,16 @@ router.get('/users', (req: Request, res: Response) => {
     const user = req.user as User | undefined;
 
     if (user && user.role == 'admin') {
-        db.User.findAll().then((users: User[]) => {
-            // Remove 'salt' and 'hash' from each user
-            const safeUsers: SafeUser[] = users.map(user => {
-                const { salt, hash, ...safeUser } = userAsJSON(user) as any; // Use toJSON() to get a plain object
-                return safeUser as SafeUser;
-            });
+        db.User.findAll().then((users: any[]) => {
+            // // Remove 'salt' and 'hash' from each user
+            // const safeUsers: SafeUser[] = users.map(user => {
+            //     const { salt, hash, ...safeUser } = userAsJSON(user) as any; // Use toJSON() to get a plain object
+            //     return safeUser as SafeUser;
+            // });
 
-            res.json(safeUsers);
+            // res.json(safeUsers);
+
+            res.json(users);
         }).catch((error: Error) => {
             res.status(500).json({ error: error.message });
         });
