@@ -1,8 +1,9 @@
 import express, { Request, Response } from 'express';
 import dotenv from 'dotenv';
-import { Op } from 'sequelize';
+// import { Op } from 'sequelize';
 import Docker from 'dockerode';
 import db from '../models';
+import getPort from 'get-port';
 import helperFunctions from '../utility/helperFunctions';
 
 dotenv.config();
@@ -20,8 +21,6 @@ subscriber - pays for use
 admin - viper and user management
 
 */
-
-
 interface User {
     id: number;
     username: string;
@@ -29,19 +28,19 @@ interface User {
     // Add other properties as needed
 }
 
-interface ViperInstance {
-    id: number;
-    uuid: string;
-    dockerid: string;
-    name: string;
-    url: string;
-    kasmvncPassword: string;
-    statusKey: string;
-    owner: number;
-    status: string;
-    logs: LogEntry[];
-    save: () => Promise<void>;
-}
+// interface ViperInstance {
+//     id: number;
+//     uuid: string;
+//     dockerid: string;
+//     name: string;
+//     url: string;
+//     kasmvncPassword: string;
+//     statusKey: string;
+//     owner: number;
+//     status: string;
+//     logs: LogEntry[];
+//     save: () => Promise<void>;
+// }
 
 
 interface LogEntry {
@@ -49,7 +48,7 @@ interface LogEntry {
     message: string;
 }
 
-function userToJson(_user:User){
+function userToJson(_user: User){
     return {
         id: _user.id,
         username: _user.username,
@@ -138,6 +137,9 @@ router.get('/new-instance', async (req: Request, res: Response) => {
             HostConfig: {
                 ShmSize: number;
                 Binds: string[];
+                PortBindings?: {
+                    [port: string]: [{ HostPort: string }];
+                };
             };
             ExposedPorts: {
                 [port: string]: {};
@@ -152,7 +154,7 @@ router.get('/new-instance', async (req: Request, res: Response) => {
 
         interface DockerContainer {
             id: string;
-            start: (callback: (err: Error | null, data: any) => void) => void;
+            start: () => Promise<void>;
             exec: (options: DockerExecOptions) => Promise<DockerExec>;
         }
 
@@ -172,100 +174,100 @@ router.get('/new-instance', async (req: Request, res: Response) => {
             };
         }
 
-        docker.createContainer({
-            Image: 'darrendignam/opf-viper-cloud:v0.0.10',
-            name: containerName,
-            HostConfig: {
-                ShmSize: 1024 * 1024 * 1024,
-                Binds: ['/var/viper-docker-project/volumes/test-corpus/test-root/corpora:/config/Desktop/test-corpus:ro'],
-            },
-            ExposedPorts: { '3000/ttcp': {}, '3001/tcp': {} },
-            NetworkingConfig: {
-                EndpointsConfig: {
-                    'ingress-proxy': {}
-                }
-            },
-            Env: envVars,
-        } as DockerContainerOptions, (err: Error | null, container: any) => {
-            if (err) {
-                console.log('err: 1:');
-                console.log(err);
-                res.json({ 'error1': err });
-            }
-            container.start(async (err: Error | null, data: any) => {
-                if (err) {
-                    console.log('err: 2');
-                    console.log(err);
-                }
+        try {
+            // Find an available port
+            const availablePort = await getPort();
+            const portString = `${availablePort}/tcp`;
 
-                try {
-                    const exec = await container.exec({
-                        AttachStdout: true, AttachStderr: true,
-                        Cmd: ['rm', '-f', '/etc/sudoers.d/abc']
-                    } as DockerExecOptions);
-                    const stream = await exec.start({
-                        hijack: true, stdin: true
-                    });
-                    stream.output.on('data', (data: any) => {
-                        console.log(data.toString());
-                    });
-                    await new Promise((resolve) => {
-                        stream.output.on('end', resolve);
-                    });
-                    console.log('Sudoers file deleted successfully');
-                } catch (execErr) { console.error('Error executing command:', execErr); }
+            let _DockerContainerOptions: DockerContainerOptions = {
+                Image: 'darrendignam/opf-viper-cloud:v0.0.10',
+                name: containerName,
+                HostConfig: {
+                    ShmSize: 1024 * 1024 * 1024,
+                    Binds: ['/var/viper-docker-project/volumes/test-corpus/test-root/corpora:/config/Desktop/test-corpus:ro'],
+                    ...(process.env.NODE_ENV === 'dev' && { PortBindings: { '3000/tcp': [{ HostPort: `${availablePort}` }] } })
+                },
+                ExposedPorts: { '3000/tcp': {}, '3001/tcp': {} },
+                NetworkingConfig: {
+                    EndpointsConfig: {
+                        'ingress-proxy': {}
+                    }
+                },
+                Env: envVars,
+            };
 
-                try {
-                    const exec = await container.exec({
-                        AttachStdout: true, AttachStderr: true,
-                        Cmd: ['gpasswd', '-d', 'abc', 'sudo']
-                    } as DockerExecOptions);
-                    const stream = await exec.start({
-                        hijack: true, stdin: true
-                    });
-                    stream.output.on('data', (data: any) => {
-                        console.log(data.toString());
-                    });
-                    await new Promise((resolve) => {
-                        stream.output.on('end', resolve);
-                    });
-                    console.log('Sudoers file deleted successfully');
-                } catch (execErr) { console.error('Error executing command:', execErr); }
+            const container = await docker.createContainer(_DockerContainerOptions);
+            await container.start();
 
-                console.log('OK: 3');
-                console.log(data);
-                interface ViperInstanceResponse {
-                    container: {
-                        id: string;
-                        uuid: string;
-                        url: string;
-                    };
-                }
-
-                db.ViperInstance.create({
-                    uuid: instanceUUID,
-                    dockerid: container.id,
-                    name: containerName,
-                    url: instanceURL,
-                    kasmvncPassword: kasmvncPassword,
-                    statusKey: statusKey,
-                    owner: ownerId,
-                    logs: [ { timestamp: new Date(), message: "Created"} ],
-                } as ViperInstance).then((newViperInstance: ViperInstance) => {
-                    res.json({
-                        container: {
-                            id: container.id,
-                            uuid: instanceUUID,
-                            url: instanceURL,
-                        }
-                    } as ViperInstanceResponse);
-                }).catch((error: Error) => {
-                    res.status(500).json({ error: 'Error creating ViperInstance', details: error });
+            try {
+                const exec = await container.exec({
+                    AttachStdout: true, AttachStderr: true,
+                    Cmd: ['rm', '-f', '/etc/sudoers.d/abc']
+                } as DockerExecOptions);
+                const stream = await exec.start({
+                    hijack: true, stdin: true
                 });
+                stream.on('data', (data: any) => {
+                    console.log(data.toString());
+                });
+                await new Promise((resolve) => {
+                    stream.on('end', resolve);
+                });
+                console.log('Sudoers file deleted successfully');
+            } catch (execErr) { console.error('Error executing command:', execErr); }
+
+            try {
+                const exec = await container.exec({
+                    AttachStdout: true, AttachStderr: true,
+                    Cmd: ['gpasswd', '-d', 'abc', 'sudo']
+                } as DockerExecOptions);
+                const stream = await exec.start({
+                    hijack: true, stdin: true
+                });
+                stream.on('data', (data: any) => {
+                    console.log(data.toString());
+                });
+                await new Promise((resolve) => {
+                    stream.on('end', resolve);
+                });
+                console.log('Sudoers file deleted successfully');
+            } catch (execErr) { console.error('Error executing command:', execErr); }
+
+            console.log('OK: 3');
+
+            interface ViperInstanceResponse {
+                container: {
+                    id: string;
+                    uuid: string;
+                    url: string;
+                };
+            }
+
+            const newViperInstance = await db.ViperInstance.create({
+                uuid: instanceUUID,
+                dockerid: container.id,
+                name: containerName,
+                url: instanceURL,
+                kasmvncPassword: kasmvncPassword,
+                statusKey: statusKey,
+                owner: ownerId,
+                status: 'created',
+                logs: [ { timestamp: new Date(), message: "Created"} ],
             });
-        });
+
+            res.json({
+                container: {
+                    id: container.id,
+                    uuid: instanceUUID,
+                    url: instanceURL,
+                }
+            } as ViperInstanceResponse);
+        } catch (err) {
+            console.log('Error creating or starting container:', err);
+            res.status(500).json({ error: 'Error creating or starting container', details: err });
+        }
     } else {
-        res.json({ "error": "Authentication" })
+        res.json({ "error": "Authentication" });
     }
 });
 
