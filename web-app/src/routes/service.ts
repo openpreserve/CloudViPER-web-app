@@ -24,6 +24,7 @@ admin - viper and user management
 interface User {
     id: number;
     username: string;
+    email: string;
     role: string;
     // Add other properties as needed
 }
@@ -52,6 +53,7 @@ function userToJson(_user: User){
     return {
         id: _user.id,
         username: _user.username,
+        email: _user.email,
         role: _user.role,
     }
 }
