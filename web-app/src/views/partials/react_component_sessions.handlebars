@@ -1,0 +1,58 @@
+class SessionList extends React.Component {
+      constructor(props) {
+        super(props);
+        this.state = {
+          sessions: [],
+          isLoading: true,
+          error: null,
+        };
+      }
+
+      componentDidMount() {
+        fetch('/account/sessions')
+          .then(response => response.json())
+          .then(data => this.setState({ sessions: data, isLoading: false }))
+          .catch(error => this.setState({ error, isLoading: false }));
+      }
+
+      render() {
+        const { sessions, isLoading, error } = this.state;
+
+        if (isLoading) {
+          return <p>Loading sessions...</p>;
+        }
+
+        if (error) {
+          return <p>Error loading sessions: {error.message}</p>;
+        }
+
+        return (
+          <div>
+            <h1>Session List</h1>
+            <table className="table table-striped">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>User</th>
+                  <th>Expires</th>
+                  {{!-- <th>Expires Time</th>
+                  <th>Status</th> --}}
+                </tr>
+              </thead>
+              <tbody>
+                {sessions.map(session => (
+                  <tr key={session.id}>
+                    <td>{session.id}</td>
+                    <td>{session.username}</td>
+                    <td>{session.expiresAt}</td>
+                    {{!-- <td>{new Date(session.loginTime).toLocaleString()}</td> --}}
+                    {{!-- <td>{new Date(session.expiresAt).toLocaleString()}</td> --}}
+                    {{!-- <td>{session.status}</td> --}}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      }
+    }
