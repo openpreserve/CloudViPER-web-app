@@ -142,7 +142,7 @@ export default (sequelize: Sequelize) => {
 
         static async authenticateUser(email: string, password: string): Promise<User | boolean> {
             try {
-                const user = await User.findOne({ where: { email } });
+                const user = await User.unscoped().findOne({ where: { email } });
                 if (!user) {
                     return false;
                 }
