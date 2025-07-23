@@ -2,8 +2,8 @@ import express, { Request, Response } from 'express';
 import dotenv from 'dotenv';
 import Docker from 'dockerode';
 import db from '../models';
-import getPort from 'get-port';
 import helperFunctions from '../utility/helperFunctions';
+import { getAvailablePort } from '../utility/portManager';
 
 dotenv.config();
 
@@ -111,8 +111,8 @@ router.get('/new-instance', async (req: Request, res: Response) => {
         ];
 
         try {
-            // Find an available port
-            const availablePort = await getPort();
+            // Find an available port for development, production uses reverse proxy
+            const availablePort = process.env.NODE_ENV === 'dev' ? await getAvailablePort(3001) : 3000;
 
             const containerOptions: any = {
                 Image: 'darrendignam/opf-viper-cloud:v0.0.10',

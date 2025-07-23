@@ -4,18 +4,18 @@ import session from 'express-session';
 import serviceRouter from '../../../routes/service';
 import db from '../../../models';
 import Docker from 'dockerode';
-import getPort from 'get-port';
 import helperFunctions from '../../../utility/helperFunctions';
+import * as portManager from '../../../utility/portManager';
 
 // Mock dependencies
 jest.mock('dockerode');
-jest.mock('get-port');
 jest.mock('../../../utility/helperFunctions');
+jest.mock('../../../utility/portManager');
 jest.mock('../../../models');
 
 const MockedDocker = Docker as jest.MockedClass<typeof Docker>;
-const mockedGetPort = getPort as jest.MockedFunction<typeof getPort>;
 const mockedHelperFunctions = helperFunctions as jest.Mocked<typeof helperFunctions>;
+const mockedPortManager = portManager as jest.Mocked<typeof portManager>;
 
 describe('Service Routes', () => {
     let app: express.Application;
@@ -88,8 +88,8 @@ describe('Service Routes', () => {
         MockedDocker.mockImplementation(() => mockDockerInstance);
 
         // Setup other mocks
-        mockedGetPort.mockResolvedValue(3001);
         mockedHelperFunctions.generateRandomString.mockReturnValue('mock-random-string');
+        mockedPortManager.getAvailablePort.mockResolvedValue(3001);
 
         // Mock database models
         db.ViperInstance = {
