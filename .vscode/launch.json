@@ -5,6 +5,7 @@
             "type": "node",
             "request": "launch",
             "name": "Launch Program (ts-node)",
+            "runtimeExecutable": "${env:HOME}/.nvm/versions/node/v22.17.1/bin/node",
             "skipFiles": [
                 "<node_internals>/**"
             ],
