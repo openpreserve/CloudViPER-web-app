@@ -6,7 +6,7 @@ import mysql from 'mysql2';
 import passport from 'passport';
 import crypto from 'crypto';
 import helperFunctions from '../utility/helperFunctions';
-import emailRelay from '../utility/emailRelay';
+import emailRelay, { EmailRelay } from '../utility/emailRelay';
 import configAuth from '../config/auth';
 
 dotenv.config();
@@ -157,20 +157,28 @@ router.put('/users/:id/role', (req: Request, res: Response) => {
     }
 });
 
-router.post('/users/invite', (req: Request, res: Response) => {
+router.post('/users/invite', async (req: Request, res: Response): Promise<void> => {
     if (req.user && (req.user as AccountUser).role == 'admin') {   
-        db.User.register({
-            username: helperFunctions.generateUsername(req.body.email),
-            role: req.body.role,
-            email: req.body.email,
-            oauthProvider: "vipercloud",
-            // created: Date.now()
-        }, helperFunctions.generateRandomString(25)/*password*/).then((user: AccountUser) => {
-            emailRelay.sendInvitedEmail(req.body.email, helperFunctions.generateUsername(req.body.email), (req.user as SafeUser).username);
+        try {
+            const user = await db.User.register({
+                username: helperFunctions.generateUsername(req.body.email),
+                role: req.body.role,
+                email: req.body.email,
+                oauthProvider: "vipercloud",
+                // created: Date.now()
+            }, helperFunctions.generateRandomString(25)/*password*/);
+            
+            try {
+                await emailRelay.sendInvitedEmail(req.body.email, helperFunctions.generateUsername(req.body.email), (req.user as SafeUser).username);
+            } catch (emailError) {
+                console.error('Error sending invitation email:', emailError);
+                // Continue execution - user was created successfully even if email failed
+            }
+            
             res.status(200).send({ message: 'User invited successfully', user });
-        }).catch((err: Error) => {
-                return res.status(500).send({ message: 'Error inviting user', err });
-        });
+        } catch (err: any) {
+            res.status(500).send({ message: 'Error inviting user', err });
+        }
     } else {
         res.status(403).send({ message: 'Unauthorized' });
     }
@@ -284,34 +292,44 @@ router.get('/reset-password',
         res.render('user_account_get_reset_password');
     })
 
-router.post('/reset-password', (req: Request, res: Response) => {
+router.post('/reset-password', async (req: Request, res: Response): Promise<void> => {
     const { email } = req.body;
     const plainToken = crypto.randomBytes(32).toString('hex'); // Increased token size for better security
     const hashedToken = crypto.createHash('sha256').update(plainToken).digest('hex'); // Hash token before storing
 
-    db.User.findOne({ where: { email } }).then((user: any | null) => {
+    try {
+        const user = await db.User.findOne({ where: { email } });
         if (!user) {
             // return res.status(400).json({ message: 'No account with that email address exists.' });
             // For security reasons, don't return information that leaks info about the service and users...
-            return res.render('user_account_post_reset_password');
+            res.render('user_account_post_reset_password');
+            return;
         }
 
-        user.update({
-            resetPasswordToken: hashedToken, // Store hashed version in database
-            resetPasswordExpires: Date.now() + 3600000,
-        }).then(() => {
-            emailRelay.sendResetEmail(email, user.username, plainToken); // Send plain token via email
+        try {
+            await user.update({
+                resetPasswordToken: hashedToken, // Store hashed version in database
+                resetPasswordExpires: new Date(Date.now() + 3600000),
+            });
+            
+            try {
+                await emailRelay.sendResetEmail(email, user.username, plainToken); // Send plain token via email
+            } catch (emailError) {
+                console.error('Error sending reset email:', emailError);
+                // Continue execution - token was stored successfully even if email failed
+            }
+            
             res.render('user_account_post_reset_password');
-        }).catch((err: Error) => {
+        } catch (err) {
             console.log("Error updating user: ", err);
             // res.status(500).json({ message: 'Error updating user.' });
             res.render('user_account_post_reset_password');
-        });
-    }).catch((err: Error) => {
+        }
+    } catch (err) {
         console.log("Error finding user: ", err);
         // res.status(500).json({ message: 'Error finding user.' });
         res.render('user_account_post_reset_password');
-    });
+    }
 });
 
 router.get('/reset-token/:token', (req: Request, res: Response) => {

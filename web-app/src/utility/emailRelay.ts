@@ -1,15 +1,43 @@
-// utility/email-relay.js
+// utility/emailRelay.ts
 
 import { MailerSend, EmailParams, Recipient, Sender } from "mailersend";
+
+/**
+ * Interface defining the email relay service methods
+ */
+interface EmailRelay {
+  /**
+   * Sends a welcome email to a new user
+   * @param email - User's email address
+   * @param username - User's username
+   */
+  sendWelcomeEmail: (email: string, username: string) => Promise<void>;
+  
+  /**
+   * Sends an invitation email to a user invited by another user
+   * @param email - User's email address
+   * @param username - User's username
+   * @param invitee - Username of the person who sent the invitation
+   */
+  sendInvitedEmail: (email: string, username: string, invitee: string) => Promise<void>;
+  
+  /**
+   * Sends a password reset email with a secure token
+   * @param email - User's email address
+   * @param username - User's username
+   * @param token - Secure reset token
+   */
+  sendResetEmail: (email: string, username: string, token: string) => Promise<void>;
+}
 
 const mailerSend = new MailerSend({
   apiKey: process.env.MAILERSEND_API_KEY!,
 });
 
-const _footer =  '<h3>&nbsp;-&nbsp;ViPER Cloud team</h3><div style="font-size: 12px; color: grey; text-align: center; padding: 10px;">This is an unmanaged email account, and as a result cannot recieve messages, do not reply to this message. If you need help and support, please reach out to <strong>sysadmin@openpreservation.org</strong></div>';
+const _footer =  '<h3>&nbsp;-&nbsp;ViPER Cloud team</h3><div style="font-size: 12px; color: grey; text-align: center; padding: 10px;">This is an unmanaged email account, and as a result cannot receive messages; do not reply to this message. If you need help and support, please reach out to <strong>sysadmin@openpreservation.org</strong></div>';
 
-const emailRelay = {
-    sendWelcomeEmail: async (in_email: string, in_username: string) => {
+const emailRelay: EmailRelay = {
+    sendWelcomeEmail: async (in_email: string, in_username: string): Promise<void> => {
         const sentFrom = new Sender("no-reply@vipercloud.cc", "ViPER Cloud");
         const recipients = [new Recipient(in_email, in_username)];
 
@@ -20,7 +48,7 @@ const emailRelay = {
             .setText('You are now part of the ViPER community. Access ViPER Cloud via https://www.vipercloud.cc/')
             .setHtml('<h2>You are now part of the ViPER community</h2>' +
                 'Access ViPER Cloud via <a href="https://www.vipercloud.cc">www.vipercloud.cc</a>.<br>\n\n' +
-                'You may need to await a service admin to authorise your account to access the advanced features of the service.<br>\n\n' +
+                'You may need to wait for a service admin to authorize your account to access the advanced features of the service.<br>\n\n' +
                 'Find out more information about ViPER here <a href="https://viper.openpreservation.org">https://viper.openpreservation.org</a>.<br>\n\n' +
                 _footer);
 
@@ -31,7 +59,7 @@ const emailRelay = {
             console.error(error);
         }
     },
-    sendInvitedEmail: async (in_email: string, in_username: string, in_invitee: string) => {
+    sendInvitedEmail: async (in_email: string, in_username: string, in_invitee: string): Promise<void> => {
         const sentFrom = new Sender("no-reply@vipercloud.cc", "ViPER Cloud");
         const recipients = [new Recipient(in_email, in_username)];
 
@@ -48,7 +76,7 @@ const emailRelay = {
                 in_email + '". To begin using the service you will need to reset your password by visiting the following link, and following the instructions:' +
                 '<h3>Reset ViPER Cloud password: <a href="https://www.vipercloud.cc/account/reset-password">https://www.vipercloud.cc/account/reset-password</a>.</h3><br>\n\n' +
                 'Access ViPER Cloud via <a href="https://www.vipercloud.cc">www.vipercloud.cc</a>.<br>\n\n' +
-                'You may need to await a service admin to authorise your account to access the advanced features of the service.<br>\n\n' +
+                'You may need to wait for a service admin to authorize your account to access the advanced features of the service.<br>\n\n' +
                 'Find out more information about ViPER here <a href="https://viper.openpreservation.org">https://viper.openpreservation.org</a>.<br>\n\n' +
                 _footer);
 
@@ -59,7 +87,7 @@ const emailRelay = {
             console.error(error);
         }
     },
-    sendResetEmail: async (in_email: string, in_username: string, in_token: string) => {
+    sendResetEmail: async (in_email: string, in_username: string, in_token: string): Promise<void> => {
         const sentFrom = new Sender("no-reply@vipercloud.cc", "ViPER Cloud");
         const recipients = [new Recipient(in_email, in_username)];
 
@@ -92,4 +120,5 @@ const emailRelay = {
     },
 };
 
+export type { EmailRelay };
 export default emailRelay;
