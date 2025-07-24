@@ -6,6 +6,7 @@ import * as process from 'process';
 import dotenv from 'dotenv';
 
 import configAuth from '../config/auth';
+import { logSQL } from '../config/logger';
 import User from './user';
 import ViperInstance from './viperinstance';
 import Log from './log'; // Import the Logs model
@@ -19,7 +20,7 @@ const databasehost = configAuth.mysqlSessionAuth.host;
 const database = configAuth.mysqlSessionAuth.database;
 const username = configAuth.mysqlSessionAuth.user;
 const password = configAuth.mysqlSessionAuth.password;
-const config: { host: string; dialect: Dialect, logging: boolean | ((...msg: any[]) => void) } = { "host": databasehost, "dialect": "mysql", logging: console.log};
+const config: { host: string; dialect: Dialect, logging: boolean | ((...msg: any[]) => void) } = { "host": databasehost, "dialect": "mysql", logging: logSQL};
 
 let sequelize: Sequelize;
 sequelize = new Sequelize(database, username, password, config);
