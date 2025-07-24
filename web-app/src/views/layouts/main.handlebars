@@ -5,15 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{{page_title}}}</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
-    {{!-- <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" integrity="sha512-9UaG1UHF/lW7q6GXs5kDnT6KvKZt01+08p0Eb02M25ztzJ8TbQxU8gS+AnU6FLq4Q753xogN419iGsonhUrc7E/w==" crossorigin="anonymous" referrerpolicy="no-referrer" /> --}}
-    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <link rel='stylesheet' id='themify-custom-fonts-css' href='https://staging.openpreservation.org/?tb_load_cf=lato|lato|lato|lato:normal,bold' type='text/css' media='all' />
     <link rel="icon" href="https://openpreservation.org/wp-content/uploads/2019/11/cropped-favicon-32x32.png" sizes="32x32" />
     <link rel="icon" href="https://openpreservation.org/wp-content/uploads/2019/11/cropped-favicon-192x192.png" sizes="192x192" />
     <link rel="apple-touch-icon" href="https://openpreservation.org/wp-content/uploads/2019/11/cropped-favicon-180x180.png" />
     <meta name="msapplication-TileImage" content="https://openpreservation.org/wp-content/uploads/2019/11/cropped-favicon-270x270.png" />
-    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css">
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
     <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap-datepicker@1.10.0/dist/js/bootstrap-datepicker.min.js"></script>
@@ -22,141 +19,153 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300..800;1,300..800&display=swap" rel="stylesheet">
-
     <link rel="stylesheet" href="/css/style.css">
-    
 </head>
 <body>
-    {{!-- <div class="header">
-		<a href="https://www.vipercloud.cc">
-    		<img decoding="async" src="http://viper.openpreservation.org/assets/img/viper-menu-logo.png" width="110" class=" wp-post-image wp-image-828" alt="viper-site-logo-white"  sizes="(max-width: 110px) 100vw, 110px" />
-        </a>
-        <p>ViPER Cloud</p>
-    </div> --}}
-
-<nav class="navbar navbar-expand-md navbar-dark fixed-top bg-blue">
-<a class="navbar-brand" href="https://www.vipercloud.cc/"><img src="https://viper.openpreservation.org/assets/img/viper-menu-logo.png" title="ViPER logo" alt="ViPER logo"></a>
-<p class="header-title-p">ViPER<span>Cloud</span></p>
-<div class="collapse navbar-collapse" id="navbarCollapse">
-<ul class="navbar-nav mr-auto">
-<li class="nav-item">
-<a class="nav-link" target="_blank" href="https://viper.openpreservation.org/tools">ViPER Tools</a>
-</li>
-<li class="nav-item">
-<a class="nav-link" target="_blank" href="https://viper.openpreservation.org/faqs">FAQs</a>
-</li>
-<li class="nav-item">
-<a class="nav-link" target="_blank" href="https://viper.openpreservation.org/refs">References</a>
-</li>
-</ul>
-
-
-<ul class="navbar-nav ml-auto">
-<li class="nav-item">
-<a class="nav-link" href="/account/logout">Logout</a>
-</li>
-</ul>
-
-
-</div>
-</nav>
-
-
-    <div class="main-content cover-image-bg">
-        <!-- Your main content goes here -->
-        {{{body}}}
+    <!-- Top OPF branding bar -->
+    <div class="top-opf-bar">
+        <img class="top-bar-logo" src="https://openpreservation.org/wp-content/uploads/2019/11/opf-site-logo-white-margin-136x75.png" width="136" height="75" alt="Open Preservation Foundation logo">
+        Powered By OPF
     </div>
-    <div class="footer">
-        <div class="footer-columns row">
-            <div class="footer-column text-left col-md-4 col-12">
-                <div class="tb-column-inner">
 
-                    <div class="module module-text tb_35z5121    ">
-                    <div class="tb_text_wrap">
-                    <p>Open Preservation Foundation<br>11 Jamaica Street<br>Greenock, PA15 1XX</p>
-                    <p>+44 (0) 113 526 6467</p>
-                    <p>info@openpreservation.org</p> </div>
-                    </div>
-
-
-                    <div class="module module-text tb_yqch524    ">
-                    <div class="tb_text_wrap">
-                    <p><a href="https://openpreservation.org/about">About</a>&nbsp;| <a href="https://openpreservation.org/company-information/">Company Information</a></p> </div>
-                    </div>
-
-
-                    <div class="module module-icon tb_vpuw6  small none icon_vertical icon_position_left ">
-                    <div class="module-icon">
-                    <div class="module-icon-item">
-                    <i class="fa fa-copyright ui blue"></i>
-                    <span>Open Preservation Foundation</span>
-                    </div>
-                    </div>
-                    </div>
-
-                    </div>
-            </div>
-            <div class="footer-column text-center col-md-4 col-12">
-                <div class="sub_column module_column col3-1 middle sub_column_post_712 sub_column_0-0-0-1 tb_ehm1772">
-                <div class="tb-column-inner">
-
-                <div class="module module-icon tb_hvbk795 opf_icons-cc xlarge none icon_horizontal  ">
-                <div class="module-icon">
-                <div class="module-icon-item">
-                <a href="http://creativecommons.org/licenses/by-sa/4.0/" rel="noopener" onclick="javascript:window.open('http://creativecommons.org/licenses/by-sa/4.0/', '_blank', 'noopener'); return false;">
-                <i class="icon-cc ui blue"></i>
-                </a>
-                </div>
-                <div class="module-icon-item">
-                <a href="http://creativecommons.org/licenses/by-sa/4.0/" rel="noopener" onclick="javascript:window.open('http://creativecommons.org/licenses/by-sa/4.0/', '_blank', 'noopener'); return false;">
-                <i class="icon-cc-by ui tb_default_color"></i>
-                </a>
-                </div>
-                <div class="module-icon-item">
-                <a href="http://creativecommons.org/licenses/by-sa/4.0/" rel="noopener" onclick="javascript:window.open('http://creativecommons.org/licenses/by-sa/4.0/', '_blank', 'noopener'); return false;">
-                <i class="icon-cc-sa ui tb_default_color"></i>
-                </a>
-                </div>
-                </div>
-                </div>
-
-
-                <div class="module module-text tb_le05434    ">
-                <div class="tb_text_wrap">
-                <p>ViPER is <b>supported, hosted, and maintained</b> by the Open Preservation Foundation</p> </div>
-                <div class="tb_text_wrap">
-                <p>All content on this website is licensed under <br>CC BY-SA 4.0 unless stated otherwise.</p> </div>
-                </div>
-
-                </div>
-                </div>
-            </div>
-            <div class="footer-column text-right col-md-4 col-12">
-                
-                <div>
-                    <a href="https://twitter.com/openpreserve" onclick="javascript:window.open('https://twitter.com/openpreserve', '_blank', 'noopener'); return false;"><i class="fa fa-twitter"></i> </a>
-                    &nbsp;|&nbsp;
-                    <a href="https://github.com/openpreserve" onclick="javascript:window.open('https://github.com/openpreserve', '_blank', 'noopener'); return false;"><i class="fa fa-github"></i> </a>
-                    &nbsp;|&nbsp;
-                    <a href="https://www.linkedin.com/company/openpreservation/" onclick="javascript:window.open('https://www.linkedin.com/company/openpreservation/', '_blank', 'noopener'); return false;"><i class="fa fa-linkedin"></i> </a>
-                    &nbsp;|&nbsp;
-                    <a href="https://www.youtube.com/c/OpenpreservationOrg" onclick="javascript:window.open('https://www.youtube.com/c/OpenpreservationOrg', '_blank', 'noopener'); return false;"><i class="fa fa-youtube"></i> </a>
-                </div>
-
-                <div>
-                    <a href="https://openpreservation.org/contact/">Contact Us</a>&nbsp;|&nbsp;
-                    <a href="https://openpreservation.org/membership/">Join Us</a>&nbsp;|&nbsp;
-                    <a href="https://openpreservation.org/donate/">Donate</a>
-                </div>
-
-                <div>
-                    <a href="https://openpreservation.org/terms-of-use/">Terms of Use</a>&nbsp;|&nbsp;
-                    <a rel="privacy-policy" href="https://openpreservation.org/privacy-policy/">Privacy Policy</a>
-                </div>
-
-
+    <!-- Main navigation -->
+    <nav class="navbar navbar-expand-md navbar-light bg-white fixed-top shadow-sm navbar-fixed-spacing">
+        <div class="container">
+            <a class="navbar-brand" href="https://www.vipercloud.cc/">
+                <img src="https://viper.openpreservation.org/assets/img/viper-menu-logo.png" title="ViPER logo" alt="ViPER logo" height="40">
+                <span class="header-title-p">ViPER<span>Cloud</span></span>
+            </a>
+            
+            <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarCollapse" aria-controls="navbarCollapse" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            
+            <div class="collapse navbar-collapse" id="navbarCollapse">
+                <ul class="navbar-nav mr-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" target="_blank" href="https://viper.openpreservation.org/tools">ViPER Tools</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" target="_blank" href="https://viper.openpreservation.org/faqs">FAQs</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" target="_blank" href="https://viper.openpreservation.org/refs">References</a>
+                    </li>
+                </ul>
+                <ul class="navbar-nav ml-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/account/logout">Logout</a>
+                    </li>
+                </ul>
             </div>
         </div>
-    </div>
+    </nav>
+
+    <!-- Main content area -->
+    <main role="main" class="main-content-spacing">
+        <div class="main-content">
+            {{{body}}}
+        </div>
+    </main>
+
+    <!-- Modern footer - exact copy from inspiration -->
+    <footer class="dark-grey-footer">
+        <div class="container">
+            <div class="row text-center text-md-left align-items-end">
+                <!-- Column 1: Contact Information & About/Company Links -->
+                <div class="col-md-4 col-12 order-md-1 order-1">
+                    <div>
+                        <p>Open Preservation Foundation<br>11 Jamaica Street<br>Greenock, PA15 1XX</p>
+                        <p>+44 (0) 113 526 6467</p>
+                        <p>info@openpreservation.org</p>
+                    </div>
+                    <div class="mt-3">
+                        <ul id="menu-footer-contactus-top" class="horizontal">
+                            <li><a href="https://openpreservation.org/about">About</a></li>
+                            <li><a href="https://openpreservation.org/company-information/">Company Information</a></li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Column 2: Copyright (Middle on desktop, bottom on mobile) -->
+                <div class="col-md-4 col-12 order-md-2 order-3 text-center">
+                    <p>ViPER is <strong>supported, hosted, and maintained</strong> by the Open Preservation Foundation</p>
+                    <p>All content on this website is licensed under CC BY-SA 4.0 unless stated otherwise.</p>
+                </div>
+
+                <!-- Column 3: Social Links & Footer Menu -->
+                <div class="col-md-4 col-12 order-md-3 order-2 text-center text-md-right">
+                    <div class="footer-logo-div">
+                        <img src="https://openpreservation.org/wp-content/uploads/2019/11/opf-site-logo-white-margin-136x75.png" width="136" height="75" alt="Open Preservation Foundation logo">
+                    </div>
+
+                    <ul class="social-links horizontal">
+                        <li class="social-link-item bluesky">
+                            <a href="https://bsky.app/profile/openpreservation.org" target="_blank" rel="noopener" aria-label="Bluesky">
+                                <i class="fa-brands fa-bluesky"></i>
+                            </a>
+                        </li>
+                        <li class="social-link-item x">
+                            <a href="https://x.com/openpreserve" target="_blank" rel="noopener" aria-label="X (formerly Twitter)">
+                                <i class="fab fa-x-twitter"></i>
+                            </a>
+                        </li>
+                        <li class="social-link-item github">
+                            <a href="https://github.com/openpreserve" target="_blank" rel="noopener" aria-label="GitHub">
+                                <i class="fab fa-github"></i>
+                            </a>
+                        </li>
+                        <li class="social-link-item linkedin">
+                            <a href="https://www.linkedin.com/company/openpreservation/" rel="noopener" target="_blank" aria-label="LinkedIn">
+                                <i class="fab fa-linkedin-in"></i>
+                            </a>
+                        </li>
+                        <li class="social-link-item youtube">
+                            <a href="https://www.youtube.com/c/OpenpreservationOrg" rel="noopener" target="_blank" aria-label="YouTube">
+                                <i class="fab fa-youtube"></i>
+                            </a>
+                        </li>
+                    </ul>
+
+                    <ul id="menu-footer-menu-top" class="horizontal">
+                        <li><a href="https://openpreservation.org/contact/">Contact Us</a></li>
+                        <li><a href="https://openpreservation.org/membership/">Join Us</a></li>
+                        <li><a href="https://openpreservation.org/donate/">Donate</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- JavaScript for navbar toggler animation -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const navbarCollapse = document.getElementById('navbarCollapse');
+            const togglerIcon = document.querySelector('.navbar-toggler-icon');
+
+            if (navbarCollapse && togglerIcon) {
+                $(navbarCollapse).on('shown.bs.collapse', function () {
+                    togglerIcon.classList.add('navbar-toggler-icon--open');
+                    const togglerButton = togglerIcon.closest('.navbar-toggler');
+                    if (togglerButton) {
+                        togglerButton.setAttribute('aria-expanded', 'true');
+                    }
+                });
+
+                $(navbarCollapse).on('hidden.bs.collapse', function () {
+                    togglerIcon.classList.remove('navbar-toggler-icon--open');
+                    const togglerButton = togglerIcon.closest('.navbar-toggler');
+                    if (togglerButton) {
+                        togglerButton.setAttribute('aria-expanded', 'false');
+                    }
+                });
+
+                const togglerButton = togglerIcon.closest('.navbar-toggler');
+                if (togglerButton && togglerButton.getAttribute('aria-expanded') === 'true') {
+                    togglerIcon.classList.add('navbar-toggler-icon--open');
+                }
+            }
+        });
+    </script>
 </body>
 </html>
