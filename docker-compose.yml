@@ -21,6 +21,7 @@ services:
       - LETSENCRYPT_EMAIL=sysadmin@openpreservation.org
     volumes:
       - ./web-app/dist:/usr/src/app
+      - ./web-app/logs:/usr/src/app/logs
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       - mysqldb

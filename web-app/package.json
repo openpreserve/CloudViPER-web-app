@@ -43,7 +43,9 @@
     "sequelize": "^6.37.3",
     "sequelize-mock": "^0.10.2",
     "sqlite3": "^5.1.7",
-    "util": "^0.12.5"
+    "util": "^0.12.5",
+    "winston": "^3.17.0",
+    "winston-daily-rotate-file": "^5.0.0"
   },
   "devDependencies": {
     "@types/connect-flash": "^0.0.40",
@@ -55,6 +57,7 @@
     "@types/node": "^22.13.4",
     "@types/passport": "^1.0.17",
     "@types/supertest": "^6.0.2",
+    "@types/winston": "^2.4.4",
     "del": "^8.0.0",
     "gulp": "^5.0.0",
     "gulp-copy": "^5.0.0",

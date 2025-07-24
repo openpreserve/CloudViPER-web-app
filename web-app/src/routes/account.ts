@@ -301,6 +301,11 @@ router.post('/reset-password', async (req: Request, res: Response): Promise<void
     console.log(`🔐 Password reset request for: ${email}`);
     console.log(`🔗 Reset URL: http://localhost:3000/account/reset-token/${plainToken}`);
 
+
+    console.log(`Reset password request for email: ${email}`);
+    console.log(`Generated token: ${plainToken}`);
+    console.log('URL for password reset: http://localhost:3000/account/reset-token/' + plainToken);
+
     try {
         const user = await db.User.findOne({ where: { email } });
         if (!user) {
