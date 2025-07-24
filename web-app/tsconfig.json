@@ -11,5 +11,5 @@
       "inlineSources": true,
       "sourceMap": true,
     },
-    "include": ["src/**/*"]
+    "include": ["src/**/*", "src/test/**/**/*"]
 }

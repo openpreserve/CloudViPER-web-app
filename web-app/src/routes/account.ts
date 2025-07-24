@@ -286,7 +286,8 @@ router.get('/reset-password',
 
 router.post('/reset-password', (req: Request, res: Response) => {
     const { email } = req.body;
-    const token = crypto.randomBytes(20).toString('hex');
+    const plainToken = crypto.randomBytes(32).toString('hex'); // Increased token size for better security
+    const hashedToken = crypto.createHash('sha256').update(plainToken).digest('hex'); // Hash token before storing
 
     db.User.findOne({ where: { email } }).then((user: any | null) => {
         if (!user) {
@@ -296,10 +297,10 @@ router.post('/reset-password', (req: Request, res: Response) => {
         }
 
         user.update({
-            resetPasswordToken: token,
+            resetPasswordToken: hashedToken, // Store hashed version in database
             resetPasswordExpires: Date.now() + 3600000,
         }).then(() => {
-            emailRelay.sendResetEmail(email, user.username, token);
+            emailRelay.sendResetEmail(email, user.username, plainToken); // Send plain token via email
             res.render('user_account_post_reset_password');
         }).catch((err: Error) => {
             console.log("Error updating user: ", err);
@@ -314,19 +315,21 @@ router.post('/reset-password', (req: Request, res: Response) => {
 });
 
 router.get('/reset-token/:token', (req: Request, res: Response) => {
-    const _token = req.params.token;
+    const plainToken = req.params.token;
+    const hashedToken = crypto.createHash('sha256').update(plainToken).digest('hex'); // Hash submitted token to compare
     interface ResetTokenResponse {
         message?: string;
     }
 
-    db.User.findOne({ where: { resetPasswordToken: _token, resetPasswordExpires: { [Op.gt]: Date.now() } } }).then((user: any | null) => {
+
+    db.User.findOne({ where: { resetPasswordToken: hashedToken, resetPasswordExpires: { [Op.gt]: Date.now() } } }).then((user: any | null) => {
         if (!user) {
             const response: ResetTokenResponse = { message: 'Password reset token is invalid or has expired.' };
             res.status(400).json(response);
             return;
         }
         res.render('user_account_get_reset_token', {
-            token: _token,
+            token: plainToken, // Pass plain token to form for submission
         });
     }).catch((err: Error) => {
         console.log("Error finding user by token: ", err);
@@ -336,13 +339,14 @@ router.get('/reset-token/:token', (req: Request, res: Response) => {
 });
 
 router.post('/reset-token', async (req: Request, res: Response): Promise<void> => {
-    const _token = req.body.token;
+    const plainToken = req.body.token;
+    const hashedToken = crypto.createHash('sha256').update(plainToken).digest('hex'); // Hash submitted token to compare
     interface ResetTokenResponse {
         message?: string;
     }
 
     try {
-        const user = await db.User.findOne({ where: { resetPasswordToken: _token, resetPasswordExpires: { [Op.gt]: Date.now() } } });
+        const user = await db.User.findOne({ where: { resetPasswordToken: hashedToken, resetPasswordExpires: { [Op.gt]: Date.now() } } });
         if (!user) {
             const response: ResetTokenResponse = { message: 'Password reset token is invalid or has expired.' };
             res.status(400).json(response);
@@ -351,8 +355,8 @@ router.post('/reset-token', async (req: Request, res: Response): Promise<void> =
 
         try {
             await user.setPassword(req.body.password);
-            user.resetPasswordToken = ''; // Clear the reset token
-            user.resetPasswordExpires = new Date(); // Clear the reset token
+            user.resetPasswordToken = undefined; // Clear the reset token
+            user.resetPasswordExpires = undefined; // Clear the expiration
             await user.save();
 
             // Log the user in
@@ -378,7 +382,5 @@ router.post('/reset-token', async (req: Request, res: Response): Promise<void> =
         res.status(500).json(response);
     }
 });
-
-
 
 export default router;
