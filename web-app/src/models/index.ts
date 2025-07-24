@@ -22,6 +22,9 @@ const username = configAuth.mysqlSessionAuth.user;
 const password = configAuth.mysqlSessionAuth.password;
 const config: { host: string; dialect: Dialect, logging: boolean | ((...msg: any[]) => void) } = { "host": databasehost, "dialect": "mysql", logging: logSQL};
 
+// Database connection info
+console.log(`DB Connected: ${database}@${databasehost} as ${username}`);
+
 let sequelize: Sequelize;
 sequelize = new Sequelize(database, username, password, config);
 
