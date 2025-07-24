@@ -1,72 +1,61 @@
-    <div class="text-white">
-        <h1>Register new Account</h1>
-        <p>By signing up for a new account you are accepting the terms and conditions</p>
-        <p>{{{form_p}}}</p>
-    </div>
+    <div class="auth-layout">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div>
+                    <h1>Register new Account</h1>
+                    <p>By signing up for a new account you are accepting the terms and conditions</p>
+                    <p>{{{form_p}}}</p>
+                </div>
 
-    {{#if error_message}}
-            {{#ifNotEquals error_message ""}}
-            <div class="alert alert-danger" role="alert">
-                {{error_message}}
+                {{#if error_message}}
+                    {{#ifNotEquals error_message ""}}
+                    <div class="alert alert-danger" role="alert">
+                        {{error_message}}
+                    </div>
+                    {{/ifNotEquals}}
+                {{/if}}
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <form method="post" action="/account/register" class="modern-form">
+                            <div class="form-group">
+                                <label for="email" class="form-label">Email:</label>
+                                <input type="email" id="email" name="email" placeholder="Email address" required class="form-control">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="username" class="form-label">Username:</label>
+                                <input type="text" id="username" name="username" placeholder="Username" required class="form-control">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="password" class="form-label">Password:</label>
+                                <input type="password" id="password" name="password" placeholder="Password" required class="form-control">
+                            </div>
+                            
+                            <div class="form-group">
+                                <button type="submit" class="btn btn-secondary w-100">Create Account</button>
+                            </div>
+
+                            <div class="form-group">
+                                <a href="/account/login/google" class="btn google-btn w-100">
+                                    <img src="https://img.icons8.com/color/16/000000/google-logo.png" alt="Google"/> 
+                                    Register with Google
+                                </a>
+                            </div>
+                        </form>
+
+                        <p class="cookie-notice">The admin section of the website uses functional cookies.</p>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <h2>ViPER Cloud</h2>
+                        <p>Welcome to our app! Here, we prioritize your privacy and security above all. Feel free to log in and explore our features. Remember, we never share your information with anyone.</p>
+                        <p>If you encounter any issues while logging in, please contact our support team for assistance. We're here to help you every step of the way.</p>
+                    </div>
+                </div>
             </div>
-            {{/ifNotEquals}}
-    {{/if}}
-
-
-    <!-- <div class="row justify-content-center"> -->
-
-
-        <div class="row">
-            <div class="col-md-4">
-              <form method="post" action="/account/register" class="register-form">
-                <table class="table">
-                  <tr>
-                    <td>
-                      <label for="email" class="form-label text-white">Email:</label>
-                    </td>
-                    <td>
-                      <input type="text" id="email" name="email" placeholder="email" required>
-                    </td>
-                  </tr>        
-                  <tr>
-                    <td>
-                      <label for="username" class="form-label text-white">Username:</label>
-                    </td>
-                    <td>
-                      <input type="text" id="username" name="username" placeholder="Username" required>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td>
-                      <label for="password" class="form-label text-white">Password:</label>
-                    </td>
-                    <td>
-                      <input type="password" id="password" name="password" placeholder="Password" required>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td colspan="2">
-                      <input class="btn btn-secondary" style="width:100%" type="submit" value="Submit">
-                    </td>
-                  </tr>
-
-                  <tr>
-                    <td colspan="2">
-                      <a href="/account/login/google" class="btn btn-block google-btn" style="width:100%"><img src="https://img.icons8.com/color/16/000000/google-logo.png"/>Login with Google</a>
-                    </td>
-                  </tr>
-
-
-                </table>
-              </form>
-
-
-
-                <p class="text-white">The admin section of the website uses functional cookies.</p>
-          </div>
-          <div class="col-md-8">
-                <h2>ViPER Cloud</h2>
-                <p>Welcome to our app! Here, we prioritize your privacy and security above all. Feel free to log in and explore our features. Remember, we never share your information with anyone.</p>
-                <p>If you encounter any issues while logging in, please contact our support team for assistance. We're here to help you every step of the way.</p>
-          </div>
-      </div>
+        </div>
+    </div>
+</div>

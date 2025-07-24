@@ -1,22 +1,26 @@
-            <div class="text-white">
+            <div class="mb-4">
                 <h1>{{{form_h1}}}</h1>
                 <p>{{{form_p}}}</p>
-                <a href="/admin" class="text-white underline">← Return to admin page</a>
+                <a href="/admin" class="text-decoration-underline">← Return to admin page</a>
             </div>
-            <div>
-            <h2 class="text-white">Choose date range to see results of the survey:</h2>
-            <form method="post" action="/admin/search" class="nps-form">
-                <div class="mb-3">
-                    <label for="startdate" class="form-label text-white">Start Date:</label>
-                    <input type="text" class="datepicker" id="startdate" name="startdate" placeholder="Start" value="{{{from}}}" required>
-
-                    <label for="enddate" class="form-label text-white">End Date:</label>
-                    <input type="text" class="datepicker" id="enddate" name="enddate" placeholder="End" value="{{{to}}}" required>
-                </div>
-                <div class="mb-3">
-                    <input class="btn btn-secondary" style="width:100%" type="submit" value="Submit">
-                </div>
-            </form>
+            
+            <div class="modern-form-container">
+                <h2>Choose date range to see results of the survey:</h2>
+                <form method="post" action="/admin/search" class="modern-form">
+                    <div class="form-group">
+                        <label for="startdate" class="form-label">Start Date:</label>
+                        <input type="text" class="datepicker form-control" id="startdate" name="startdate" placeholder="Select start date" value="{{{from}}}" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="enddate" class="form-label">End Date:</label>
+                        <input type="text" class="datepicker form-control" id="enddate" name="enddate" placeholder="Select end date" value="{{{to}}}" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <button type="submit" class="btn btn-secondary w-100">Search Results</button>
+                    </div>
+                </form>
             </div>
             <div>
                 <button id="download_csv" type="button" class="btn btn-primary">Download Raw Data as CSV</button>

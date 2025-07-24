@@ -1,43 +1,55 @@
-    <div class="text-white">
-        <h1>{{{form_h1}}}</h1>
-        <p>{{{form_p}}}</p>
-    </div>
+<div class="auth-layout">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div>
+                    <h1>{{{form_h1}}}</h1>
+                    <p>{{{form_p}}}</p>
+                </div>
 
-    {{#if error_message}}
-            {{#ifNotEquals error_message ""}}
-            <div class="alert alert-danger" role="alert">
-                <p>There was an error!</p>
-                <p>{{error_message}}</p>
-            </div>
-            {{/ifNotEquals}}
-    {{/if}}
+                {{#if error_message}}
+                    {{#ifNotEquals error_message ""}}
+                    <div class="alert alert-danger" role="alert">
+                        <p>There was an error!</p>
+                        <p>{{error_message}}</p>
+                    </div>
+                    {{/ifNotEquals}}
+                {{/if}}
 
-<div class="container">
-    <div class="row">
-        <div class="col-md-4">
-            <form method="post" action="/account/reset-token" class="nps-form" onsubmit="return validatePassword()">
-                <div class="mb-3">
-                    <input type="text" id="token" name="token" value="{{{token}}}" hidden>
-                    <label for="password" class="form-label text-white">New Password:</label>
-                    <input type="password" id="password" name="password" placeholder="password" required>
-                </div>
-                <div class="mb-3">
-                    <label for="confirm-password" class="form-label text-white">Confirm Password:</label>
-                    <input type="password" id="confirm-password" name="confirm-password" placeholder="confirm password" required>
-                </div>
-                <div class="mb-3">
-                    <input type="checkbox" id="show-password" onclick="togglePasswordVisibility()"> Show Password
-                </div>
-                <div class="mb-3">
-                    <input class="btn btn-secondary" style="width:100%" type="submit" value="Reset Password">
-                </div>
-            </form>
-            <div id="AlertMessageDiv"></div>
-            <p class="text-white">The admin section of the website uses functional cookies.</p>
-        </div>
-        <div class="col-md-4">
-            <h2>Password Reset</h2>
-            <p>Please enter a new password for this account.</p>
+                <div class="row">
+                    <div class="col-md-6">
+                        <form method="post" action="/account/reset-token" class="modern-form" onsubmit="return validatePassword()">
+                            <input type="hidden" id="token" name="token" value="{{{token}}}">
+                            
+                            <div class="form-group">
+                                <label for="password" class="form-label">New Password:</label>
+                                <input type="password" id="password" name="password" placeholder="Enter new password" required class="form-control">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="confirm-password" class="form-label">Confirm Password:</label>
+                                <input type="password" id="confirm-password" name="confirm-password" placeholder="Confirm new password" required class="form-control">
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>
+                                    <input type="checkbox" id="show-password" onclick="togglePasswordVisibility()"> 
+                                    Show Password
+                                </label>
+                            </div>
+                            
+                            <div class="form-group">
+                                <button type="submit" class="btn btn-secondary w-100">Update Password</button>
+                            </div>
+                        </form>
+                        
+                        <div id="AlertMessageDiv"></div>
+                        <p class="cookie-notice">The admin section of the website uses functional cookies.</p>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <h2>Password Reset</h2>
+                        <p>Please enter a new password for this account.</p>
         </div>
     </div>
 </div>

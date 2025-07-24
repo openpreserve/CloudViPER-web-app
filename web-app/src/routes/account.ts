@@ -297,6 +297,11 @@ router.post('/reset-password', async (req: Request, res: Response): Promise<void
     const plainToken = crypto.randomBytes(32).toString('hex'); // Increased token size for better security
     const hashedToken = crypto.createHash('sha256').update(plainToken).digest('hex'); // Hash token before storing
 
+
+    console.log(`Reset password request for email: ${email}`);
+    console.log(`Generated token: ${plainToken}`);
+    console.log('URL for password reset: http://localhost:3000/account/reset-token/' + plainToken);
+
     try {
         const user = await db.User.findOne({ where: { email } });
         if (!user) {
