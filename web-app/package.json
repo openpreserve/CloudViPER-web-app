@@ -5,6 +5,7 @@
   "main": "app.js",
   "scripts": {
     "start": "node dist/app.js",
+
     "dev": "ts-node-dev --respawn --transpile-only src/app.ts",
     "compile": "tsc",
     "build": "gulp build",
@@ -51,6 +52,7 @@
     "@types/express": "^5.0.0",
     "@types/express-mysql-session": "^3.0.6",
     "@types/express-session": "^1.18.1",
+
     "@types/jest": "^29.5.14",
     "@types/node": "^22.13.4",
     "@types/passport": "^1.0.17",

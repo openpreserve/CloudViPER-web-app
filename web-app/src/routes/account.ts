@@ -321,6 +321,7 @@ router.get('/reset-token/:token', (req: Request, res: Response) => {
         message?: string;
     }
 
+
     db.User.findOne({ where: { resetPasswordToken: hashedToken, resetPasswordExpires: { [Op.gt]: Date.now() } } }).then((user: any | null) => {
         if (!user) {
             const response: ResetTokenResponse = { message: 'Password reset token is invalid or has expired.' };
