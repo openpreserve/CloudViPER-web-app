@@ -35,7 +35,7 @@ services:
     command: ["sh", "-c", "npm install && npm install -g nodemon && nodemon app.js"]
     
   mysqldb:
-    image: mysql:5.7
+    image: mysql:8.0
     container_name: mysqldb-viper-cloud
     restart: always
     env_file: ./web-app/dist/.env
@@ -43,6 +43,7 @@ services:
       - 3306:3306
     volumes:
       - ./volumes/mysql_data:/var/lib/mysql
+    command: --default-authentication-plugin=mysql_native_password
     networks:
       - viper-gui
 
@@ -51,7 +52,7 @@ services:
     image: phpmyadmin/phpmyadmin
     container_name: pma
     environment:
-      PMA_HOST: db
+      PMA_HOST: mysqldb
       PMA_PORT: 3306
       PMA_ARBITRARY: 1
     restart: always
