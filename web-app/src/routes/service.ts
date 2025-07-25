@@ -1,9 +1,12 @@
 import express, { Request, Response } from 'express';
 import dotenv from 'dotenv';
 import Docker from 'dockerode';
+import fs from 'fs';
+import path from 'path';
 import db from '../models';
 import helperFunctions from '../utility/helperFunctions';
 import { getAvailablePort } from '../utility/portManager';
+import { appLogger } from '../config/logger';
 
 dotenv.config();
 
@@ -134,6 +137,16 @@ router.get('/new-instance', async (req: Request, res: Response) => {
             const container = await docker.createContainer(containerOptions);
             await container.start();
 
+            appLogger.info('Container created and started successfully', {
+                instanceUUID,
+                containerName,
+                containerId: container.id,
+                userId: user.id,
+                userEmail: user.email,
+                instanceURL,
+                timestamp: new Date().toISOString()
+            });
+
             // Remove sudo access (security hardening)
             try {
                 const exec1 = await container.exec({
@@ -186,6 +199,15 @@ router.get('/new-instance', async (req: Request, res: Response) => {
             });
         } catch (err) {
             console.log('Error creating or starting container:', err);
+            appLogger.error('Container creation failed', {
+                error: (err as Error).message,
+                stack: (err as Error).stack,
+                userId: user.id,
+                userEmail: user.email,
+                instanceUUID,
+                timestamp: new Date().toISOString()
+            });
+            
             await db.Log.create({
                 eventType: 'Error',
                 message: 'Error creating or starting container',
@@ -242,7 +264,16 @@ router.get('/viperinstances', async (req: Request, res: Response) => {
 
 router.get('/terminate-instance/:containerId', async (req: Request, res: Response) => {
     const containerID = req.params.containerId;
+    const user = req.user as ServiceUser | undefined;
+    
     console.log(containerID);
+    appLogger.info('Container termination requested', {
+        containerId: containerID,
+        userId: user?.id,
+        userEmail: user?.email,
+        timestamp: new Date().toISOString()
+    });
+    
     const container = docker.getContainer(containerID);
 
     let ti_response: { [key: string]: any } = {}
@@ -305,6 +336,252 @@ router.get('/set-status-instance/:statuskey/:status', async (req: Request, res: 
         ti_response["DATABASE"] = { 'Error': error };
         res.json(ti_response);
     });
+});
+
+// Get detailed Docker inspect data for an instance (admin only)
+router.get('/viperinstance/:dockerid/inspect', async (req: Request, res: Response) => {
+    const user = req.user as ServiceUser | undefined;
+    
+    if (!user || user.role !== 'admin') {
+        res.status(403).send({ message: 'Admin access required' });
+        return;
+    }
+
+    try {
+        const { dockerid } = req.params;
+        const instance = await db.ViperInstance.findOne({
+            where: { dockerid },
+            include: [{
+                model: db.User,
+                as: 'ownerUser',
+                attributes: ['id', 'username', 'email', 'firstName', 'lastName']
+            }]
+        });
+
+        if (!instance) {
+            res.status(404).send({ message: 'Instance not found' });
+            return;
+        }
+
+        // Use the already imported and configured docker instance
+        try {
+            const container = docker.getContainer(dockerid);
+            const inspectData = await container.inspect();
+            
+            // Calculate operational hours - fix the date creation logic
+            const createdDate = instance.createdAt ? new Date(instance.createdAt) : new Date();
+            const now = new Date();
+            const operationalHours = ((now.getTime() - createdDate.getTime()) / (1000 * 60 * 60)).toFixed(2);
+            
+            res.json({
+                instance: instance,
+                operationalHours: operationalHours,
+                dockerInspect: inspectData
+            });
+        } catch (dockerError: any) {
+            console.error('Docker inspect error:', dockerError);
+            // If Docker inspect fails, still return instance data
+            const createdDate = instance.createdAt ? new Date(instance.createdAt) : new Date();
+            const now = new Date();
+            const operationalHours = ((now.getTime() - createdDate.getTime()) / (1000 * 60 * 60)).toFixed(2);
+            
+            res.json({
+                instance: instance,
+                operationalHours: operationalHours,
+                dockerInspect: { error: 'Unable to retrieve Docker inspect data', message: dockerError?.message || 'Unknown error' }
+            });
+        }
+    } catch (error) {
+        console.error('Error retrieving instance details:', error);
+        res.status(500).send({ message: 'Error retrieving instance details', error });
+    }
+});
+
+// Helper function to read and parse log files
+const readLogFile = (logType: string, date?: string): Promise<any[]> => {
+    return new Promise((resolve, reject) => {
+        const logsDir = path.join(__dirname, '../../logs');
+        const logDate = date || new Date().toISOString().split('T')[0];
+        const fileName = `${logType}-${logDate}.log`;
+        const filePath = path.join(logsDir, fileName);
+
+        if (!fs.existsSync(filePath)) {
+            resolve([]);
+            return;
+        }
+
+        fs.readFile(filePath, 'utf8', (err, data) => {
+            if (err) {
+                reject(err);
+                return;
+            }
+
+            try {
+                const lines = data.trim().split('\n').filter(line => line.length > 0);
+                
+                if (logType === 'session' || logType === 'app') {
+                    // Parse JSON logs
+                    const parsedLogs = lines.map((line, index) => {
+                        try {
+                            return JSON.parse(line);
+                        } catch (parseErr) {
+                            return {
+                                error: 'Failed to parse log entry',
+                                rawLine: line,
+                                lineNumber: index + 1
+                            };
+                        }
+                    });
+                    resolve(parsedLogs);
+                } else {
+                    // Plain text logs (SQL)
+                    const parsedLogs = lines.map((line, index) => ({
+                        lineNumber: index + 1,
+                        content: line,
+                        timestamp: line.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/) ? 
+                                  line.split(' - ')[0] : null
+                    }));
+                    resolve(parsedLogs);
+                }
+            } catch (parseError) {
+                reject(parseError);
+            }
+        });
+    });
+};
+
+// Get session logs (admin only)
+router.get('/logs/session', async (req: Request, res: Response) => {
+    const user = req.user as ServiceUser | undefined;
+    
+    if (!user || user.role !== 'admin') {
+        res.status(403).send({ message: 'Admin access required' });
+        return;
+    }
+
+    try {
+        const { date, limit = '50', offset = '0' } = req.query;
+        const logs = await readLogFile('session', date as string);
+        
+        // Apply pagination
+        const startIndex = parseInt(offset as string);
+        const endIndex = startIndex + parseInt(limit as string);
+        const paginatedLogs = logs.slice(startIndex, endIndex);
+        
+        res.json({
+            logs: paginatedLogs,
+            total: logs.length,
+            hasMore: endIndex < logs.length,
+            date: date || new Date().toISOString().split('T')[0]
+        });
+    } catch (error) {
+        console.error('Error reading session logs:', error);
+        res.status(500).send({ message: 'Error reading session logs', error });
+    }
+});
+
+// Get SQL logs (admin only)
+router.get('/logs/sql', async (req: Request, res: Response) => {
+    const user = req.user as ServiceUser | undefined;
+    
+    if (!user || user.role !== 'admin') {
+        res.status(403).send({ message: 'Admin access required' });
+        return;
+    }
+
+    try {
+        const { date, limit = '50', offset = '0' } = req.query;
+        const logs = await readLogFile('sql', date as string);
+        
+        // Apply pagination
+        const startIndex = parseInt(offset as string);
+        const endIndex = startIndex + parseInt(limit as string);
+        const paginatedLogs = logs.slice(startIndex, endIndex);
+        
+        res.json({
+            logs: paginatedLogs,
+            total: logs.length,
+            hasMore: endIndex < logs.length,
+            date: date || new Date().toISOString().split('T')[0]
+        });
+    } catch (error) {
+        console.error('Error reading SQL logs:', error);
+        res.status(500).send({ message: 'Error reading SQL logs', error });
+    }
+});
+
+// Get application logs (admin only)
+router.get('/logs/app', async (req: Request, res: Response) => {
+    const user = req.user as ServiceUser | undefined;
+    
+    if (!user || user.role !== 'admin') {
+        res.status(403).send({ message: 'Admin access required' });
+        return;
+    }
+
+    try {
+        const { date, limit = '50', offset = '0' } = req.query;
+        const logs = await readLogFile('app', date as string);
+        
+        // Apply pagination
+        const startIndex = parseInt(offset as string);
+        const endIndex = startIndex + parseInt(limit as string);
+        const paginatedLogs = logs.slice(startIndex, endIndex);
+        
+        res.json({
+            logs: paginatedLogs,
+            total: logs.length,
+            hasMore: endIndex < logs.length,
+            date: date || new Date().toISOString().split('T')[0]
+        });
+    } catch (error) {
+        console.error('Error reading application logs:', error);
+        res.status(500).send({ message: 'Error reading application logs', error });
+    }
+});
+
+// Get available log dates (admin only)
+router.get('/logs/dates', async (req: Request, res: Response) => {
+    const user = req.user as ServiceUser | undefined;
+    
+    if (!user || user.role !== 'admin') {
+        res.status(403).send({ message: 'Admin access required' });
+        return;
+    }
+
+    try {
+        const logsDir = path.join(__dirname, '../../logs');
+        
+        // Check if logs directory exists, if not create it
+        if (!fs.existsSync(logsDir)) {
+            fs.mkdirSync(logsDir, { recursive: true });
+        }
+        
+        const files = fs.readdirSync(logsDir);
+        
+        const logDates = new Set<string>();
+        const logTypes = ['session', 'sql', 'app'];
+        
+        files.forEach(file => {
+            logTypes.forEach(type => {
+                const regex = new RegExp(`^${type}-(\\d{4}-\\d{2}-\\d{2})\\.log$`);
+                const match = file.match(regex);
+                if (match) {
+                    logDates.add(match[1]);
+                }
+            });
+        });
+        
+        const sortedDates = Array.from(logDates).sort().reverse(); // Most recent first
+        
+        res.json({
+            dates: sortedDates,
+            types: logTypes
+        });
+    } catch (error) {
+        console.error('Error reading log directory:', error);
+        res.status(500).send({ message: 'Error reading log directory', error });
+    }
 });
 
 export default router;

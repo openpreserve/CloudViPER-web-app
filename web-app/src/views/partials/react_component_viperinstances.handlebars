@@ -5,6 +5,9 @@ class ViperInstanceList extends React.Component {
           instances: [],
           isLoading: true,
           error: null,
+          selectedInstance: null,
+          instanceDetails: null,
+          detailsLoading: false,
         };
       }
 
@@ -47,6 +50,10 @@ class ViperInstanceList extends React.Component {
       }
 
       formatOwnerInfo = (instance) => {
+        if (!instance) {
+          return 'Unknown';
+        }
+        
         if (instance.ownerUser) {
           const user = instance.ownerUser;
           // Prefer firstName + lastName, then username, then email
@@ -59,7 +66,58 @@ class ViperInstanceList extends React.Component {
           }
         }
         // Fallback to owner ID if user data is not available
-        return `User ID: ${instance.owner}`;
+        return `User ID: ${instance.owner || 'Unknown'}`;
+      }
+
+      showInstanceDetails = async (instance) => {
+        this.setState({ detailsLoading: true, selectedInstance: instance });
+        
+        try {
+          const response = await fetch(`/service/viperinstance/${instance.dockerid}/inspect`);
+          if (response.ok) {
+            const details = await response.json();
+            this.setState({ instanceDetails: details, detailsLoading: false });
+          } else {
+            console.error('Failed to fetch instance details');
+            this.setState({ 
+              instanceDetails: { 
+                error: 'Failed to fetch details',
+                instance: instance,
+                operationalHours: 'Unknown',
+                dockerInspect: { error: 'API request failed', message: 'Could not fetch Docker details' }
+              }, 
+              detailsLoading: false 
+            });
+          }
+        } catch (error) {
+          console.error('Error fetching instance details:', error);
+          this.setState({ 
+            instanceDetails: { 
+              error: 'Error fetching details',
+              instance: instance,
+              operationalHours: 'Unknown',
+              dockerInspect: { error: 'Network error', message: error.message || 'Unknown error occurred' }
+            }, 
+            detailsLoading: false 
+          });
+        }
+      }
+
+      closeDetailsPanel = () => {
+        this.setState({ selectedInstance: null, instanceDetails: null });
+      }
+
+      formatBytes = (bytes) => {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+      }
+
+      isAdmin = () => {
+        // Check if current user is admin - we'll get this from props
+        return this.props.userRole === 'admin';
       }
 
       formatUrl = (url) => {
@@ -67,7 +125,7 @@ class ViperInstanceList extends React.Component {
       }
 
       render() {
-        const { instances, isLoading, error } = this.state;
+        const { instances, isLoading, error, selectedInstance, instanceDetails, detailsLoading } = this.state;
 
         if (isLoading) {
           return <p>Loading instances...</p>;
@@ -83,6 +141,101 @@ class ViperInstanceList extends React.Component {
             <div className="btn-container">
               <button className="btn btn-primary" onClick={this.startNewInstance}>Start New Instance</button>
             </div>
+
+            {/* Instance Details Modal */}
+            {selectedInstance && (
+              <div className="instance-details-overlay" onClick={this.closeDetailsPanel}>
+                <div className="instance-details-modal" onClick={(e) => e.stopPropagation()}>
+                  <div className="modal-header">
+                    <h3>Instance Details: {selectedInstance.name}</h3>
+                    <button className="btn btn-sm btn-secondary" onClick={this.closeDetailsPanel}>
+                      <i className="fas fa-times"></i>
+                    </button>
+                  </div>
+                  
+                  {detailsLoading ? (
+                    <div className="modal-body">
+                      <p>Loading detailed information...</p>
+                    </div>
+                  ) : instanceDetails ? (
+                    <div className="modal-body">
+                      {instanceDetails.error ? (
+                        <div className="error-message">
+                          <p><strong>Error:</strong> {instanceDetails.error}</p>
+                          <p>Showing basic instance information only.</p>
+                        </div>
+                      ) : null}
+                      
+                      {/* Human-readable metadata */}
+                      <div className="details-section">
+                        <h4>📊 Instance Metadata</h4>
+                        <div className="metadata-grid">
+                          <div><strong>Operational Time:</strong> {instanceDetails.operationalHours || 'Unknown'} hours</div>
+                          <div><strong>Owner:</strong> {this.formatOwnerInfo(instanceDetails.instance)}</div>
+                          <div><strong>Status:</strong> 
+                            {instanceDetails.instance && instanceDetails.instance.status ? (
+                              <span className={`status-badge status-${instanceDetails.instance.status}`}>
+                                {instanceDetails.instance.status}
+                              </span>
+                            ) : (
+                              'Unknown'
+                            )}
+                          </div>
+                          <div><strong>Docker ID:</strong> <code>{instanceDetails.instance && instanceDetails.instance.dockerid || 'Unknown'}</code></div>
+                          <div><strong>UUID:</strong> <code>{instanceDetails.instance && instanceDetails.instance.uuid || 'Unknown'}</code></div>
+                          <div><strong>Created:</strong> 
+                            {instanceDetails.instance && instanceDetails.instance.createdAt ? 
+                              new Date(instanceDetails.instance.createdAt).toLocaleString() : 
+                              'Unknown'
+                            }
+                          </div>
+                          <div><strong>VNC Password:</strong> <code>{instanceDetails.instance && instanceDetails.instance.kasmvncPassword || 'Unknown'}</code></div>
+                          <div><strong>URL:</strong> 
+                            {instanceDetails.instance && instanceDetails.instance.url ? (
+                              instanceDetails.instance.status === 'active' ? (
+                                <a href={this.formatUrl(instanceDetails.instance.url)} target="_blank" rel="noopener noreferrer">
+                                  {instanceDetails.instance.url}
+                                </a>
+                              ) : (
+                                instanceDetails.instance.url
+                              )
+                            ) : (
+                              'Unknown'
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Docker Inspect Data */}
+                      <div className="details-section">
+                        <h4>🐳 Docker Inspect Data</h4>
+                        {instanceDetails.dockerInspect && instanceDetails.dockerInspect.error ? (
+                          <div className="error-message">
+                            <p><strong>Error:</strong> {instanceDetails.dockerInspect.error}</p>
+                            <p>{instanceDetails.dockerInspect.message}</p>
+                          </div>
+                        ) : instanceDetails.dockerInspect ? (
+                          <div className="docker-inspect-container">
+                            <pre className="docker-inspect-json">
+                              {JSON.stringify(instanceDetails.dockerInspect, null, 2)}
+                            </pre>
+                          </div>
+                        ) : (
+                          <div className="error-message">
+                            <p><strong>No Docker data available</strong></p>
+                            <p>Docker inspect information could not be retrieved.</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="modal-body">
+                      <p>Error loading instance details.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             <table className="table table-striped">
               <thead>
@@ -133,6 +286,14 @@ class ViperInstanceList extends React.Component {
                   >
                     <i className="fas fa-external-link-alt"></i> Launch Instance
                   </button>
+                  {this.isAdmin() && (
+                    <button 
+                      className="btn btn-info" 
+                      onClick={() => this.showInstanceDetails(instance)}
+                    >
+                      <i className="fas fa-info-circle"></i> Details
+                    </button>
+                  )}
                   <button 
                     className={`btn btn-danger ${instance.status === 'deleted' ? 'disabled' : ''}`} 
                     onClick={() => this.removeInstance(instance.dockerid)} 

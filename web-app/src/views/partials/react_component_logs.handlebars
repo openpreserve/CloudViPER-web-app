@@ -1,0 +1,598 @@
+class LogViewer extends React.Component {
+    constructor(props) {
+        super(props);
+        this.state = {
+            selectedLogType: 'app',
+            selectedDate: new Date().toISOString().split('T')[0],
+            logs: [],
+            loading: false,
+            error: null,
+            availableDates: [],
+            pagination: {
+                offset: 0,
+                limit: 50,
+                total: 0,
+                hasMore: false
+            },
+            searchTerm: '',
+            filteredLogs: []
+        };
+    }
+
+    componentDidMount() {
+        this.fetchAvailableDates();
+        this.fetchLogs();
+    }
+
+    fetchAvailableDates = async () => {
+        try {
+            const response = await fetch('/service/logs/dates');
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            const data = await response.json();
+            this.setState({ 
+                availableDates: data.dates || [],
+                error: null 
+            });
+        } catch (error) {
+            console.error('Error fetching available dates:', error);
+            this.setState({ 
+                availableDates: [new Date().toISOString().split('T')[0]], // Default to today
+                error: 'Failed to load available dates'
+            });
+        }
+    }
+
+    fetchLogs = async (reset = false) => {
+        const { selectedLogType, selectedDate, pagination, logs } = this.state;
+        
+        this.setState({ loading: true, error: null });
+
+        try {
+            const offset = reset ? 0 : pagination.offset;
+            const response = await fetch(
+                `/service/logs/${selectedLogType}?date=${selectedDate}&limit=${pagination.limit}&offset=${offset}`
+            );
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            const data = await response.json();
+            
+            const newLogs = reset ? data.logs : [...logs, ...data.logs];
+            
+            this.setState({
+                logs: newLogs,
+                loading: false,
+                pagination: {
+                    ...pagination,
+                    offset: offset + data.logs.length,
+                    total: data.total,
+                    hasMore: data.hasMore
+                }
+            }, () => {
+                this.filterLogs();
+            });
+        } catch (error) {
+            console.error('Error fetching logs:', error);
+            this.setState({ 
+                loading: false, 
+                error: error.message 
+            });
+        }
+    }
+
+    filterLogs = () => {
+        const { logs, searchTerm } = this.state;
+        
+        if (!searchTerm) {
+            this.setState({ filteredLogs: logs });
+            return;
+        }
+
+        const filtered = logs.filter(log => {
+            const searchableText = JSON.stringify(log).toLowerCase();
+            return searchableText.includes(searchTerm.toLowerCase());
+        });
+        
+        this.setState({ filteredLogs: filtered });
+    }
+
+    handleLogTypeChange = (logType) => {
+        this.setState({ 
+            selectedLogType: logType,
+            logs: [],
+            pagination: { ...this.state.pagination, offset: 0 }
+        }, () => {
+            this.fetchLogs(true);
+        });
+    }
+
+    handleDateChange = (date) => {
+        this.setState({ 
+            selectedDate: date,
+            logs: [],
+            pagination: { ...this.state.pagination, offset: 0 }
+        }, () => {
+            this.fetchLogs(true);
+        });
+    }
+
+    handleSearchChange = (e) => {
+        const searchTerm = e.target.value;
+        this.setState({ searchTerm }, () => {
+            this.filterLogs();
+        });
+    }
+
+    loadMore = () => {
+        if (!this.state.loading && this.state.pagination.hasMore) {
+            this.fetchLogs();
+        }
+    }
+
+    refreshLogs = () => {
+        this.setState({ 
+            logs: [],
+            pagination: { ...this.state.pagination, offset: 0 }
+        }, () => {
+            this.fetchLogs(true);
+        });
+    }
+
+    formatLogEntry = (log, index) => {
+        const { selectedLogType } = this.state;
+        
+        if (selectedLogType === 'session') {
+            const message = log.message || log;
+            return (
+                <div key={index} className="log-entry session-log">
+                    <div className="log-header">
+                        <span className="log-event-type">{message.eventType || 'Unknown Event'}</span>
+                        <span className="log-timestamp">{new Date(message.timestamp || log.timestamp).toLocaleString()}</span>
+                    </div>
+                    <div className="log-details">
+                        <div className="log-detail">
+                            <strong>User:</strong> {message.userEmail || 'Anonymous'} ({message.userRole || 'No role'})
+                        </div>
+                        <div className="log-detail">
+                            <strong>IP:</strong> {message.ipAddress || 'Unknown'}
+                        </div>
+                        <div className="log-detail">
+                            <strong>URL:</strong> {message.url || 'Unknown'}
+                        </div>
+                        <div className="log-detail">
+                            <strong>Method:</strong> {message.method || 'Unknown'} | 
+                            <strong> User Agent:</strong> {(message.userAgent || 'Unknown').substring(0, 60)}...
+                        </div>
+                        {message.route && (
+                            <div className="log-detail">
+                                <strong>Route:</strong> {message.route}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        } else if (selectedLogType === 'sql') {
+            return (
+                <div key={index} className="log-entry sql-log">
+                    <div className="log-header">
+                        <span className="log-line-number">Line {log.lineNumber}</span>
+                        {log.timestamp && (
+                            <span className="log-timestamp">{new Date(log.timestamp).toLocaleString()}</span>
+                        )}
+                    </div>
+                    <div className="log-content">
+                        <code>{log.content}</code>
+                    </div>
+                </div>
+            );
+        } else {
+            // App logs - Enhanced formatting
+            return (
+                <div key={index} className="log-entry app-log">
+                    <div className="log-header">
+                        <span className={`log-level ${log.level}`}>{log.level || 'INFO'}</span>
+                        <span className="log-timestamp">{new Date(log.timestamp).toLocaleString()}</span>
+                    </div>
+                    <div className="log-content">
+                        <div className="log-message">
+                            <strong>{log.message}</strong>
+                        </div>
+                        {this.renderAppLogDetails(log)}
+                    </div>
+                </div>
+            );
+        }
+    }
+
+    renderAppLogDetails = (log) => {
+        // Handle different types of application logs with specific formatting
+        const eventType = log.eventType;
+        const message = log.message;
+
+        // Application startup logs
+        if (message === 'Application starting') {
+            return (
+                <div className="log-details">
+                    <div className="log-detail">
+                        <strong>Environment:</strong> {log.nodeEnv || 'Unknown'}
+                    </div>
+                    <div className="log-detail">
+                        <strong>Port:</strong> {log.port || 'Unknown'}
+                    </div>
+                    <div className="log-detail">
+                        <strong>DB User:</strong> {log.dbUser || 'Unknown'}
+                    </div>
+                </div>
+            );
+        }
+
+        // Server startup logs
+        if (message === 'Server started successfully') {
+            return (
+                <div className="log-details">
+                    <div className="log-detail">
+                        <strong>Environment:</strong> {log.nodeEnv || 'Unknown'}
+                    </div>
+                    <div className="log-detail">
+                        <strong>Port:</strong> {log.port || 'Unknown'}
+                    </div>
+                    <div className="log-detail">
+                        <strong>Hostname:</strong> {window.location.hostname || 'localhost'}
+                    </div>
+                    <div className="log-detail">
+                        <strong>Server URL:</strong> http://{window.location.hostname || 'localhost'}:{log.port || '3000'}
+                    </div>
+                </div>
+            );
+        }
+
+        // Database connection logs
+        if (message === 'Database connection initialized') {
+            return (
+                <div className="log-details">
+                    <div className="log-detail">
+                        <strong>Database:</strong> {log.database || 'Unknown'}
+                    </div>
+                    <div className="log-detail">
+                        <strong>Host:</strong> {log.host || 'Unknown'}
+                    </div>
+                    <div className="log-detail">
+                        <strong>User:</strong> {log.user || 'Unknown'}
+                    </div>
+                    <div className="log-detail">
+                        <strong>Environment:</strong> {log.env || 'Unknown'}
+                    </div>
+                </div>
+            );
+        }
+
+        // Database synchronization logs
+        if (message === 'Database synchronized successfully') {
+            return (
+                <div className="log-details">
+                    <div className="log-detail">
+                        <strong>Alter Mode:</strong> {log.alterMode ? 'Enabled' : 'Disabled'}
+                    </div>
+                </div>
+            );
+        }
+
+        // 404 Error logs
+        if (message === '404 Not Found') {
+            return (
+                <div className="log-details">
+                    <div className="log-detail">
+                        <strong>Path:</strong> <code>{log.url || 'Unknown'}</code>
+                    </div>
+                    <div className="log-detail">
+                        <strong>Method:</strong> {log.method || 'Unknown'}
+                    </div>
+                    <div className="log-detail">
+                        <strong>IP Address:</strong> {log.ip || 'Unknown'}
+                    </div>
+                    <div className="log-detail">
+                        <strong>User Agent:</strong> {(log.userAgent || 'Unknown').substring(0, 80)}...
+                    </div>
+                    {log.referer && (
+                        <div className="log-detail">
+                            <strong>Referer:</strong> {log.referer}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // User role change logs
+        if (eventType === 'Role Change') {
+            return (
+                <div className="log-details">
+                    <div className="log-detail">
+                        <strong>Target User:</strong> {log.targetUsername || 'Unknown'} ({log.targetUserEmail || 'Unknown'})
+                    </div>
+                    <div className="log-detail">
+                        <strong>Role Change:</strong> 
+                        <span className="role-change">
+                            <span className="old-role">{log.oldRole || 'Unknown'}</span>
+                            <span className="arrow"> → </span>
+                            <span className="new-role">{log.newRole || 'Unknown'}</span>
+                        </span>
+                    </div>
+                    <div className="log-detail">
+                        <strong>Changed By:</strong> {log.adminUsername || 'Unknown'} (ID: {log.adminUserId || 'Unknown'})
+                    </div>
+                </div>
+            );
+        }
+
+        // User invitation logs
+        if (eventType === 'User Invitation') {
+            return (
+                <div className="log-details">
+                    <div className="log-detail">
+                        <strong>New User:</strong> {log.newUsername || 'Unknown'} ({log.newUserEmail || 'Unknown'})
+                    </div>
+                    <div className="log-detail">
+                        <strong>Assigned Role:</strong> {log.assignedRole || 'Unknown'}
+                    </div>
+                    <div className="log-detail">
+                        <strong>Invited By:</strong> {log.invitedByUsername || 'Unknown'} (ID: {log.invitedByUserId || 'Unknown'})
+                    </div>
+                </div>
+            );
+        }
+
+        // User login logs
+        if (eventType === 'User Login' || eventType === 'Google OAuth Login') {
+            return (
+                <div className="log-details">
+                    <div className="log-detail">
+                        <strong>User:</strong> {log.username || 'Unknown'} (ID: {log.userId || 'Unknown'})
+                    </div>
+                    <div className="log-detail">
+                        <strong>Role:</strong> {log.userRole || 'Unknown'}
+                    </div>
+                    <div className="log-detail">
+                        <strong>IP Address:</strong> {log.ipAddress || 'Unknown'}
+                    </div>
+                    <div className="log-detail">
+                        <strong>User Agent:</strong> {(log.userAgent || 'Unknown').substring(0, 80)}...
+                    </div>
+                    {eventType === 'Google OAuth Login' && (
+                        <div className="log-detail">
+                            <strong>Authentication Method:</strong> Google OAuth
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // User logout logs
+        if (eventType === 'User Logout') {
+            return (
+                <div className="log-details">
+                    <div className="log-detail">
+                        <strong>User:</strong> {log.username || 'Unknown'} (ID: {log.userId || 'Unknown'})
+                    </div>
+                    <div className="log-detail">
+                        <strong>Role:</strong> {log.userRole || 'Unknown'}
+                    </div>
+                    <div className="log-detail">
+                        <strong>IP Address:</strong> {log.ipAddress || 'Unknown'}
+                    </div>
+                </div>
+            );
+        }
+
+        // Container management logs
+        if (message === 'Container created and started successfully') {
+            return (
+                <div className="log-details">
+                    <div className="log-detail">
+                        <strong>Container:</strong> {log.containerName || 'Unknown'}
+                    </div>
+                    <div className="log-detail">
+                        <strong>Container ID:</strong> <code>{(log.containerId || 'Unknown').substring(0, 12)}...</code>
+                    </div>
+                    <div className="log-detail">
+                        <strong>Instance UUID:</strong> {log.instanceUUID || 'Unknown'}
+                    </div>
+                    <div className="log-detail">
+                        <strong>Instance URL:</strong> <a href={`https://${log.instanceURL}`} target="_blank">{log.instanceURL || 'Unknown'}</a>
+                    </div>
+                    <div className="log-detail">
+                        <strong>Created By:</strong> {log.userEmail || 'Unknown'} (ID: {log.userId || 'Unknown'})
+                    </div>
+                </div>
+            );
+        }
+
+        // Container termination logs
+        if (message === 'Container termination requested') {
+            return (
+                <div className="log-details">
+                    <div className="log-detail">
+                        <strong>Container ID:</strong> <code>{(log.containerId || 'Unknown').substring(0, 12)}...</code>
+                    </div>
+                    <div className="log-detail">
+                        <strong>Requested By:</strong> {log.userEmail || 'Unknown'} (ID: {log.userId || 'Unknown'})
+                    </div>
+                </div>
+            );
+        }
+
+        // Password reset logs
+        if (eventType === 'Password Reset Request') {
+            return (
+                <div className="log-details">
+                    <div className="log-detail">
+                        <strong>Email:</strong> {log.email || 'Unknown'}
+                    </div>
+                    <div className="log-detail">
+                        <strong>IP Address:</strong> {log.ipAddress || 'Unknown'}
+                    </div>
+                    <div className="log-detail">
+                        <strong>User Agent:</strong> {(log.userAgent || 'Unknown').substring(0, 80)}...
+                    </div>
+                </div>
+            );
+        }
+
+        // Error logs
+        if (log.level === 'error') {
+            return (
+                <div className="log-details">
+                    {log.error && (
+                        <div className="log-detail">
+                            <strong>Error:</strong> <code>{log.error}</code>
+                        </div>
+                    )}
+                    {log.userId && (
+                        <div className="log-detail">
+                            <strong>User ID:</strong> {log.userId}
+                        </div>
+                    )}
+                    {log.userEmail && (
+                        <div className="log-detail">
+                            <strong>User Email:</strong> {log.userEmail}
+                        </div>
+                    )}
+                    {log.stack && (
+                        <div className="log-detail">
+                            <strong>Stack Trace:</strong>
+                            <pre className="error-stack">{log.stack}</pre>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // Default formatting for other logs
+        const keysToShow = ['eventType', 'message', 'level', 'timestamp'];
+        const otherData = Object.keys(log).filter(key => !keysToShow.includes(key));
+        
+        if (otherData.length > 0) {
+            return (
+                <div className="log-details">
+                    {otherData.map(key => (
+                        <div key={key} className="log-detail">
+                            <strong>{key.charAt(0).toUpperCase() + key.slice(1)}:</strong> 
+                            {typeof log[key] === 'object' ? JSON.stringify(log[key]) : String(log[key])}
+                        </div>
+                    ))}
+                </div>
+            );
+        }
+
+        return null;
+    }
+
+    render() {
+        const { 
+            selectedLogType, 
+            selectedDate, 
+            filteredLogs, 
+            loading, 
+            error, 
+            availableDates, 
+            pagination,
+            searchTerm 
+        } = this.state;
+
+        return (
+            <div className="log-viewer">
+                {/* Controls */}
+                <div className="log-controls">
+                    <div className="log-control-group">
+                        <label>Log Type:</label>
+                        <select 
+                            value={selectedLogType} 
+                            onChange={(e) => this.handleLogTypeChange(e.target.value)}
+                            className="form-select"
+                        >
+                            <option value="session">📊 Session Logs</option>
+                            <option value="sql">🗄️ SQL Logs</option>
+                            <option value="app">📱 Application Logs</option>
+                        </select>
+                    </div>
+                    
+                    <div className="log-control-group">
+                        <label>Date:</label>
+                        <select 
+                            value={selectedDate} 
+                            onChange={(e) => this.handleDateChange(e.target.value)}
+                            className="form-select"
+                        >
+                            {(availableDates || []).map(date => (
+                                <option key={date} value={date}>{date}</option>
+                            ))}
+                            {(!availableDates || availableDates.length === 0) && (
+                                <option value={selectedDate}>{selectedDate}</option>
+                            )}
+                        </select>
+                    </div>
+                    
+                    <div className="log-control-group">
+                        <label>Search:</label>
+                        <input
+                            type="text"
+                            value={searchTerm}
+                            onChange={this.handleSearchChange}
+                            placeholder="Search logs..."
+                            className="form-control"
+                        />
+                    </div>
+                    
+                    <button 
+                        onClick={this.refreshLogs} 
+                        className="btn btn-secondary"
+                        disabled={loading}
+                    >
+                        🔄 Refresh
+                    </button>
+                </div>
+
+                {/* Log Info */}
+                <div className="log-info">
+                    <span>Showing {filteredLogs.length} of {pagination.total} entries</span>
+                    {searchTerm && <span> (filtered by: "{searchTerm}")</span>}
+                </div>
+
+                {/* Error Display */}
+                {error && (
+                    <div className="alert alert-danger">
+                        <strong>Error:</strong> {error}
+                    </div>
+                )}
+
+                {/* Logs Display */}
+                <div className="log-entries">
+                    {loading && filteredLogs.length === 0 ? (
+                        <div className="loading">Loading logs...</div>
+                    ) : filteredLogs.length === 0 ? (
+                        <div className="no-logs">No logs found for the selected criteria.</div>
+                    ) : (
+                        <React.Fragment>
+                            {filteredLogs.map((log, index) => this.formatLogEntry(log, index))}
+                            
+                            {pagination.hasMore && (
+                                <div className="load-more">
+                                    <button 
+                                        onClick={this.loadMore} 
+                                        className="btn btn-primary"
+                                        disabled={loading}
+                                    >
+                                        {loading ? 'Loading...' : 'Load More'}
+                                    </button>
+                                </div>
+                            )}
+                        </React.Fragment>
+                    )}
+                </div>
+            </div>
+        );
+    }
+}

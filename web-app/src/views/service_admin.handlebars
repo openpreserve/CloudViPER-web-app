@@ -105,12 +105,14 @@
 /* Button group styling for ViPER instances */
 .instance-buttons {
     display: flex;
-    gap: 10px;
+    gap: 8px;
     margin-top: 15px;
+    flex-wrap: wrap;
 }
 
 .instance-buttons .btn {
     flex: 1;
+    min-width: 110px;
     font-weight: 500;
     border-radius: 6px;
     transition: all 0.2s ease;
@@ -118,7 +120,6 @@
     align-items: center;
     justify-content: center;
     gap: 6px;
-    width: calc(50% - 5px); /* 50% width minus half the gap */
     white-space: nowrap;
 }
 
@@ -133,6 +134,162 @@
         width: 100%;
         flex: none;
     }
+}
+
+/* Admin-only Details button styling */
+.instance-buttons .btn-info {
+    background-color: #17a2b8;
+    border-color: #17a2b8;
+}
+
+.instance-buttons .btn-info:hover:not(.disabled) {
+    background-color: #138496;
+    border-color: #117a8b;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(23, 162, 184, 0.3);
+}
+
+/* Instance Details Modal */
+.instance-details-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1050; /* Higher than Bootstrap navbar z-index (1030) */
+    opacity: 0;
+    animation: fadeIn 0.3s ease-out forwards;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes modalSlideIn {
+    from {
+        opacity: 0;
+        transform: scale(0.9) translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.instance-details-modal {
+    background: white;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 900px;
+    max-height: 80vh;
+    overflow: hidden;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    animation: modalSlideIn 0.3s ease-out forwards;
+    transform: scale(0.9) translateY(-20px);
+}
+
+.instance-details-modal .modal-header {
+    background: #f8f9fa;
+    padding: 16px 24px;
+    border-bottom: 1px solid #e9ecef;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.instance-details-modal .modal-header h3 {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #343a40;
+    flex: 1;
+    margin-right: 16px;
+}
+
+.instance-details-modal .modal-header .btn {
+    padding: 4px 8px;
+    font-size: 0.875rem;
+    min-width: auto;
+    max-width: 50px;
+    border-radius: 4px;
+}
+
+.instance-details-modal .modal-header .btn i {
+    font-size: 0.875rem;
+}
+
+.instance-details-modal .modal-body {
+    padding: 24px;
+    max-height: calc(80vh - 100px);
+    overflow-y: auto;
+}
+
+.details-section {
+    margin-bottom: 32px;
+}
+
+.details-section h4 {
+    color: #343a40;
+    margin-bottom: 16px;
+    font-weight: 600;
+}
+
+.metadata-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+    background: #f8f9fa;
+    padding: 16px;
+    border-radius: 6px;
+    border-left: 4px solid #007bff;
+}
+
+.metadata-grid div {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 0;
+}
+
+.metadata-grid code {
+    background: #e9ecef;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'Courier New', monospace;
+}
+
+.docker-inspect-container {
+    background: #2d3748;
+    border-radius: 6px;
+    max-height: 400px;
+    overflow: auto;
+}
+
+.docker-inspect-json {
+    color: #e2e8f0;
+    font-size: 12px;
+    line-height: 1.4;
+    margin: 0;
+    padding: 16px;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+.error-message {
+    background: #f8d7da;
+    color: #721c24;
+    padding: 16px;
+    border-radius: 6px;
+    border-left: 4px solid #dc3545;
 }
 
 .instance-buttons .btn-danger {
@@ -225,12 +382,224 @@
     color: #721c24;
     border: 1px solid #f5c6cb;
 }
+
+/* Log Viewer Styles */
+.log-viewer {
+    max-height: 70vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.log-controls {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 16px;
+    padding: 16px;
+    background: #f8f9fa;
+    border-radius: 6px;
+    flex-wrap: wrap;
+    align-items: end;
+}
+
+.log-control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.log-control-group label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #495057;
+    margin: 0;
+}
+
+.log-control-group .form-select,
+.log-control-group .form-control {
+    font-size: 14px;
+    padding: 6px 12px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    min-width: 120px;
+}
+
+.log-info {
+    padding: 8px 16px;
+    background: #e9ecef;
+    border-radius: 4px;
+    font-size: 14px;
+    color: #495057;
+    margin-bottom: 16px;
+}
+
+.log-entries {
+    flex: 1;
+    overflow-y: auto;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    background: white;
+}
+
+.log-entry {
+    border-bottom: 1px solid #e9ecef;
+    padding: 16px;
+    transition: background-color 0.2s;
+}
+
+.log-entry:hover {
+    background-color: #f8f9fa;
+}
+
+.log-entry:last-child {
+    border-bottom: none;
+}
+
+.log-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.log-event-type {
+    background: #007bff;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.log-level {
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.log-level.info {
+    background: #17a2b8;
+    color: white;
+}
+
+.log-level.warn {
+    background: #ffc107;
+    color: #212529;
+}
+
+.log-level.error {
+    background: #dc3545;
+    color: white;
+}
+
+.log-line-number {
+    background: #6c757d;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.log-timestamp {
+    font-size: 12px;
+    color: #6c757d;
+    font-family: monospace;
+}
+
+.log-details {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.log-detail {
+    font-size: 14px;
+    color: #495057;
+}
+
+.log-detail strong {
+    color: #212529;
+}
+
+.log-content {
+    margin-top: 8px;
+}
+
+.log-content code {
+    background: #f8f9fa;
+    padding: 8px;
+    border-radius: 4px;
+    display: block;
+    font-size: 12px;
+    color: #495057;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.session-log .log-event-type {
+    background: #28a745;
+}
+
+.sql-log .log-line-number {
+    background: #17a2b8;
+}
+
+.app-log .log-level {
+    background: #6f42c1;
+    color: white;
+}
+
+.loading, .no-logs {
+    text-align: center;
+    padding: 32px;
+    color: #6c757d;
+    font-style: italic;
+}
+
+.load-more {
+    text-align: center;
+    padding: 16px;
+    border-top: 1px solid #e9ecef;
+}
+
+.alert {
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    border-radius: 4px;
+}
+
+.alert-danger {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+@media (max-width: 768px) {
+    .log-controls {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .log-control-group {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+    }
+    
+    .log-details {
+        grid-template-columns: 1fr;
+    }
+}
 </style>
 
 <script type="text/babel">
     {{> react_component_users }}
     {{> react_component_sessions }}
     {{> react_component_viperinstances }}
+    {{> react_component_logs }}
 
     class AdminDashboard extends React.Component {
         constructor(props) {
@@ -246,6 +615,10 @@
 
         render() {
             const { activeTab } = this.state;
+            
+            // Get user info from the template context
+            const userEmail = '{{{user.email}}}';
+            const userRole = '{{{user.role}}}';
 
             const tabs = [
                 {
@@ -266,8 +639,15 @@
                     id: 'instances',
                     label: 'ViPER Instances',
                     icon: '🖥️',
-                    component: <ViperInstanceList />,
+                    component: <ViperInstanceList userRole={userRole} userEmail={userEmail} />,
                     description: 'Monitor and manage ViPER container instances'
+                },
+                {
+                    id: 'logs',
+                    label: 'System Logs',
+                    icon: '📊',
+                    component: <LogViewer />,
+                    description: 'View and analyze system, session, and database logs'
                 }
             ];
 
