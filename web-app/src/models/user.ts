@@ -155,6 +155,10 @@ export default (sequelize: Sequelize) => {
 
         static associate(models: any) {
             // define association here
+            User.hasMany(models.ViperInstance, {
+                foreignKey: 'owner',
+                as: 'viperInstances'
+            });
         }
     }
 

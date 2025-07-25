@@ -205,7 +205,13 @@ router.get('/viperinstances', async (req: Request, res: Response) => {
     
     if (user && user.role === 'admin') {
         try {
-            const instances = await db.ViperInstance.findAll();
+            const instances = await db.ViperInstance.findAll({
+                include: [{
+                    model: db.User,
+                    as: 'ownerUser',
+                    attributes: ['id', 'username', 'email', 'firstName', 'lastName']
+                }]
+            });
             res.json(instances);
         } catch (error) {
             console.error('Error retrieving viper instances:', error);
@@ -217,7 +223,12 @@ router.get('/viperinstances', async (req: Request, res: Response) => {
             const instances = await db.ViperInstance.findAll({
                 where: {
                     owner: userId
-                }
+                },
+                include: [{
+                    model: db.User,
+                    as: 'ownerUser',
+                    attributes: ['id', 'username', 'email', 'firstName', 'lastName']
+                }]
             });
             res.json(instances);
         } catch (error) {

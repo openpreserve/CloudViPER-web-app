@@ -34,6 +34,10 @@ export default (sequelize: Sequelize) => {
     
         static associate(models: any) {
           // define association here
+          ViperInstance.belongsTo(models.User, {
+            foreignKey: 'owner',
+            as: 'ownerUser'
+          });
         }
     }
 

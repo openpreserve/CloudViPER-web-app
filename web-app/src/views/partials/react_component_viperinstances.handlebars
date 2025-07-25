@@ -46,6 +46,22 @@ class ViperInstanceList extends React.Component {
           .catch(error => console.error('Error terminating instance:', error));
       }
 
+      formatOwnerInfo = (instance) => {
+        if (instance.ownerUser) {
+          const user = instance.ownerUser;
+          // Prefer firstName + lastName, then username, then email
+          if (user.firstName && user.lastName) {
+            return `${user.firstName} ${user.lastName} (${user.email})`;
+          } else if (user.username) {
+            return `${user.username} (${user.email})`;
+          } else {
+            return user.email;
+          }
+        }
+        // Fallback to owner ID if user data is not available
+        return `User ID: ${instance.owner}`;
+      }
+
       formatUrl = (url) => {
         return `https://${url}`;
       }
@@ -89,7 +105,11 @@ class ViperInstanceList extends React.Component {
                                 <h5 className="card-title">{instance.name}</h5>
                                 <h6 className="card-subtitle mb-2 text-muted">{instance.dockerid}</h6>
                                 <p className="card-text">
-                                <small className="text-muted"><strong>STATUS: {instance.status}</strong></small><br/>
+                                <small className="text-muted">
+                                  <span className={`status-badge status-${instance.status}`}>
+                                    {instance.status}
+                                  </span>
+                                </small><br/>
                                 <small className="text-muted"><strong>UUID: </strong>{instance.uuid}</small><br/>
                   <small className="text-muted">
                     <strong>URL: </strong>
@@ -102,21 +122,25 @@ class ViperInstanceList extends React.Component {
                                 <small className="text-muted"><strong>Username: </strong>abc</small><br/>
                                 <small className="text-muted"><strong>Password: </strong>{instance.kasmvncPassword}</small><br/>
                                 <small className="text-muted"><strong>Created At: </strong>{new Date(instance.createdAt).toLocaleString()}</small><br/>
-                                <small className="text-muted"><strong>Owner: </strong>{instance.owner}</small>
+                                <small className="text-muted"><strong>Owner: </strong>{this.formatOwnerInfo(instance)}</small>
                                 </p>
-                <button 
-                  className={`btn btn-danger ${instance.status === 'deleted' ? 'disabled' : ''}`} 
-                  onClick={() => this.removeInstance(instance.dockerid)} 
-                  disabled={instance.status === 'deleted'}
-                >
-                  Remove Instance
-                </button>
+                
+                <div className="instance-buttons">
                   <button
-                    className={`btn btn-primary ml-2 ${instance.status === 'active' ? '' : 'disabled'}`} 
+                    className={`btn btn-primary ${instance.status === 'active' ? '' : 'disabled'}`} 
                     onClick={() => window.open(this.formatUrl(instance.url), '_blank')}
+                    disabled={instance.status !== 'active'}
                   >
-                    Launch Instance
+                    <i className="fas fa-external-link-alt"></i> Launch Instance
                   </button>
+                  <button 
+                    className={`btn btn-danger ${instance.status === 'deleted' ? 'disabled' : ''}`} 
+                    onClick={() => this.removeInstance(instance.dockerid)} 
+                    disabled={instance.status === 'deleted'}
+                  >
+                    <i className="fas fa-trash"></i> Remove Instance
+                  </button>
+                </div>
                             </div>
                             </div>
                         </div>

@@ -1,34 +1,319 @@
 
   <div>
-      <h1>Admin Account</h1>
-      <p>({{{user.email}}})</p>
-  </div>
+    <h1>Admin Dashboard</h1>
+    <p class="text-muted">({{{user.email}}})</p>
+</div>
 
-  <div id="react-root" class="bg-white"></div>
+<div id="react-root" class="bg-white"></div>
 
+<!-- Add React, ReactDOM, and Babel scripts -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.development.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.development.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/6.25.0/babel.min.js"></script>
 
-  <!-- Add React, ReactDOM, and Babel scripts -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.development.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.development.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/6.25.0/babel.min.js"></script>
+<style>
+.admin-tabs {
+    border-bottom: 2px solid #e9ecef;
+    margin-bottom: 0;
+}
 
-  <script type="text/babel">
+.admin-tab {
+    background: none;
+    border: none;
+    padding: 12px 24px;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: 500;
+    color: #6c757d;
+    border-bottom: 3px solid transparent;
+    transition: all 0.3s ease;
+    margin-right: 8px;
+}
 
+.admin-tab:hover {
+    color: #495057;
+    background-color: #f8f9fa;
+}
+
+.admin-tab.active {
+    color: #007bff;
+    border-bottom-color: #007bff;
+    background-color: #fff;
+}
+
+.admin-tab-content {
+    background: #fff;
+    border: 1px solid #e9ecef;
+    border-top: none;
+    min-height: 600px;
+    padding: 24px;
+}
+
+.admin-panel {
+    display: none;
+}
+
+.admin-panel.active {
+    display: block;
+    animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.admin-tab-icon {
+    margin-right: 8px;
+    font-size: 18px;
+}
+
+.panel-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.panel-title {
+    font-size: 24px;
+    font-weight: 600;
+    color: #343a40;
+    margin: 0;
+}
+
+.panel-subtitle {
+    font-size: 14px;
+    color: #6c757d;
+    margin: 4px 0 0 0;
+}
+
+/* ViPER Instance Card Styling */
+.card-img-custom {
+    max-width: 100%;
+    height: auto;
+    object-fit: cover;
+}
+
+.center-image {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Button group styling for ViPER instances */
+.instance-buttons {
+    display: flex;
+    gap: 10px;
+    margin-top: 15px;
+}
+
+.instance-buttons .btn {
+    flex: 1;
+    font-weight: 500;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: calc(50% - 5px); /* 50% width minus half the gap */
+    white-space: nowrap;
+}
+
+/* Mobile responsive: stack buttons on small screens */
+@media (max-width: 768px) {
+    .instance-buttons {
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    .instance-buttons .btn {
+        width: 100%;
+        flex: none;
+    }
+}
+
+.instance-buttons .btn-danger {
+    background-color: #dc3545;
+    border-color: #dc3545;
+}
+
+.instance-buttons .btn-danger:hover:not(.disabled) {
+    background-color: #c82333;
+    border-color: #bd2130;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(220, 53, 69, 0.3);
+}
+
+.instance-buttons .btn-primary {
+    background-color: #007bff;
+    border-color: #007bff;
+}
+
+.instance-buttons .btn-primary:hover:not(.disabled) {
+    background-color: #0056b3;
+    border-color: #004085;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 123, 255, 0.3);
+}
+
+.instance-buttons .btn.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none !important;
+    box-shadow: none !important;
+}
+
+/* Instance card improvements */
+.card {
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    transition: box-shadow 0.3s ease;
+}
+
+.card:hover {
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.card-title {
+    color: #343a40;
+    font-weight: 600;
+}
+
+.card-subtitle {
+    font-family: monospace;
+    font-size: 0.9em;
+}
+
+/* Status badge styling */
+.status-badge {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.75em;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.status-active {
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.status-pending {
+    background-color: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeaa7;
+}
+
+.status-inactive {
+    background-color: #f8d7da;
+    color: #721c24;
+}
+
+.status-deleted {
+    background-color: #d1ecf1;
+    color: #0c5460;
+}
+
+.status-error {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+</style>
+
+<script type="text/babel">
     {{> react_component_users }}
     {{> react_component_sessions }}
     {{> react_component_viperinstances }}
 
-    class App extends React.Component {
-      render() {
-        return (
-          <div>
-            <UserList />
-            <SessionList />
-            <ViperInstanceList />
-          </div>
-        );
-      }
+    class AdminDashboard extends React.Component {
+        constructor(props) {
+            super(props);
+            this.state = {
+                activeTab: 'users'
+            };
+        }
+
+        switchTab = (tabName) => {
+            this.setState({ activeTab: tabName });
+        }
+
+        render() {
+            const { activeTab } = this.state;
+
+            const tabs = [
+                {
+                    id: 'users',
+                    label: 'User Management',
+                    icon: '👥',
+                    component: <UserList />,
+                    description: 'Manage user accounts, roles, and permissions'
+                },
+                {
+                    id: 'sessions',
+                    label: 'Active Sessions',
+                    icon: '🔐',
+                    component: <SessionList />,
+                    description: 'Monitor and manage user sessions'
+                },
+                {
+                    id: 'instances',
+                    label: 'ViPER Instances',
+                    icon: '🖥️',
+                    component: <ViperInstanceList />,
+                    description: 'Monitor and manage ViPER container instances'
+                }
+            ];
+
+            return (
+                <div className="admin-dashboard">
+                    {/* Tab Navigation */}
+                    <div className="admin-tabs">
+                        {tabs.map(tab => (
+                            <button
+                                key={tab.id}
+                                className={`admin-tab ${activeTab === tab.id ? 'active' : ''}`}
+                                onClick={() => this.switchTab(tab.id)}
+                            >
+                                <span className="admin-tab-icon">{tab.icon}</span>
+                                {tab.label}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Tab Content */}
+                    <div className="admin-tab-content">
+                        {tabs.map(tab => (
+                            <div
+                                key={tab.id}
+                                className={`admin-panel ${activeTab === tab.id ? 'active' : ''}`}
+                            >
+                                <div className="panel-header">
+                                    <div>
+                                        <h2 className="panel-title">
+                                            <span className="admin-tab-icon">{tab.icon}</span>
+                                            {tab.label}
+                                        </h2>
+                                        <p className="panel-subtitle">{tab.description}</p>
+                                    </div>
+                                </div>
+                                <div className="panel-body">
+                                    {tab.component}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        }
     }
 
-    ReactDOM.render(<App />, document.getElementById('react-root'));
-  </script>
+    ReactDOM.render(<AdminDashboard />, document.getElementById('react-root'));
+    console.log('Admin Dashboard rendered successfully');
+</script>
