@@ -6,7 +6,7 @@ import * as process from 'process';
 import dotenv from 'dotenv';
 
 import configAuth from '../config/auth';
-import { logSQL } from '../config/logger';
+import { logSQL, appLogger } from '../config/logger';
 import User from './user';
 import ViperInstance from './viperinstance';
 import Log from './log'; // Import the Logs model
@@ -24,6 +24,15 @@ const config: { host: string; dialect: Dialect, logging: boolean | ((...msg: any
 
 // Database connection info
 console.log(`DB Connected: ${database}@${databasehost} as ${username}`);
+
+// Log database connection attempt
+appLogger.info('Database connection initialized', {
+    database,
+    host: databasehost,
+    user: username,
+    env,
+    timestamp: new Date().toISOString()
+});
 
 let sequelize: Sequelize;
 sequelize = new Sequelize(database, username, password, config);
@@ -56,6 +65,17 @@ Object.keys(db).forEach((modelName: string) => {
 
 db.sequelize.sync({ alter: true }).then(() => {
   console.log('Database synchronized with { alter: true }');
+  appLogger.info('Database synchronized successfully', {
+    alterMode: true,
+    timestamp: new Date().toISOString()
+  });
+}).catch((error) => {
+  console.error('Database synchronization failed:', error);
+  appLogger.error('Database synchronization failed', {
+    error: error.message,
+    stack: error.stack,
+    timestamp: new Date().toISOString()
+  });
 });
 
 export { usermodel, vipermodel, logmodel }; 

@@ -899,6 +899,132 @@ input.form-control:focus {
     border-top: 1px solid #dee2e6;
 }
 
+/* Enhanced Log Viewer Styles */
+.log-message {
+    margin-bottom: 8px;
+    color: #2c3e50;
+}
+
+.log-details {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    padding: 10px;
+    margin-top: 8px;
+}
+
+.log-detail {
+    margin-bottom: 6px;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    line-height: 1.4;
+}
+
+.log-detail:last-child {
+    margin-bottom: 0;
+}
+
+.log-detail strong {
+    color: #007bff;
+    min-width: 120px;
+    flex-shrink: 0;
+}
+
+.log-detail code {
+    background: #f8f9fa;
+    padding: 2px 6px;
+    border-radius: 3px;
+    color: #495057;
+    font-family: 'Consolas', 'Monaco', 'Lucida Console', monospace;
+    border: 1px solid #dee2e6;
+}
+
+.log-detail a {
+    color: #4fc3f7;
+    text-decoration: none;
+}
+
+.log-detail a:hover {
+    text-decoration: underline;
+}
+
+.role-change {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.old-role {
+    color: #dc3545;
+    background: #f8d7da;
+    padding: 2px 6px;
+    border-radius: 3px;
+    border: 1px solid #f5c6cb;
+}
+
+.new-role {
+    color: #28a745;
+    background: #d4edda;
+    padding: 2px 6px;
+    border-radius: 3px;
+    border: 1px solid #c3e6cb;
+}
+
+.arrow {
+    color: #6c757d;
+    font-weight: bold;
+}
+
+.error-stack {
+    background: #f8d7da;
+    border: 1px solid #f5c6cb;
+    border-radius: 4px;
+    padding: 8px;
+    color: #721c24;
+    font-size: 10px;
+    overflow-x: auto;
+    max-height: 200px;
+    overflow-y: auto;
+    margin-top: 4px;
+}
+
+/* Responsive design for log details */
+@media (max-width: 768px) {
+    .log-detail {
+        flex-direction: column;
+        gap: 4px;
+    }
+    
+    .log-detail strong {
+        min-width: auto;
+    }
+    
+    .role-change {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+    }
+}
+
+/* Light scrollbar for error stacks */
+.error-stack::-webkit-scrollbar {
+    width: 8px;
+}
+
+.error-stack::-webkit-scrollbar-track {
+    background: #f8d7da;
+}
+
+.error-stack::-webkit-scrollbar-thumb {
+    background: #dc3545;
+    border-radius: 4px;
+}
+
+.error-stack::-webkit-scrollbar-thumb:hover {
+    background: #c82333;
+}
+
 /* Responsive improvements */
 @media (max-width: 768px) {
     .auth-layout {

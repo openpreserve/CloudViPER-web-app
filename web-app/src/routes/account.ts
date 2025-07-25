@@ -8,6 +8,7 @@ import crypto from 'crypto';
 import helperFunctions from '../utility/helperFunctions';
 import emailRelay, { EmailRelay } from '../utility/emailRelay';
 import configAuth from '../config/auth';
+import { appLogger } from '../config/logger';
 
 dotenv.config();
 
@@ -141,42 +142,116 @@ router.get('/users', (req: Request, res: Response) => {
     }
 });
 
-router.put('/users/:id/role', (req: Request, res: Response) => {
-    if (req.user && (req.user as AccountUser).role == 'admin') {
+router.put('/users/:id/role', async (req: Request, res: Response) => {
+    const currentUser = req.user as AccountUser;
+    if (currentUser && currentUser.role == 'admin') {
         const userId = req.params.id;
         const newRole = req.body.role;
 
-        console.error(req.body);
-        console.error(`${userId} - ${newRole}`);
+        try {
+            // Get the target user's current role for logging
+            const targetUser = await db.User.findByPk(userId);
+            const oldRole = targetUser?.role;
 
-        db.User.update({ role: newRole }, { where: { id: userId } })
-            .then(() => res.status(200).send({ message: 'Role updated successfully' }))
-            .catch((error: Error) => res.status(500).send({ message: 'Error updating role', error }));
+            console.error(req.body);
+            console.error(`${userId} - ${newRole}`);
+
+            await db.User.update({ role: newRole }, { where: { id: userId } });
+            
+            // Log the role change
+            appLogger.info('User role changed', {
+                eventType: 'Role Change',
+                targetUserId: parseInt(userId),
+                targetUserEmail: targetUser?.email,
+                targetUsername: targetUser?.username,
+                oldRole,
+                newRole,
+                adminUserId: currentUser.id,
+                adminUsername: currentUser.username,
+                timestamp: new Date().toISOString()
+            });
+
+            res.status(200).send({ message: 'Role updated successfully' });
+        } catch (error) {
+            appLogger.error('Role change failed', {
+                eventType: 'Role Change Error',
+                targetUserId: parseInt(userId),
+                newRole,
+                adminUserId: currentUser.id,
+                error: (error as Error).message,
+                timestamp: new Date().toISOString()
+            });
+            res.status(500).send({ message: 'Error updating role', error });
+        }
     } else {
         res.status(403).send({ message: 'Error updating role' });
     }
 });
 
 router.post('/users/invite', async (req: Request, res: Response): Promise<void> => {
-    if (req.user && (req.user as AccountUser).role == 'admin') {   
+    const currentUser = req.user as AccountUser;
+    if (currentUser && currentUser.role == 'admin') {   
         try {
+            const newUsername = helperFunctions.generateUsername(req.body.email);
             const user = await db.User.register({
-                username: helperFunctions.generateUsername(req.body.email),
+                username: newUsername,
                 role: req.body.role,
                 email: req.body.email,
                 oauthProvider: "vipercloud",
                 // created: Date.now()
             }, helperFunctions.generateRandomString(25)/*password*/);
             
+            // Log successful user invitation
+            appLogger.info('User invited successfully', {
+                eventType: 'User Invitation',
+                newUserId: user.id,
+                newUserEmail: req.body.email,
+                newUsername,
+                assignedRole: req.body.role,
+                invitedByUserId: currentUser.id,
+                invitedByUsername: currentUser.username,
+                timestamp: new Date().toISOString()
+            });
+            
             try {
-                await emailRelay.sendInvitedEmail(req.body.email, helperFunctions.generateUsername(req.body.email), (req.user as SafeUser).username);
+                await emailRelay.sendInvitedEmail(req.body.email, newUsername, currentUser.username);
+                
+                // Log successful email sending
+                appLogger.info('Invitation email sent', {
+                    eventType: 'Invitation Email',
+                    recipientEmail: req.body.email,
+                    recipientUsername: newUsername,
+                    invitedByUsername: currentUser.username,
+                    timestamp: new Date().toISOString()
+                });
             } catch (emailError) {
                 console.error('Error sending invitation email:', emailError);
+                
+                // Log email failure
+                appLogger.error('Invitation email failed', {
+                    eventType: 'Invitation Email Error',
+                    recipientEmail: req.body.email,
+                    recipientUsername: newUsername,
+                    invitedByUsername: currentUser.username,
+                    error: (emailError as Error).message,
+                    timestamp: new Date().toISOString()
+                });
                 // Continue execution - user was created successfully even if email failed
             }
             
             res.status(200).send({ message: 'User invited successfully', user });
         } catch (err: any) {
+            // Log invitation failure
+            appLogger.error('User invitation failed', {
+                eventType: 'User Invitation Error',
+                targetEmail: req.body.email,
+                targetRole: req.body.role,
+                invitedByUserId: currentUser.id,
+                invitedByUsername: currentUser.username,
+                error: err.message,
+                timestamp: new Date().toISOString()
+            });
+            
             res.status(500).send({ message: 'Error inviting user', err });
         }
     } else {
@@ -263,17 +338,58 @@ router.get('/login', (req: Request, res: Response) => {
 router.post('/login', passport.authenticate('local', { failureRedirect: '/account/login', failureFlash: true }),
     (req, res) => {
         if (req.user) {
+            const user = req.user as AccountUser;
+            
+            // Log successful login
+            appLogger.info('User logged in successfully', {
+                eventType: 'User Login',
+                userId: user.id,
+                username: user.username,
+                userRole: user.role,
+                ipAddress: req.ip,
+                userAgent: req.headers['user-agent'],
+                timestamp: new Date().toISOString()
+            });
+            
             res.redirect('/account');
         } else {
             console.log("Login failed... redirecting....");
+            
+            // Log failed login attempt
+            appLogger.warn('Login attempt failed', {
+                eventType: 'Login Failure',
+                ipAddress: req.ip,
+                userAgent: req.headers['user-agent'],
+                timestamp: new Date().toISOString()
+            });
+            
             res.redirect('/account/login');
         }
     });
 
 router.get('/logout', (req: Request, res: Response) => {
+    const user = req.user as AccountUser;
+    
     req.logout((err) => {
         if (err) {
+            appLogger.error('Logout error', {
+                eventType: 'Logout Error',
+                userId: user?.id,
+                username: user?.username,
+                error: err.message,
+                timestamp: new Date().toISOString()
+            });
             res.json(err);
+        } else {
+            // Log successful logout
+            appLogger.info('User logged out', {
+                eventType: 'User Logout',
+                userId: user?.id,
+                username: user?.username,
+                userRole: user?.role,
+                ipAddress: req.ip,
+                timestamp: new Date().toISOString()
+            });
         }
         res.redirect('/account/login')
     });
@@ -283,6 +399,19 @@ router.get('/logout', (req: Request, res: Response) => {
 router.get('/login/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
 
 router.get('/google/return', passport.authenticate('google', { failureRedirect: '/account/login', failureFlash: true }), (req, res) => {
+    const user = req.user as AccountUser;
+    
+    // Log successful Google OAuth login
+    appLogger.info('User logged in via Google OAuth', {
+        eventType: 'Google OAuth Login',
+        userId: user.id,
+        username: user.username,
+        userRole: user.role,
+        ipAddress: req.ip,
+        userAgent: req.headers['user-agent'],
+        timestamp: new Date().toISOString()
+    });
+    
     req.flash('alert-success', 'Thanks for setting up a ViPER account - you may need to contact an admin to get full access to the services on offer.');
     res.redirect('/account');
 });
@@ -301,20 +430,28 @@ router.post('/reset-password', async (req: Request, res: Response): Promise<void
     console.log(`🔐 Password reset request for: ${email}`);
     console.log(`🔗 Reset URL: http://localhost:3000/account/reset-token/${plainToken}`);
 
-
-    console.log(`Reset password request for email: ${email}`);
-    console.log(`Generated token: ${plainToken}`);
-    console.log('URL for password reset: http://localhost:3000/account/reset-token/' + plainToken);
-
-
-    console.log(`Reset password request for email: ${email}`);
-    console.log(`Generated token: ${plainToken}`);
-    console.log('URL for password reset: http://localhost:3000/account/reset-token/' + plainToken);
+    // Log password reset request
+    appLogger.info('Password reset requested', {
+        eventType: 'Password Reset Request',
+        email,
+        ipAddress: req.ip,
+        userAgent: req.headers['user-agent'],
+        timestamp: new Date().toISOString()
+    });
 
     try {
         const user = await db.User.findOne({ where: { email } });
         if (!user) {
             console.log(`❌ No user found with email: ${email}`);
+            
+            // Log failed reset attempt (user not found)
+            appLogger.warn('Password reset request for non-existent user', {
+                eventType: 'Password Reset - User Not Found',
+                email,
+                ipAddress: req.ip,
+                timestamp: new Date().toISOString()
+            });
+            
             // For security reasons, don't return information that leaks info about the service and users...
             res.render('user_account_post_reset_password');
             return;
@@ -330,23 +467,70 @@ router.post('/reset-password', async (req: Request, res: Response): Promise<void
             
             console.log(`✅ Reset token generated and stored for ${user.username}`);
             
+            // Log successful token generation
+            appLogger.info('Password reset token generated', {
+                eventType: 'Password Reset Token Generated',
+                userId: user.id,
+                username: user.username,
+                email,
+                tokenExpiry: expiryTime.toISOString(),
+                timestamp: new Date().toISOString()
+            });
+            
             try {
                 await emailRelay.sendResetEmail(email, user.username, plainToken); // Send plain token via email
                 console.log(`📧 Reset email sent to: ${email}`);
+                
+                // Log successful email sending
+                appLogger.info('Password reset email sent', {
+                    eventType: 'Password Reset Email Sent',
+                    userId: user.id,
+                    username: user.username,
+                    email,
+                    timestamp: new Date().toISOString()
+                });
             } catch (emailError) {
                 console.error('❌ Error sending reset email:', emailError);
+                
+                // Log email failure
+                appLogger.error('Password reset email failed', {
+                    eventType: 'Password Reset Email Error',
+                    userId: user.id,
+                    username: user.username,
+                    email,
+                    error: (emailError as Error).message,
+                    timestamp: new Date().toISOString()
+                });
                 // Continue execution - token was stored successfully even if email failed
             }
             
             res.render('user_account_post_reset_password');
         } catch (err) {
             console.log("❌ Error updating user: ", err);
-            // res.status(500).json({ message: 'Error updating user.' });
+            
+            // Log database error
+            appLogger.error('Password reset token storage failed', {
+                eventType: 'Password Reset Error',
+                userId: user.id,
+                username: user.username,
+                email,
+                error: (err as Error).message,
+                timestamp: new Date().toISOString()
+            });
+            
             res.render('user_account_post_reset_password');
         }
     } catch (err) {
         console.log("❌ Error finding user: ", err);
-        // res.status(500).json({ message: 'Error finding user.' });
+        
+        // Log database error
+        appLogger.error('Password reset user lookup failed', {
+            eventType: 'Password Reset Database Error',
+            email,
+            error: (err as Error).message,
+            timestamp: new Date().toISOString()
+        });
+        
         res.render('user_account_post_reset_password');
     }
 });

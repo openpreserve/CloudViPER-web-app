@@ -12,7 +12,10 @@
     "copy-views": "copyfiles -u 1 'src/views/**/*' 'src/views/*' 'dist/views'",
     "test": "jest --detectOpenHandles --forceExit",
     "test:watch": "jest --watchAll",
-    "coverage": "jest --coverage"
+    "coverage": "jest --coverage",
+    "logs:session": "node scripts/view-session-logs.js",
+    "logs:app": "tail -f logs/app-$(date +%Y-%m-%d).log",
+    "logs:sql": "tail -f logs/sql-$(date +%Y-%m-%d).log"
   },
   "author": "Darren Dignam",
   "license": "Apache-2.0",

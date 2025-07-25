@@ -4,6 +4,7 @@ import bodyParser from 'body-parser';
 import passport from 'passport';
 import flash from 'connect-flash';
 import db from './models';
+import { logSession, appLogger } from './config/logger';
 
 import configAuth from './config/auth';
 
@@ -15,6 +16,14 @@ console.log(`DB USER: ${process.env.DB_USER}`);
 const app: Application = express();
 const PORT: number = parseInt(process.env.PORT || '3000', 10);
 const secure_cookie = (process.env.NODE_ENV === 'production') ? true || false : false;
+
+// Log application startup
+appLogger.info('Application starting', {
+    nodeEnv: process.env.NODE_ENV,
+    port: PORT,
+    dbUser: process.env.DB_USER,
+    timestamp: new Date().toISOString()
+});
 
 // Begin server setup
 app.use( bodyParser.urlencoded({ extended: true}) );
@@ -81,35 +90,102 @@ if (process.env.NODE_ENV === 'production') {
     });
 }
 
-// Middleware to log session creation
+// Middleware to log session events with enhanced metadata
 app.use((req, res, next) => {
     if (!req.session) {
         return next();
     }
 
-    const logData = {
-        eventType: 'Session Creation',
-        eventDescription: 'A new session has been created.',
-        userId: req.user ? req.user.toString() : null,
-        browserInfo: req.headers['user-agent'] || null,
-        ipAddress: req.headers['x-forwarded-for'] || req.socket.remoteAddress || null,
-    };
+    // Cast session to any to add custom properties
+    const session = req.session as any;
+    const user = req.user as any;
 
-    db.Log.create(logData)
-        .then(() => next())
-        .catch(err => {
-            console.error('Failed to log session creation:', err);
-            next();
-        });
+    // Only log if this is a new session or user authentication event
+    const shouldLog = !session.logged || user !== session.lastUser;
+    
+    if (shouldLog) {
+        // Determine event type
+        let eventType = 'Session Activity';
+        if (!session.logged) {
+            eventType = 'Session Creation';
+            session.logged = true;
+        } else if (user && user !== session.lastUser) {
+            eventType = user ? 'User Login' : 'User Logout';
+        }
+        
+        // Track last user state
+        session.lastUser = user;
+        
+        // Log session event with comprehensive metadata
+        try {
+            logSession(eventType, req, {
+                sessionAge: req.session.cookie.maxAge,
+                cookieSecure: req.session.cookie.secure,
+                isNewSession: !session.logged,
+                userRole: user?.role || null,
+                userEmail: user?.email || null
+            });
+        } catch (err) {
+            console.error('Failed to log session event:', err);
+        }
+    }
+    
+    next();
+});
+
+// Middleware to log important route access
+app.use((req, res, next) => {
+    const user = req.user as any;
+    const importantRoutes = [
+        '/service/new-instance',
+        '/service/terminate-instance',
+        '/service/admin',
+        '/account/login',
+        '/account/logout',
+        '/account/register'
+    ];
+    
+    const isImportantRoute = importantRoutes.some(route => 
+        req.originalUrl.startsWith(route)
+    );
+    
+    if (isImportantRoute || (req.method !== 'GET' && req.method !== 'HEAD')) {
+        try {
+            logSession('Route Access', req, {
+                route: req.originalUrl,
+                method: req.method,
+                userRole: user?.role || 'anonymous',
+                statusCode: res.statusCode,
+                bodySize: req.headers['content-length'] || null
+            });
+        } catch (err) {
+            console.error('Failed to log route access:', err);
+        }
+    }
+    
+    next();
 });
 
 // catch 404 and forward to error handler
 app.use(function(req, res ) {
+    appLogger.warn('404 Not Found', {
+        url: req.originalUrl,
+        method: req.method,
+        ip: req.ip,
+        userAgent: req.headers['user-agent'],
+        referer: req.headers['referer'],
+        timestamp: new Date().toISOString()
+    });
     res.json({"error":{code:404,status:"not found"}});
 });
 
 // Start the server
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
+    appLogger.info('Server started successfully', {
+        port: PORT,
+        nodeEnv: process.env.NODE_ENV,
+        timestamp: new Date().toISOString()
+    });
 });
 
