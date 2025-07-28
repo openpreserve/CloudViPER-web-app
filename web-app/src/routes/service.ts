@@ -7,6 +7,7 @@ import db from '../models';
 import helperFunctions from '../utility/helperFunctions';
 import { getAvailablePort } from '../utility/portManager';
 import { appLogger } from '../config/logger';
+import { UserRole } from '../types/UserRole';
 
 dotenv.config();
 
@@ -21,13 +22,15 @@ ROLES:
 - member: can run one viper  
 - subscriber: pays for use
 - admin: viper and user management
+
+Note: These roles are now defined as an enum in ../types/UserRole.ts
 */
 
 interface ServiceUser {
     id: number;
     username: string;
     email: string;
-    role: string;
+    role: UserRole;
 }
 
 function userToJson(_user: ServiceUser) {
@@ -44,13 +47,13 @@ router.get('/', (req: Request, res: Response) => {
     const user = req.user as ServiceUser | undefined;
     if (user) {
         switch (user.role) {
-            case 'admin':
+            case UserRole.ADMIN:
                 res.redirect('/service/admin');
                 break;
-            case 'testing':
+            case UserRole.TESTING:
                 res.redirect('/service/testing');
                 break;
-            case 'member':
+            case UserRole.MEMBER:
                 res.redirect('/service/member');
                 break;
 
@@ -64,7 +67,7 @@ router.get('/', (req: Request, res: Response) => {
 
 router.get('/admin', (req: Request, res: Response) => {
     const user = req.user as ServiceUser | undefined;
-    if (user && user.role === 'admin') {
+    if (user && user.role === UserRole.ADMIN) {
         res.render('service_admin', { user: userToJson(user) });
     } else {
         res.redirect('/service');
@@ -73,7 +76,7 @@ router.get('/admin', (req: Request, res: Response) => {
 
 router.get('/testing', (req: Request, res: Response) => {
     const user = req.user as ServiceUser | undefined;
-    if (user && user.role === 'testing') {
+    if (user && user.role === UserRole.TESTING) {
         res.render('service_testing', { user: userToJson(user) });
     } else {
         res.redirect('/service');
@@ -82,7 +85,7 @@ router.get('/testing', (req: Request, res: Response) => {
 
 router.get('/member', (req: Request, res: Response) => {
     const user = req.user as ServiceUser | undefined;
-    if (user && user.role === 'member') {
+    if (user && user.role === UserRole.MEMBER) {
         res.render('service_member', { user: userToJson(user) });
     } else {
         res.redirect('/service');
@@ -92,7 +95,7 @@ router.get('/member', (req: Request, res: Response) => {
 router.get('/new-instance', async (req: Request, res: Response) => {
     const user = req.user as ServiceUser | undefined;
 
-    if (user && user.role !== 'user') {
+    if (user && user.role !== UserRole.USER) {
         const ownerId = user.id;
 
         const instanceUUID = helperFunctions.generateRandomString(12);
@@ -226,7 +229,7 @@ router.get('/new-instance', async (req: Request, res: Response) => {
 router.get('/viperinstances', async (req: Request, res: Response) => {
     const user = req.user as ServiceUser | undefined;
     
-    if (user && user.role === 'admin') {
+    if (user && user.role === UserRole.ADMIN) {
         try {
             const instances = await db.ViperInstance.findAll({
                 include: [{
@@ -240,7 +243,7 @@ router.get('/viperinstances', async (req: Request, res: Response) => {
             console.error('Error retrieving viper instances:', error);
             res.status(500).send({ message: 'Error retrieving viper instances', error });
         }
-    } else if (user && user.role !== 'user') {
+    } else if (user && user.role !== UserRole.USER) {
         try {
             const userId = user.id;
             const instances = await db.ViperInstance.findAll({
@@ -343,7 +346,7 @@ router.get('/set-status-instance/:statuskey/:status', async (req: Request, res: 
 router.get('/viperinstance/:dockerid/inspect', async (req: Request, res: Response) => {
     const user = req.user as ServiceUser | undefined;
     
-    if (!user || user.role !== 'admin') {
+    if (!user || user.role !== UserRole.ADMIN) {
         res.status(403).send({ message: 'Admin access required' });
         return;
     }
@@ -455,7 +458,7 @@ const readLogFile = (logType: string, date?: string): Promise<any[]> => {
 router.get('/logs/session', async (req: Request, res: Response) => {
     const user = req.user as ServiceUser | undefined;
     
-    if (!user || user.role !== 'admin') {
+    if (!user || user.role !== UserRole.ADMIN) {
         res.status(403).send({ message: 'Admin access required' });
         return;
     }
@@ -485,7 +488,7 @@ router.get('/logs/session', async (req: Request, res: Response) => {
 router.get('/logs/sql', async (req: Request, res: Response) => {
     const user = req.user as ServiceUser | undefined;
     
-    if (!user || user.role !== 'admin') {
+    if (!user || user.role !== UserRole.ADMIN) {
         res.status(403).send({ message: 'Admin access required' });
         return;
     }
@@ -515,7 +518,7 @@ router.get('/logs/sql', async (req: Request, res: Response) => {
 router.get('/logs/app', async (req: Request, res: Response) => {
     const user = req.user as ServiceUser | undefined;
     
-    if (!user || user.role !== 'admin') {
+    if (!user || user.role !== UserRole.ADMIN) {
         res.status(403).send({ message: 'Admin access required' });
         return;
     }
@@ -545,7 +548,7 @@ router.get('/logs/app', async (req: Request, res: Response) => {
 router.get('/logs/dates', async (req: Request, res: Response) => {
     const user = req.user as ServiceUser | undefined;
     
-    if (!user || user.role !== 'admin') {
+    if (!user || user.role !== UserRole.ADMIN) {
         res.status(403).send({ message: 'Admin access required' });
         return;
     }

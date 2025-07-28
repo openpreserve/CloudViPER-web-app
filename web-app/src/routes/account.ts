@@ -9,6 +9,7 @@ import helperFunctions from '../utility/helperFunctions';
 import emailRelay, { EmailRelay } from '../utility/emailRelay';
 import configAuth from '../config/auth';
 import { appLogger } from '../config/logger';
+import { UserRole, isValidRole, toUserRole } from '../types/UserRole';
 
 dotenv.config();
 
@@ -25,6 +26,7 @@ member - can run one viper
 subscriber - pays for use
 admin - viper and user management
 
+Note: These roles are now defined as an enum in ../types/UserRole.ts
 */
 
 function userAsJSON(user: any): object {
@@ -42,14 +44,14 @@ function userAsJSON(user: any): object {
 interface AccountUser {
     id: number;
     username: string;
-    role: string;
+    role: UserRole;
 }
 
 interface SafeUser {
     id: number;
     username: string;
     email: string;
-    role: string;
+    role: UserRole;
     // Add other properties as needed
 }
 
@@ -60,13 +62,13 @@ router.get('/', (req: Request, res: Response) => {
         //console.log( JSON.stringify(user) );
 
         switch (user.role) {
-            case 'admin':
+            case UserRole.ADMIN:
                 res.redirect('/service/admin');
                 break;
-            case 'testing':
+            case UserRole.TESTING:
                 res.redirect('/service/testing');
                 break;
-            case 'member':
+            case UserRole.MEMBER:
                 res.redirect('/service/member');
                 break;
 
@@ -89,7 +91,7 @@ router.post('/update', (req: Request, res: Response) => {
 
     const user = req.user as AccountUser | undefined;
 
-    if (user && (user.role == 'admin' || user.id == _userid)) {
+    if (user && (user.role == UserRole.ADMIN || user.id == _userid)) {
         switch (_action) {
             case 'get':
                 interface FindUserResponse {
@@ -123,7 +125,7 @@ router.post('/update', (req: Request, res: Response) => {
 router.get('/users', (req: Request, res: Response) => {
     const user = req.user as AccountUser | undefined;
 
-    if (user && user.role == 'admin') {
+    if (user && user.role == UserRole.ADMIN) {
         db.User.findAll().then((users: any[]) => {
             // // Remove 'salt' and 'hash' from each user
             // const safeUsers: SafeUser[] = users.map(user => {
@@ -142,11 +144,20 @@ router.get('/users', (req: Request, res: Response) => {
     }
 });
 
-router.put('/users/:id/role', async (req: Request, res: Response) => {
+router.put('/users/:id/role', async (req: Request, res: Response): Promise<void> => {
     const currentUser = req.user as AccountUser;
-    if (currentUser && currentUser.role == 'admin') {
+    if (currentUser && currentUser.role == UserRole.ADMIN) {
         const userId = req.params.id;
         const newRole = req.body.role;
+
+        // Validate the new role
+        if (!isValidRole(newRole)) {
+            res.status(400).send({ 
+                message: 'Invalid role', 
+                validRoles: Object.values(UserRole) 
+            });
+            return;
+        }
 
         try {
             // Get the target user's current role for logging
@@ -190,12 +201,16 @@ router.put('/users/:id/role', async (req: Request, res: Response) => {
 
 router.post('/users/invite', async (req: Request, res: Response): Promise<void> => {
     const currentUser = req.user as AccountUser;
-    if (currentUser && currentUser.role == 'admin') {   
+    if (currentUser && currentUser.role == UserRole.ADMIN) {   
+        // Validate the role before processing
+        const assignedRole = toUserRole(req.body.role);
+        
         try {
             const newUsername = helperFunctions.generateUsername(req.body.email);
+            
             const user = await db.User.register({
                 username: newUsername,
-                role: req.body.role,
+                role: assignedRole,
                 email: req.body.email,
                 oauthProvider: "vipercloud",
                 // created: Date.now()
@@ -207,7 +222,7 @@ router.post('/users/invite', async (req: Request, res: Response): Promise<void> 
                 newUserId: user.id,
                 newUserEmail: req.body.email,
                 newUsername,
-                assignedRole: req.body.role,
+                assignedRole: assignedRole,
                 invitedByUserId: currentUser.id,
                 invitedByUsername: currentUser.username,
                 timestamp: new Date().toISOString()
@@ -245,7 +260,7 @@ router.post('/users/invite', async (req: Request, res: Response): Promise<void> 
             appLogger.error('User invitation failed', {
                 eventType: 'User Invitation Error',
                 targetEmail: req.body.email,
-                targetRole: req.body.role,
+                targetRole: assignedRole,
                 invitedByUserId: currentUser.id,
                 invitedByUsername: currentUser.username,
                 error: err.message,
@@ -260,7 +275,7 @@ router.post('/users/invite', async (req: Request, res: Response): Promise<void> 
 });
 
 router.get('/sessions', (req: Request, res: Response) => {
-    if (req.user && (req.user as AccountUser).role == 'admin') {
+    if (req.user && (req.user as AccountUser).role == UserRole.ADMIN) {
         const connection = mysql.createConnection(configAuth.mysqlSessionAuth);
         const query = 'SELECT session_id, expires, data FROM sessions';
 
@@ -633,7 +648,7 @@ router.post('/reset-token', async (req: Request, res: Response): Promise<void> =
 
 router.get('/debug-tokens', async (req: Request, res: Response) => {
     // Debug endpoint to check tokens in database
-    if (req.user && (req.user as AccountUser).role == 'admin') {
+    if (req.user && (req.user as AccountUser).role == UserRole.ADMIN) {
         try {
             const users = await db.User.findAll({
                 attributes: ['id', 'username', 'email', 'resetPasswordToken', 'resetPasswordExpires']
