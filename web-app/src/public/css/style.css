@@ -969,6 +969,207 @@ input.form-control:focus {
     padding: 2rem 0;
 }
 
+/* Simple Cloud Login Page */
+.cloud-page {
+    /* background: linear-gradient(135deg, #87CEEB 0%, #E0F7FA 50%, #B0E0E6 100%); */
+    /* min-height: 100vh; */
+    padding: 40px 20px;
+}
+
+.login-cloud {
+    background: rgba(255, 255, 255, 0.8);
+    border-radius: 30px;
+    padding: 40px;
+    max-width: 1000px;
+    margin: 0 auto 40px auto;
+    box-shadow: 0 10px 30px rgba(135, 206, 235, 0.3);
+}
+
+.login-cloud h1 {
+    text-align: center;
+    color: #2c3e50;
+    font-size: 2.5rem;
+    margin-bottom: 10px;
+}
+
+.login-cloud > p {
+    text-align: center;
+    color: #6c757d;
+    font-size: 1.1rem;
+    margin-bottom: 30px;
+}
+
+.error-alert {
+    background: rgba(248, 215, 218, 0.9);
+    border: 1px solid rgba(220, 53, 69, 0.3);
+    border-radius: 15px;
+    padding: 15px;
+    margin-bottom: 25px;
+    color: #721c24;
+}
+
+.login-content {
+    display: flex;
+    gap: 40px;
+}
+
+.login-form {
+    flex: 1;
+}
+
+.login-form label {
+    display: block;
+    margin-bottom: 5px;
+    color: #2c3e50;
+    font-weight: 500;
+}
+
+.login-form input {
+    width: 100%;
+    padding: 12px 15px;
+    border: 2px solid rgba(135, 206, 235, 0.3);
+    border-radius: 20px;
+    margin-bottom: 20px;
+    background: rgba(255, 255, 255, 0.9);
+    transition: border-color 0.3s ease;
+}
+
+.login-form input:focus {
+    outline: none;
+    border-color: #87CEEB;
+    background: white;
+}
+
+.login-form button {
+    width: 100%;
+    padding: 12px;
+    background: linear-gradient(135deg, #137DA4 0%, #20B2AA 100%);
+    border: none;
+    border-radius: 20px;
+    color: white;
+    font-weight: 500;
+    font-size: 16px;
+    cursor: pointer;
+    margin-bottom: 15px;
+    transition: transform 0.2s ease;
+}
+
+.login-form button:hover {
+    transform: translateY(-2px);
+}
+
+.google-btn {
+    display: block;
+    width: 100%;
+    padding: 12px;
+    background: white;
+    border: 2px solid rgba(66, 133, 244, 0.3);
+    border-radius: 20px;
+    color: #4285F4;
+    text-decoration: none;
+    text-align: center;
+    margin-bottom: 20px;
+    transition: transform 0.2s ease;
+}
+
+.google-btn:hover {
+    transform: translateY(-2px);
+    text-decoration: none;
+    color: #4285F4;
+}
+
+.cookie-notice {
+    font-size: 0.9rem;
+    color: #6c757d;
+    margin-bottom: 10px;
+}
+
+.login-links {
+    font-size: 0.9rem;
+}
+
+.login-links a {
+    color: #137DA4;
+    text-decoration: none;
+}
+
+.login-links a:hover {
+    text-decoration: underline;
+}
+
+.welcome-text {
+    flex: 1;
+    padding-left: 20px;
+}
+
+.welcome-text h2 {
+    color: #137DA4;
+    font-size: 1.8rem;
+    margin-bottom: 15px;
+}
+
+.welcome-text p {
+    color: #5a6c7d;
+    line-height: 1.6;
+    margin-bottom: 15px;
+}
+
+.info-section {
+    background: rgba(255, 255, 255, 0.8);
+    border-radius: 25px;
+    padding: 40px;
+    max-width: 1000px;
+    margin: 0 auto;
+    display: flex;
+    gap: 40px;
+}
+
+.info-column {
+    flex: 1;
+}
+
+.info-column h3 {
+    color: #2c3e50;
+    font-size: 1.2rem;
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.info-column p {
+    color: #5a6c7d;
+    line-height: 1.6;
+    font-size: 0.95rem;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+    .login-content {
+        flex-direction: column;
+        gap: 30px;
+    }
+    
+    .welcome-text {
+        padding-left: 0;
+        text-align: center;
+    }
+    
+    .info-section {
+        flex-direction: column;
+        gap: 30px;
+        padding: 30px 20px;
+    }
+    
+    .login-cloud {
+        padding: 30px 20px;
+    }
+    
+    .login-cloud h1 {
+        font-size: 2rem;
+    }
+}
+
 /* Remove table-based form layouts in favor of modern divs */
 .legacy-table-form {
     display: none;
