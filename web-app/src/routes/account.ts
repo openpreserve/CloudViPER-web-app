@@ -34,6 +34,7 @@ function userAsJSON(user: any): object {
         return {
             id: user.id,
             username: user.username,
+            email: user.email,
             role: user.role
         };
     } catch (err) {
@@ -44,6 +45,7 @@ function userAsJSON(user: any): object {
 interface AccountUser {
     id: number;
     username: string;
+    email: string;
     role: UserRole;
 }
 
@@ -73,10 +75,37 @@ router.get('/', (req: Request, res: Response) => {
                 break;
 
             default:
-                res.render('user_account_index', {
-                    // csrfToken: req.csrfToken(),
-                    user: req.user ? userAsJSON( req.user ) : {},
-                    alertSuccess: alertSuccess
+                console.log("DEBUG: Full req.user object:", JSON.stringify(req.user, null, 2));
+                console.log("DEBUG: userAsJSON result:", JSON.stringify(userAsJSON(req.user), null, 2));
+                
+                // Fetch full user data from database to ensure we have email
+                db.User.findByPk(user.id).then((fullUser: any | null) => {
+                    if (fullUser) {
+                        console.log("DEBUG: Full user from DB:", JSON.stringify({
+                            id: fullUser.id,
+                            username: fullUser.username,
+                            email: fullUser.email,
+                            role: fullUser.role
+                        }, null, 2));
+                        
+                        res.render('user_account_index', {
+                            user: userAsJSON(fullUser),
+                            alertSuccess: alertSuccess
+                        });
+                    } else {
+                        // Fallback to session user if DB lookup fails
+                        res.render('user_account_index', {
+                            user: req.user ? userAsJSON( req.user ) : {},
+                            alertSuccess: alertSuccess
+                        });
+                    }
+                }).catch((err: Error) => {
+                    console.error("Error fetching full user data:", err);
+                    // Fallback to session user if DB lookup fails
+                    res.render('user_account_index', {
+                        user: req.user ? userAsJSON( req.user ) : {},
+                        alertSuccess: alertSuccess
+                    });
                 });
         }
 

@@ -24,11 +24,10 @@
                     <label for="confirm-password">Confirm Password:</label>
                     <input type="password" id="confirm-password" name="confirm-password" placeholder="Confirm new password" required>
                     
-                    <div class="checkbox-container">
-                        <label>
-                            <input type="checkbox" id="show-password" onclick="togglePasswordVisibility()"> 
-                            Show Password
-                        </label>
+                    <div class="password-toggle" style="padding: 10px 0; margin: 5px 0;">
+                        <span id="password-toggle-btn" onclick="togglePasswordVisibility()" style="cursor: pointer; color: #137DA4; text-decoration: underline; font-size: 14px; padding: 5px; display: inline-block;">
+                            <i class="fas fa-eye" id="toggle-icon"></i> <span id="toggle-text">Show Password</span>
+                        </span>
                     </div>
                     
                     <button type="submit">Update Password</button>
@@ -94,12 +93,19 @@ function validatePassword() {
 function togglePasswordVisibility() {
     var passwordField = document.getElementById("password");
     var confirmPasswordField = document.getElementById("confirm-password");
-    if (passwordField.type === "password" && confirmPasswordField.type === "password") {
+    var toggleIcon = document.getElementById("toggle-icon");
+    var toggleText = document.getElementById("toggle-text");
+    
+    if (passwordField.type === "password") {
         passwordField.type = "text";
         confirmPasswordField.type = "text";
+        toggleIcon.className = "fas fa-eye-slash";
+        toggleText.textContent = "Hide Password";
     } else {
         passwordField.type = "password";
         confirmPasswordField.type = "password";
+        toggleIcon.className = "fas fa-eye";
+        toggleText.textContent = "Show Password";
     }
 }
 </script>
