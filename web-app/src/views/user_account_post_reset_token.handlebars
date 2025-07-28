@@ -1,25 +1,50 @@
-    <div>
+<div class="cloud-page">
+    <!-- Password Reset Success Cloud -->
+    <div class="login-cloud">
         <h1>{{{form_h1}}}</h1>
         <p>{{{form_p}}}</p>
-    </div>
 
-    {{#if error_message}}
+        {{#if error_message}}
             {{#ifNotEquals error_message ""}}
-            <div class="alert alert-danger" role="alert">
+            <div class="error-alert">
                 {{error_message}}
             </div>
             {{/ifNotEquals}}
-    {{/if}}
+        {{/if}}
 
-
-    <div class="container">
-        <div class="row">
-            <div class="col-md-4">
-                <h2>Your password has been reset!</h2>
+        <div class="login-content">
+            <div class="login-form">
+                <h2>Password Reset Successful!</h2>
+                <p>Your password has been successfully updated. You can now log in with your new password.</p>
+                
+                <div style="text-align: center; margin-top: 30px;">
+                    <a href="/account/login" class="google-btn">Login Now</a>
+                </div>
+                
+                <p class="login-links"><a href="/account">Go to Account Dashboard</a></p>
             </div>
-            <div class="col-md-4">
-                <h2>What next?</h2>
-                <p>Access your <a href='/account'>account</a>.</p>
+            
+            <div class="welcome-text">
+                <h2>All Set!</h2>
+                <p>Your password has been successfully reset. You can now access your Cloud ViPER account with your new credentials.</p>
+                <p>For security reasons, we recommend logging out of any other devices where you might be signed in with the old password.</p>
             </div>
         </div>
     </div>
+
+    <!-- Information Section -->
+    <div class="info-section">
+        <div class="info-column">
+            <h3><i class="fas fa-check-circle" style="color: #87CEEB;"></i> Password Updated</h3>
+            <p>Your new password is now active and ready to use. The previous password has been completely invalidated for security purposes.</p>
+        </div>
+        <div class="info-column">
+            <h3><i class="fas fa-shield-alt" style="color: #137DA4;"></i> Security Notice</h3>
+            <p>For your security, consider logging out of other devices or sessions. Your account is now more secure with the new password.</p>
+        </div>
+        <div class="info-column">
+            <h3><i class="fas fa-rocket" style="color: #20B2AA;"></i> Ready to Go</h3>
+            <p>You're all set! Log in with your new password and continue using Cloud ViPER's powerful digital preservation tools and services.</p>
+        </div>
+    </div>
+</div>
