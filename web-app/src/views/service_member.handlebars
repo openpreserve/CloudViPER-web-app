@@ -1,15 +1,226 @@
-  <div>
-      <h1>ViPER Member Account</h1>
-      <p>({{{user.email}}})</p>
-  </div>
+<!-- Cloud GUI Styling for Member Account -->
+<div class="login-cloud">
+  <div class="login-content">
+    <div class="login-header">
+      <div class="login-icon">
+        <i class="fas fa-user-check"></i>
+      </div>
+      <h1 class="login-title">ViPER Member Dashboard</h1>
+      <p class="login-subtitle">Welcome to your member dashboard, {{{user.email}}}</p>
+    </div>
 
-  <div id="react-root" class="bg-white"></div>
+    <div class="info-section">
+      <div class="info-card">
+        <div class="info-icon">
+          <i class="fas fa-star"></i>
+        </div>
+        <div class="info-content">
+          <h3>Member Account Benefits</h3>
+          <p>As a ViPER member, you have enhanced access to our preservation services.</p>
+          <ul>
+            <li><i class="fas fa-check text-success"></i> Create one ViPER container instance</li>
+            <li><i class="fas fa-check text-success"></i> Full access to ViPER tools</li>
+            <li><i class="fas fa-check text-success"></i> Priority support</li>
+            <li><i class="fas fa-check text-success"></i> Extended session duration</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="upgrade-prompt">
+        <div class="upgrade-content">
+          <h4><i class="fas fa-rocket"></i> Need more capacity?</h4>
+          <p>Upgrade to a Subscriber account for unlimited instances and premium features.</p>
+          <a href="mailto:admin@cloudviper.org?subject=Subscriber Account Request&body=Hello,%0D%0A%0D%0AI would like to upgrade my member account ({{{user.email}}}) to a subscriber account for unlimited access.%0D%0A%0D%0AThank you!" 
+             class="btn btn-success">
+            <i class="fas fa-crown"></i> Upgrade to Subscriber
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="react-root" class="container-fluid mt-4"></div>
 
 
   <!-- Add React, ReactDOM, and Babel scripts -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.development.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.development.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/6.25.0/babel.min.js"></script>
+
+  <style>
+  /* Cloud GUI Enhanced Styling for Member ViPER Instances */
+  .viper-instances-container {
+    background: linear-gradient(135deg, #2C5530 0%, #4CAF50 100%);
+    border-radius: 12px;
+    padding: 2rem;
+    margin: 1rem 0;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  }
+
+  .instances-header {
+    color: white;
+    text-align: center;
+    margin-bottom: 2rem;
+  }
+
+  .instances-header h2 {
+    font-size: 2rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+  }
+
+  .instances-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    gap: 1.5rem;
+    margin-top: 1.5rem;
+  }
+
+  .instance-card {
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+    backdrop-filter: blur(10px);
+  }
+
+  .instance-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+  }
+
+  .instance-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+  }
+
+  .instance-status {
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+
+  .status-active {
+    background: #d4edda;
+    color: #155724;
+  }
+
+  .status-created {
+    background: #fff3cd;
+    color: #856404;
+  }
+
+  .status-error {
+    background: #f8d7da;
+    color: #721c24;
+  }
+
+  .new-instance-card {
+    background: linear-gradient(135deg, #2C5530, #4CAF50);
+    color: white;
+    border: 2px dashed rgba(255, 255, 255, 0.3);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 200px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+
+  .new-instance-card:hover {
+    background: linear-gradient(135deg, #4CAF50, #2C5530);
+    border-color: rgba(255, 255, 255, 0.5);
+  }
+
+  .new-instance-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    opacity: 0.8;
+  }
+
+  .instance-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 1rem;
+  }
+
+  .btn-cloud {
+    background: linear-gradient(135deg, #2C5530, #4CAF50);
+    border: none;
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .btn-cloud:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(76, 175, 80, 0.4);
+    color: white;
+    text-decoration: none;
+  }
+
+  .btn-danger-cloud {
+    background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+  }
+
+  .btn-danger-cloud:hover {
+    box-shadow: 0 4px 15px rgba(255, 107, 107, 0.4);
+  }
+
+  .empty-state {
+    text-align: center;
+    color: rgba(255, 255, 255, 0.8);
+    padding: 3rem;
+  }
+
+  .empty-state i {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+    opacity: 0.6;
+  }
+
+  .loading-spinner {
+    color: rgba(255, 255, 255, 0.8);
+    text-align: center;
+    padding: 2rem;
+  }
+
+  .loading-spinner i {
+    font-size: 2rem;
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
+  .member-benefits {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-top: 1rem;
+    color: rgba(255, 255, 255, 0.9);
+  }
+
+  .member-benefits h4 {
+    color: white;
+    margin-bottom: 0.5rem;
+  }
+  </style>
 
   <script type="text/babel">
 
@@ -18,7 +229,15 @@
     class App extends React.Component {
       render() {
         return (
-          <div>
+          <div className="viper-instances-container">
+            <div className="instances-header">
+              <h2><i className="fas fa-star"></i> Member ViPER Instances</h2>
+              <p>Professional access to ViPER preservation tools</p>
+              <div className="member-benefits">
+                <h4><i className="fas fa-crown"></i> Member Benefits Active</h4>
+                <p><i className="fas fa-check"></i> Priority support & extended sessions</p>
+              </div>
+            </div>
             <ViPERInstanceList />
           </div>
         );
