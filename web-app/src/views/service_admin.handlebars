@@ -65,7 +65,10 @@
 
 .admin-tab-icon {
     margin-right: 8px;
-    font-size: 18px;
+    font-size: 16px;
+    width: 20px;
+    text-align: center;
+    display: inline-block;
 }
 
 .panel-header {
@@ -624,28 +627,28 @@
                 {
                     id: 'users',
                     label: 'User Management',
-                    icon: '👥',
+                    icon: 'fas fa-users',
                     component: <UserList />,
                     description: 'Manage user accounts, roles, and permissions'
                 },
                 {
                     id: 'sessions',
                     label: 'Active Sessions',
-                    icon: '🔐',
+                    icon: 'fas fa-lock',
                     component: <SessionList />,
                     description: 'Monitor and manage user sessions'
                 },
                 {
                     id: 'instances',
                     label: 'ViPER Instances',
-                    icon: '🖥️',
+                    icon: 'fas fa-server',
                     component: <ViPERInstanceList userRole={userRole} userEmail={userEmail} />,
                     description: 'Monitor and manage ViPER container instances'
                 },
                 {
                     id: 'logs',
                     label: 'System Logs',
-                    icon: '📊',
+                    icon: 'fas fa-chart-line',
                     component: <LogViewer />,
                     description: 'View and analyze system, session, and database logs'
                 }
@@ -661,7 +664,7 @@
                                 className={`admin-tab ${activeTab === tab.id ? 'active' : ''}`}
                                 onClick={() => this.switchTab(tab.id)}
                             >
-                                <span className="admin-tab-icon">{tab.icon}</span>
+                                <i className={`admin-tab-icon ${tab.icon}`}></i>
                                 {tab.label}
                             </button>
                         ))}
@@ -677,7 +680,7 @@
                                 <div className="panel-header">
                                     <div>
                                         <h2 className="panel-title">
-                                            <span className="admin-tab-icon">{tab.icon}</span>
+                                            <i className={`admin-tab-icon ${tab.icon}`}></i>
                                             {tab.label}
                                         </h2>
                                         <p className="panel-subtitle">{tab.description}</p>

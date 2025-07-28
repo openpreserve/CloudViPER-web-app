@@ -1,5 +1,3 @@
-// config/auth.js
-
 import dotenv from 'dotenv';
 dotenv.config({ path: `${__dirname}/../.env` });
 
@@ -8,7 +6,7 @@ const auth = {
     {
         clientID: process.env.GOOGLE_AUTH_CLIENT_ID || '',
         clientSecret: process.env.GOOGLE_AUTH_CLIENT_SECRET || '',
-        callbackURL: "https://www.vipercloud.cc/account/google/return/",
+        callbackURL: `https://${process.env.DOMAIN_NAME || 'cloudviper.org'}/account/google/return/`,
     },
 
     'mysqlSessionAuth':

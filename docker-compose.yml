@@ -16,9 +16,10 @@ services:
     env_file: ./web-app/dist/.env
     environment:
       - VIRTUAL_PORT=3000
-      - VIRTUAL_HOST=www.vipercloud.cc
-      - LETSENCRYPT_HOST=www.vipercloud.cc
+      - VIRTUAL_HOST=${DOMAIN_NAME:-cloudviper.org}
+      - LETSENCRYPT_HOST=${DOMAIN_NAME:-cloudviper.org}
       - LETSENCRYPT_EMAIL=sysadmin@openpreservation.org
+      - DOMAIN_NAME=${DOMAIN_NAME:-cloudviper.org}
     volumes:
       - ./web-app/dist:/usr/src/app
       - ./web-app/logs:/usr/src/app/logs

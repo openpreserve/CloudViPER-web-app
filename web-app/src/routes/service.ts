@@ -12,6 +12,7 @@ dotenv.config();
 
 const router = express.Router();
 const docker = new Docker({ socketPath: '/var/run/docker.sock' });
+const DOMAIN_NAME = process.env.DOMAIN_NAME || 'cloudviper.org';
 
 /*
 ROLES:
@@ -109,8 +110,8 @@ router.get('/new-instance', async (req: Request, res: Response) => {
             "PASSWORD=" + kasmvncPassword,
             "PUID=1000",
             "PGID=1000",
-            "ACME_PRE_HOOK=curl https://www.vipercloud.cc/service/set-status-instance/"+statusKey+"/begin_cert",
-            "ACME_POST_HOOK=curl https://www.vipercloud.cc/service/set-status-instance/"+statusKey+"/active",
+            "ACME_PRE_HOOK=curl https://" + DOMAIN_NAME + "/service/set-status-instance/"+statusKey+"/begin_cert",
+            "ACME_POST_HOOK=curl https://" + DOMAIN_NAME + "/service/set-status-instance/"+statusKey+"/active",
         ];
 
         try {
