@@ -6,6 +6,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import accountRouter from '../../../routes/account';
 import User from '../../../models/user';
+import { UserRole } from '../../../types/UserRole';
 
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
@@ -71,7 +72,7 @@ describe('Account Routes - Password Reset Integration Tests', () => {
       id: 1,
       email: 'test@example.com',
       username: 'testuser',
-      role: 'user',
+      role: UserRole.USER,
       resetPasswordToken: null,
       resetPasswordExpires: null,
       update: jest.fn().mockResolvedValue(true),

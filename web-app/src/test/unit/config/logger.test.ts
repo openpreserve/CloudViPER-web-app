@@ -1,4 +1,5 @@
 import { jest } from '@jest/globals';
+import { UserRole } from '../../../types/UserRole';
 
 // Create a comprehensive mock for winston
 const mockWinston = {
@@ -90,7 +91,7 @@ describe('Logger Configuration', () => {
                 id: 1,
                 username: 'testuser',
                 email: 'test@example.com',
-                role: 'user'
+                role: UserRole.USER
             }
         } as any;
 

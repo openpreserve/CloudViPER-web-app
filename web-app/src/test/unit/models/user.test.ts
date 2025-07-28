@@ -2,6 +2,7 @@ import { Sequelize } from 'sequelize';
 import dotenv from 'dotenv';
 import User from '../../../models/user';
 import path from 'path';
+import { UserRole } from '../../../types/UserRole';
 
 const result = dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
@@ -49,7 +50,7 @@ describe('User Model', () => {
   });
 
   it('should register a new user', async () => {
-    const userDetails = { email: 'test@example.com', username: 'testuser', role: 'user' };
+    const userDetails = { email: 'test@example.com', username: 'testuser', role: UserRole.USER };
     const password = 'password123';
 
     const user = await userModel.register(userDetails, password);
@@ -58,7 +59,7 @@ describe('User Model', () => {
   });
 
   it('should set a password for the user', async () => {
-    const user = userModel.build({ email: 'test@example.com', username: 'testuser', role: 'user' });
+    const user = userModel.build({ email: 'test@example.com', username: 'testuser', role: UserRole.USER });
 
     await user.setPassword('password123');
     expect(user.salt).toBeDefined();
@@ -66,7 +67,7 @@ describe('User Model', () => {
   });
 
   it('should authenticate a user with correct password', async () => {
-    const userDetails = { email: 'test2@example.com', username: 'testuser2', role: 'user' };
+    const userDetails = { email: 'test2@example.com', username: 'testuser2', role: UserRole.USER };
     const password = 'password123';
 
     const user = await userModel.register(userDetails, password);
@@ -75,7 +76,7 @@ describe('User Model', () => {
   });
 
   it('should not authenticate a user with incorrect password', async () => {
-    const userDetails = { email: 'test3@example.com', username: 'testuser3', role: 'user' };
+    const userDetails = { email: 'test3@example.com', username: 'testuser3', role: UserRole.USER };
     const password = 'password123';
 
     const user = await userModel.register(userDetails, password);
@@ -85,7 +86,7 @@ describe('User Model', () => {
 
 //   it('should authenticate a user using static method', async () => {
 //     const userModel = User(sequelizeInstance);
-//     const userDetails = { email: 'test4@example.com', username: 'testuser4', role: 'user' };
+//     const userDetails = { email: 'test4@example.com', username: 'testuser4', role: UserRole.USER };
 //     const password = 'password123';
 
 //     await userModel.register(userDetails, password);
@@ -95,14 +96,14 @@ describe('User Model', () => {
 
   // Additional tests for better coverage
   it('should throw error when registering user without email', async () => {
-    const userDetails = { username: 'testuser', role: 'user' }; // No email
+    const userDetails = { username: 'testuser', role: UserRole.USER }; // No email
     const password = 'password123';
 
     await expect(userModel.register(userDetails, password)).rejects.toThrow('Field email is not set');
   });
 
   it('should throw error when registering duplicate user', async () => {
-    const userDetails = { email: 'duplicate@example.com', username: 'testuser', role: 'user' };
+    const userDetails = { email: 'duplicate@example.com', username: 'testuser', role: UserRole.USER };
     const password = 'password123';
 
     // Register first user
@@ -114,7 +115,7 @@ describe('User Model', () => {
 
   it('should throw error when user email becomes undefined after build', async () => {
     // This test targets the second email check in register method (line 79 area)
-    const userDetails = { email: 'test@example.com', username: 'testuser', role: 'user' };
+    const userDetails = { email: 'test@example.com', username: 'testuser', role: UserRole.USER };
     const password = 'password123';
     
     // Mock the build method to return a user without email
@@ -122,7 +123,7 @@ describe('User Model', () => {
     userModel.build = jest.fn().mockReturnValue({
       email: undefined, // Simulate email becoming undefined
       username: 'testuser',
-      role: 'user'
+      role: UserRole.USER
     });
     
     await expect(userModel.register(userDetails, password)).rejects.toThrow('Field email is not set');
@@ -132,19 +133,19 @@ describe('User Model', () => {
   });
 
   it('should throw error when setting empty password', async () => {
-    const user = userModel.build({ email: 'test@example.com', username: 'testuser', role: 'user' });
+    const user = userModel.build({ email: 'test@example.com', username: 'testuser', role: UserRole.USER });
 
     await expect(user.setPassword('')).rejects.toThrow('Password argument not set!');
   });
 
   it('should throw error when authenticating user without salt', async () => {
-    const user = userModel.build({ email: 'test@example.com', username: 'testuser', role: 'user' });
+    const user = userModel.build({ email: 'test@example.com', username: 'testuser', role: UserRole.USER });
     
     await expect(user.authenticate('password123')).rejects.toThrow('Authentication not possible. No salt value stored in db!');
   });
 
   it('should authenticate a user using static method', async () => {
-    const userDetails = { email: 'static@example.com', username: 'staticuser', role: 'user' };
+    const userDetails = { email: 'static@example.com', username: 'staticuser', role: UserRole.USER };
     const password = 'password123';
 
     await userModel.register(userDetails, password);
@@ -184,7 +185,7 @@ describe('User Model', () => {
   // Password Reset Token Tests
   describe('Password Reset Token functionality', () => {
     it('should store reset password token and expiration', async () => {
-      const userDetails = { email: 'reset@example.com', username: 'resetuser', role: 'user' };
+      const userDetails = { email: 'reset@example.com', username: 'resetuser', role: UserRole.USER };
       const password = 'password123';
       const user = await userModel.register(userDetails, password);
 
@@ -204,7 +205,7 @@ describe('User Model', () => {
     });
 
     it('should clear reset password token after use', async () => {
-      const userDetails = { email: 'clear@example.com', username: 'clearuser', role: 'user' };
+      const userDetails = { email: 'clear@example.com', username: 'clearuser', role: UserRole.USER };
       const password = 'password123';
       const user = await userModel.register(userDetails, password);
 
@@ -224,7 +225,7 @@ describe('User Model', () => {
     });
 
     it('should find user by reset token and check expiration', async () => {
-      const userDetails = { email: 'token@example.com', username: 'tokenuser', role: 'user' };
+      const userDetails = { email: 'token@example.com', username: 'tokenuser', role: UserRole.USER };
       const password = 'password123';
       const user = await userModel.register(userDetails, password);
 
@@ -248,7 +249,7 @@ describe('User Model', () => {
     });
 
     it('should not find user with expired reset token', async () => {
-      const userDetails = { email: 'expired@example.com', username: 'expireduser', role: 'user' };
+      const userDetails = { email: 'expired@example.com', username: 'expireduser', role: UserRole.USER };
       const password = 'password123';
       const user = await userModel.register(userDetails, password);
 
@@ -271,7 +272,7 @@ describe('User Model', () => {
     });
 
     it('should not find user with invalid reset token', async () => {
-      const userDetails = { email: 'invalid@example.com', username: 'invaliduser', role: 'user' };
+      const userDetails = { email: 'invalid@example.com', username: 'invaliduser', role: UserRole.USER };
       const password = 'password123';
       const user = await userModel.register(userDetails, password);
 
@@ -294,8 +295,8 @@ describe('User Model', () => {
     });
 
     it('should handle multiple users with different reset tokens', async () => {
-      const user1Details = { email: 'multi1@example.com', username: 'multi1', role: 'user' };
-      const user2Details = { email: 'multi2@example.com', username: 'multi2', role: 'user' };
+      const user1Details = { email: 'multi1@example.com', username: 'multi1', role: UserRole.USER };
+      const user2Details = { email: 'multi2@example.com', username: 'multi2', role: UserRole.USER };
       const password = 'password123';
 
       const user1 = await userModel.register(user1Details, password);

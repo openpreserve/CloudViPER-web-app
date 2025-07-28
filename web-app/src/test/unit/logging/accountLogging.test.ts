@@ -1,5 +1,6 @@
 import { jest } from '@jest/globals';
 import { appLogger, logSession } from '../../../config/logger';
+import { UserRole } from '../../../types/UserRole';
 
 // Mock the logger functions
 jest.mock('../../../config/logger', () => ({
@@ -234,7 +235,7 @@ describe('Account Route Logging Tests', () => {
         it('should integrate with session logging for user actions', () => {
             const mockRequest = {
                 sessionID: 'session-123',
-                user: { id: 1, username: 'test.user', role: 'admin' },
+                user: { id: 1, username: 'test.user', role: UserRole.ADMIN },
                 ip: '127.0.0.1',
                 method: 'POST',
                 originalUrl: '/account/update-role',

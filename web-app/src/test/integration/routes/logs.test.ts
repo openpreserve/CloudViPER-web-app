@@ -4,6 +4,7 @@ import express from 'express';
 import session from 'express-session';
 import fs from 'fs';
 import path from 'path';
+import { UserRole } from '../../../types/UserRole';
 
 // Mock file system operations
 jest.mock('fs');
@@ -81,7 +82,7 @@ describe('Log Service Integration Tests', () => {
             req.user = { 
                 id: 1, 
                 email: 'admin@example.com', 
-                role: 'admin' 
+                role: UserRole.ADMIN 
             };
             next();
         });
@@ -149,7 +150,7 @@ describe('Log Service Integration Tests', () => {
                 req.user = { 
                     id: 2, 
                     email: 'user@example.com', 
-                    role: 'user' 
+                    role: UserRole.USER 
                 };
                 next();
             });
@@ -271,7 +272,7 @@ describe('Log Service Integration Tests', () => {
                 req.user = { 
                     id: 2, 
                     email: 'user@example.com', 
-                    role: 'user' 
+                    role: UserRole.USER 
                 };
                 next();
             });
