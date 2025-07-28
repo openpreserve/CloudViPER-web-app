@@ -1,59 +1,60 @@
-<div class="auth-layout">
-    <div class="container">
-        <div class="row justify-content-center">
-            <div class="col-md-8">
-                <div>
-                    <h1>{{{form_h1}}}</h1>
-                    <p>{{{form_p}}}</p>
-                </div>
+<div class="cloud-page">
+    <!-- Login Cloud -->
+    <div class="login-cloud">
+        <h1>{{{form_h1}}}</h1>
+        <p>{{{form_p}}}</p>
 
-                {{#if error_message}}
-                    {{#ifNotEquals error_message ""}}
-                    <div class="alert alert-danger" role="alert">
-                        <p>{{error_message}}</p>
-                        <p>Login failed, please try again!</p>
-                        {{!-- <p>Login Failed! (Remember to login with your username - not your email address)</p> --}}
-                    </div>
-                    {{/ifNotEquals}}
-                {{/if}}
-
-                <div class="row">
-                    <div class="col-md-6">
-                        <form method="post" action="/account/login" class="modern-form">
-                            <div class="form-group">
-                                <label for="email" class="form-label">Email:</label>
-                                <input type="email" id="email" name="email" placeholder="Email address" required class="form-control">
-                            </div>
-                            
-                            <div class="form-group">
-                                <label for="password" class="form-label">Password:</label>
-                                <input type="password" id="password" name="password" placeholder="Password" required class="form-control">
-                            </div>
-                            
-                            <div class="form-group">
-                                <button type="submit" class="btn btn-secondary w-100">Sign In</button>
-                            </div>
-                        </form>
-
-                        <div class="form-group">
-                            <a href="/account/login/google" class="btn google-btn w-100">
-                                <img src="https://img.icons8.com/color/16/000000/google-logo.png" alt="Google"/> 
-                                Login with Google
-                            </a>
-                        </div>
-                        
-                        <hr>
-                        <p class="cookie-notice">The admin section of the website uses functional cookies.</p>
-                        <p><a href="/account/register">Register New Account</a> | <a href="/account/reset-password">Forgot Password?</a></p>
-                    </div>
-                    
-                    <div class="col-md-6">
-                        <h2>ViPER Cloud</h2>
-                        <p>Welcome to our app! Here, we prioritize your privacy and security above all. Feel free to log in and explore our features. Remember, we never share your information with anyone.</p>
-                        <p>If you encounter any issues while logging in, please contact our support team for assistance. We're here to help you every step of the way.</p>
-                    </div>
-                </div>
+        {{#if error_message}}
+            {{#ifNotEquals error_message ""}}
+            <div class="error-alert">
+                <p>{{error_message}}</p>
+                <p>Login failed, please try again!</p>
             </div>
+            {{/ifNotEquals}}
+        {{/if}}
+
+        <div class="login-content">
+            <div class="login-form">
+                <form method="post" action="/account/login">
+                    <label for="email">Email:</label>
+                    <input type="email" id="email" name="email" placeholder="Email address" required>
+                    
+                    <label for="password">Password:</label>
+                    <input type="password" id="password" name="password" placeholder="Password" required>
+                    
+                    <button type="submit">Sign In</button>
+                </form>
+
+                <a href="/account/login/google" class="google-btn">
+                    <img src="https://img.icons8.com/color/16/000000/google-logo.png" alt="Google"/> 
+                    Login with Google
+                </a>
+                
+                <p class="cookie-notice">The admin section of the website uses functional cookies.</p>
+                <p class="login-links"><a href="/account/register">Register New Account</a> | <a href="/account/reset-password">Forgot Password?</a></p>
+            </div>
+            
+            <div class="welcome-text">
+                <h2>Cloud ViPER</h2>
+                <p>Welcome to our app! Here, we prioritize your privacy and security above all. Feel free to log in and explore our features. Remember, we never share your information with anyone.</p>
+                <p>If you encounter any issues while logging in, please contact our support team for assistance. We're here to help you every step of the way.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Information Section -->
+    <div class="info-section">
+        <div class="info-column">
+            <h3><i class="fas fa-cloud" style="color: #87CEEB;"></i> What is Cloud ViPER?</h3>
+            <p>Cloud ViPER is a powerful cloud-based digital preservation platform that provides automated validation, identification, and characterization of digital files. Built on the robust ViPER framework, it offers seamless access to preservation tools and workflows.</p>
+        </div>
+        <div class="info-column">
+            <h3><i class="fas fa-shield-alt" style="color: #137DA4;"></i> Secure & Reliable</h3>
+            <p>Your digital assets are protected with enterprise-grade security and privacy controls. All processing happens in isolated, secure environments with comprehensive audit trails and data protection compliance.</p>
+        </div>
+        <div class="info-column">
+            <h3><i class="fas fa-rocket" style="color: #20B2AA;"></i> Get Started</h3>
+            <p>Ready to begin your digital preservation journey? Log in to access your dashboard, upload files for analysis, and leverage our comprehensive suite of preservation tools and validation services.</p>
         </div>
     </div>
 </div>
