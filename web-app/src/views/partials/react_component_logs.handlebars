@@ -28,7 +28,7 @@ class LogViewer extends React.Component {
         try {
             const response = await fetch('/service/logs/dates');
             if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                throw new Error('HTTP ' + response.status + ': ' + response.statusText);
             }
             const data = await response.json();
             this.setState({ 
@@ -52,11 +52,11 @@ class LogViewer extends React.Component {
         try {
             const offset = reset ? 0 : pagination.offset;
             const response = await fetch(
-                `/service/logs/${selectedLogType}?date=${selectedDate}&limit=${pagination.limit}&offset=${offset}`
+                '/service/logs/' + selectedLogType + '?date=' + selectedDate + '&limit=' + pagination.limit + '&offset=' + offset
             );
             
             if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                throw new Error('HTTP ' + response.status + ': ' + response.statusText);
             }
             
             const data = await response.json();
@@ -194,7 +194,7 @@ class LogViewer extends React.Component {
             return (
                 <div key={index} className="log-entry app-log">
                     <div className="log-header">
-                        <span className={`log-level ${log.level}`}>{log.level || 'INFO'}</span>
+                        <span className={'log-level ' + log.level}>{log.level || 'INFO'}</span>
                         <span className="log-timestamp">{new Date(log.timestamp).toLocaleString()}</span>
                     </div>
                     <div className="log-content">
@@ -401,7 +401,7 @@ class LogViewer extends React.Component {
                         <strong>Instance UUID:</strong> {log.instanceUUID || 'Unknown'}
                     </div>
                     <div className="log-detail">
-                        <strong>Instance URL:</strong> <a href={`https://${log.instanceURL}`} target="_blank">{log.instanceURL || 'Unknown'}</a>
+                        <strong>Instance URL:</strong> <a href={'https://' + log.instanceURL} target="_blank">{log.instanceURL || 'Unknown'}</a>
                     </div>
                     <div className="log-detail">
                         <strong>Created By:</strong> {log.userEmail || 'Unknown'} (ID: {log.userId || 'Unknown'})
