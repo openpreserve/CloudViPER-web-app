@@ -20,7 +20,35 @@ const databasehost = configAuth.mysqlSessionAuth.host;
 const database = configAuth.mysqlSessionAuth.database;
 const username = configAuth.mysqlSessionAuth.user;
 const password = configAuth.mysqlSessionAuth.password;
-const config: { host: string; dialect: Dialect, logging: boolean | ((...msg: any[]) => void) } = { "host": databasehost, "dialect": "mysql", logging: logSQL};
+const config: { 
+  host: string; 
+  dialect: Dialect; 
+  logging: boolean | ((...msg: any[]) => void);
+  dialectOptions?: {
+    charset?: string;
+    collate?: string;
+  };
+  pool?: {
+    max: number;
+    min: number;
+    acquire: number;
+    idle: number;
+  };
+} = { 
+  "host": databasehost, 
+  "dialect": "mysql", 
+  logging: logSQL,
+  dialectOptions: {
+    charset: 'utf8mb4',
+    collate: 'utf8mb4_unicode_ci',
+  },
+  pool: {
+    max: 5,
+    min: 0,
+    acquire: 30000,
+    idle: 10000
+  }
+};
 
 // Database connection info
 console.log(`DB Connected: ${database}@${databasehost} as ${username}`);
@@ -63,20 +91,27 @@ Object.keys(db).forEach((modelName: string) => {
   }
 });
 
-db.sequelize.sync({ alter: true }).then(() => {
-  console.log('Database synchronized with { alter: true }');
-  appLogger.info('Database synchronized successfully', {
-    alterMode: true,
-    timestamp: new Date().toISOString()
+// Only sync database if not in test environment or if explicitly requested
+if (env !== 'test' || process.env.FORCE_DB_SYNC === 'true') {
+  db.sequelize.sync({ 
+    force: env === 'test', // Force recreate tables in test environment
+    alter: env !== 'test'  // Use alter in non-test environments
+  }).then(() => {
+    console.log(`Database synchronized with ${env === 'test' ? '{ force: true }' : '{ alter: true }'}`);
+    appLogger.info('Database synchronized successfully', {
+      mode: env === 'test' ? 'force' : 'alter',
+      env,
+      timestamp: new Date().toISOString()
+    });
+  }).catch((error) => {
+    console.error('Database synchronization failed:', error);
+    appLogger.error('Database synchronization failed', {
+      error: error.message,
+      stack: error.stack,
+      timestamp: new Date().toISOString()
+    });
   });
-}).catch((error) => {
-  console.error('Database synchronization failed:', error);
-  appLogger.error('Database synchronization failed', {
-    error: error.message,
-    stack: error.stack,
-    timestamp: new Date().toISOString()
-  });
-});
+}
 
 export { usermodel, vipermodel, logmodel }; 
 export default db;

@@ -15,6 +15,11 @@ interface ViperInstanceAttributes {
     updatedAt?: Date;
     status: string;
     logs: any[];
+    lastActivity?: Date;
+    lastScreenshot?: any;
+    activityHistory?: any[];
+    activityScore?: number;
+    isUserActive?: boolean;
   }
 
 export default (sequelize: Sequelize) => {
@@ -31,6 +36,11 @@ export default (sequelize: Sequelize) => {
         public updatedAt?: Date;
         public status!: string;
         public logs!: any[];
+        public lastActivity?: Date;
+        public lastScreenshot?: any;
+        public activityHistory?: any[];
+        public activityScore?: number;
+        public isUserActive?: boolean;
     
         static associate(models: any) {
           // define association here
@@ -53,6 +63,11 @@ export default (sequelize: Sequelize) => {
         createdAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
         status: { type: DataTypes.STRING, allowNull: false, defaultValue: 'initilising' },
         logs: { type: DataTypes.JSON, allowNull: true, defaultValue: [] }, // Initialize as an empty array
+        lastActivity: { type: DataTypes.DATE, allowNull: true },
+        lastScreenshot: { type: DataTypes.JSON, allowNull: true },
+        activityHistory: { type: DataTypes.JSON, allowNull: true, defaultValue: [] },
+        activityScore: { type: DataTypes.INTEGER, allowNull: true, defaultValue: 0 },
+        isUserActive: { type: DataTypes.BOOLEAN, allowNull: true, defaultValue: false },
     }, {
         sequelize,
         modelName: 'ViperInstance',

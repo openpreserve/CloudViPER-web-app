@@ -203,6 +203,78 @@ class ViPERInstanceList extends React.Component {
         return 'https://' + url;
       }
 
+      loadActivityHistory = async (instanceUUID) => {
+        try {
+          const response = await fetch(`/service/activity/${instanceUUID}`);
+          const data = await response.json();
+          
+          if (data.success) {
+            alert(`Activity Summary for ${instanceUUID}:
+Total Events: ${data.summary.totalEvents}
+Average CPU: ${data.summary.avgCpuUsage}%
+Average Memory: ${data.summary.avgMemoryUsage}%
+Last Activity: ${data.summary.lastActivity ? new Date(data.summary.lastActivity).toLocaleString() : 'Never'}
+User Active: ${data.summary.isUserActive ? 'Yes' : 'No'}
+Activity Score: ${data.summary.currentScore}`);
+          } else {
+            console.error('Error loading activity:', data.error);
+            alert('Error loading activity history: ' + data.error);
+          }
+        } catch (error) {
+          console.error('Error fetching activity:', error);
+          alert('Error fetching activity history');
+        }
+      }
+
+      viewScreenshot = async (instanceUUID) => {
+        try {
+          const response = await fetch(`/service/screenshot/${instanceUUID}`);
+          const data = await response.json();
+          
+          if (data.success && data.screenshot) {
+            // Create a modal or new window to display the screenshot
+            const screenshotWindow = window.open('', '_blank', 'width=800,height=600');
+            screenshotWindow.document.write(`
+              <html>
+                <head><title>Screenshot - ${instanceUUID}</title></head>
+                <body style="margin:0;padding:20px;background:#f0f0f0;">
+                  <h3>Instance Screenshot</h3>
+                  <p><strong>Instance:</strong> ${instanceUUID}</p>
+                  <p><strong>Captured:</strong> ${data.screenshot.capturedAt ? new Date(data.screenshot.capturedAt).toLocaleString() : 'Unknown'}</p>
+                  <img src="data:image/png;base64,${data.screenshot.screenshot}" style="max-width:100%;border:1px solid #ccc;" />
+                </body>
+              </html>
+            `);
+          } else {
+            alert('No screenshot available for this instance');
+          }
+        } catch (error) {
+          console.error('Error fetching screenshot:', error);
+          alert('Error fetching screenshot');
+        }
+      }
+
+      cleanupInactiveInstances = async () => {
+        if (!confirm('This will automatically shutdown instances that have been inactive for 30+ minutes. Continue?')) {
+          return;
+        }
+
+        try {
+          const response = await fetch('/service/cleanup-inactive', { method: 'POST' });
+          const data = await response.json();
+          
+          if (data.success) {
+            alert(`Cleanup completed: ${data.shutdownCount} instances shut down`);
+            this.fetchInstances(); // Refresh the list
+          } else {
+            alert('Error during cleanup: ' + data.error);
+          }
+        } catch (error) {
+          console.error('Error during cleanup:', error);
+          alert('Error during cleanup');
+        }
+      }
+
       render() {
         const { instances, isLoading, error, selectedInstance, instanceDetails, detailsLoading, filters, showFilters } = this.state;
         const filteredInstances = this.getFilteredInstances();
@@ -410,7 +482,21 @@ class ViPERInstanceList extends React.Component {
                                 <small className="text-muted"><strong>Username: </strong>abc</small><br/>
                                 <small className="text-muted"><strong>Password: </strong>{instance.kasmvncPassword}</small><br/>
                                 <small className="text-muted"><strong>Created At: </strong>{new Date(instance.createdAt).toLocaleString()}</small><br/>
-                                <small className="text-muted"><strong>Owner: </strong>{this.formatOwnerInfo(instance)}</small>
+                                <small className="text-muted"><strong>Owner: </strong>{this.formatOwnerInfo(instance)}</small><br/>
+                                {instance.lastActivity && (
+                                  <small className="text-muted"><strong>Last Activity: </strong>{new Date(instance.lastActivity).toLocaleString()}</small>
+                                )}<br/>
+                                {instance.isUserActive !== undefined && (
+                                  <small className="text-muted">
+                                    <strong>Status: </strong>
+                                    <span className={instance.isUserActive ? 'text-success' : 'text-warning'}>
+                                      {instance.isUserActive ? '🟢 Active User' : '🟡 Inactive'}
+                                    </span>
+                                  </small>
+                                )}<br/>
+                                {instance.activityScore !== undefined && (
+                                  <small className="text-muted"><strong>Activity Score: </strong>{instance.activityScore}</small>
+                                )}
                                 </p>
                 
                 <div className="instance-buttons">
@@ -427,6 +513,22 @@ class ViPERInstanceList extends React.Component {
                       onClick={() => this.showInstanceDetails(instance)}
                     >
                       <i className="fas fa-info-circle"></i> Details
+                    </button>
+                  )}
+                  {this.isAdmin() && (
+                    <button 
+                      className="btn btn-success btn-sm" 
+                      onClick={() => this.loadActivityHistory(instance.uuid)}
+                    >
+                      <i className="fas fa-chart-line"></i> Activity
+                    </button>
+                  )}
+                  {this.isAdmin() && instance.lastScreenshot && (
+                    <button 
+                      className="btn btn-secondary btn-sm" 
+                      onClick={() => this.viewScreenshot(instance.uuid)}
+                    >
+                      <i className="fas fa-camera"></i> Screenshot
                     </button>
                   )}
                   <button 
@@ -447,6 +549,23 @@ class ViPERInstanceList extends React.Component {
                 ))}
               </tbody>
             </table>
+
+            {/* Admin Cleanup Controls */}
+            {this.isAdmin() && (
+              <div className="alert alert-warning mt-4">
+                <h5><i className="fas fa-tools"></i> Admin Controls</h5>
+                <p>Use these controls to manage inactive instances automatically.</p>
+                <button 
+                  className="btn btn-warning"
+                  onClick={this.cleanupInactiveInstances}
+                >
+                  <i className="fas fa-broom"></i> Cleanup Inactive Instances
+                </button>
+                <small className="form-text text-muted mt-2">
+                  This will automatically shutdown instances that have been inactive for 30+ minutes.
+                </small>
+              </div>
+            )}
           </div>
         );
       }

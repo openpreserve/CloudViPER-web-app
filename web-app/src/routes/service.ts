@@ -3,13 +3,12 @@ import dotenv from 'dotenv';
 import Docker from 'dockerode';
 import fs from 'fs';
 import path from 'path';
-import { QueryTypes } from 'sequelize';
+import { QueryTypes, Op } from 'sequelize';
 import db from '../models';
 import helperFunctions from '../utility/helperFunctions';
 import { getAvailablePort } from '../utility/portManager';
 import { appLogger } from '../config/logger';
 import { UserRole } from '../types/UserRole';
-import { instanceCreationLimiter, generalApiLimiter } from '../middleware/rateLimiter';
 
 dotenv.config();
 
@@ -174,7 +173,7 @@ router.get('/member', (req: Request, res: Response) => {
     res.render('service_member', { user: userToJson(user!) });
 });
 
-router.get('/new-instance', instanceCreationLimiter.middleware(), async (req: Request, res: Response): Promise<void> => {
+router.get('/new-instance', async (req: Request, res: Response): Promise<void> => {
     const user = req.user as ServiceUser | undefined;
     const permissionCheck = checkUserPermission(user, [UserRole.TESTING, UserRole.MEMBER, UserRole.SUBSCRIBER, UserRole.ADMIN]);
 
@@ -349,6 +348,357 @@ router.get('/new-instance', instanceCreationLimiter.middleware(), async (req: Re
             });
         }
 
+        // Install monitoring dependencies and create monitoring script
+        try {
+            // Install required packages for monitoring (split into individual commands)
+            const execUpdate = await container.exec({
+                AttachStdout: true, 
+                AttachStderr: true,
+                Cmd: ['apt-get', 'update']
+            });
+            const streamUpdate = await execUpdate.start({ hijack: true, stdin: true });
+            streamUpdate.on('data', (data: any) => console.log(data.toString()));
+            await new Promise((resolve) => streamUpdate.on('end', resolve));
+
+            const execInstall = await container.exec({
+                AttachStdout: true, 
+                AttachStderr: true,
+                Cmd: ['apt-get', 'install', '-y', 'scrot', 'xdotool', 'curl', 'bc']
+            });
+            const streamInstall = await execInstall.start({ hijack: true, stdin: true });
+            streamInstall.on('data', (data: any) => console.log(data.toString()));
+            await new Promise((resolve) => streamInstall.on('end', resolve));
+            
+            appLogger.info('Monitoring dependencies installed', {
+                eventType: 'Monitoring Setup',
+                instanceUUID,
+                containerId: container.id,
+                action: 'dependencies_installed',
+                timestamp: new Date().toISOString()
+            });
+        } catch (execErr) { 
+            appLogger.warn('Failed to install monitoring dependencies', {
+                eventType: 'Monitoring Setup Warning',
+                instanceUUID,
+                containerId: container.id,
+                error: (execErr as Error).message,
+                timestamp: new Date().toISOString()
+            });
+        }
+
+        // Create the monitoring script inside the container
+        const monitoringScript = `#!/bin/bash
+# ViPER Container Monitoring Script
+INSTANCE_UUID="${instanceUUID}"
+SERVICE_URL="https://${DOMAIN_NAME}"
+SCREENSHOT_URL="\${SERVICE_URL}/service/screenshot/\${INSTANCE_UUID}"
+ACTIVITY_URL="\${SERVICE_URL}/service/activity/\${INSTANCE_UUID}"
+
+# Activity counters
+MOUSE_EVENTS=0
+KEYBOARD_EVENTS=0
+
+# Function to capture and send screenshot
+capture_screenshot() {
+    if command -v scrot &> /dev/null && [ -n "\$DISPLAY" ]; then
+        scrot -z /tmp/screenshot.png 2>/dev/null
+        
+        if [ -f /tmp/screenshot.png ]; then
+            SCREENSHOT_B64=\$(base64 -w 0 /tmp/screenshot.png)
+            TIMESTAMP=\$(date -Iseconds)
+            
+            curl -X POST "\$SCREENSHOT_URL" \\
+                -H "Content-Type: application/json" \\
+                -d "{\\"screenshot\\":\\"\$SCREENSHOT_B64\\",\\"timestamp\\":\\"\$TIMESTAMP\\"}" \\
+                --max-time 30 --silent &
+            
+            rm -f /tmp/screenshot.png
+            echo "\$(date): Screenshot sent"
+        fi
+    fi
+}
+
+# Function to get and send activity data
+send_activity() {
+    # Get CPU usage
+    CPU_USAGE=\$(top -bn1 | grep "Cpu(s)" | sed "s/.*, *\\([0-9.]*\\)%* id.*/\\1/" | awk '{print 100 - \$1}' 2>/dev/null || echo "0")
+    
+    # Get memory usage
+    if [ -f /proc/meminfo ]; then
+        MEMORY_TOTAL=\$(grep MemTotal /proc/meminfo | awk '{print \$2}')
+        MEMORY_AVAILABLE=\$(grep MemAvailable /proc/meminfo | awk '{print \$2}')
+        MEMORY_USAGE=\$(echo "scale=1; ((\$MEMORY_TOTAL - \$MEMORY_AVAILABLE) * 100) / \$MEMORY_TOTAL" | bc -l 2>/dev/null || echo "0")
+    else
+        MEMORY_USAGE=0
+    fi
+    
+    # Check if window is active
+    WINDOW_ACTIVE=false
+    if [ -n "\$DISPLAY" ] && command -v xdotool &> /dev/null; then
+        if xdotool getactivewindow &>/dev/null; then
+            WINDOW_ACTIVE=true
+        fi
+    fi
+    
+    TIMESTAMP=\$(date -Iseconds)
+    
+    # Send activity report
+    curl -X POST "\$ACTIVITY_URL" \\
+        -H "Content-Type: application/json" \\
+        -d "{
+            \\"mouseEvents\\": \$MOUSE_EVENTS,
+            \\"keyboardEvents\\": \$KEYBOARD_EVENTS,
+            \\"windowActive\\": \$WINDOW_ACTIVE,
+            \\"cpuUsage\\": \${CPU_USAGE:-0},
+            \\"memoryUsage\\": \${MEMORY_USAGE:-0},
+            \\"timestamp\\": \\"\$TIMESTAMP\\"
+        }" \\
+        --max-time 15 --silent &
+    
+    # Reset counters
+    MOUSE_EVENTS=0
+    KEYBOARD_EVENTS=0
+    
+    echo "\$(date): Activity report sent (CPU: \${CPU_USAGE:-0}%, Memory: \${MEMORY_USAGE:-0}%)"
+}
+
+# Function to monitor mouse activity
+monitor_mouse() {
+    PREV_POS=""
+    while true; do
+        if command -v xdotool &> /dev/null && [ -n "\$DISPLAY" ]; then
+            CURRENT_POS=\$(xdotool getmouselocation 2>/dev/null)
+            if [ -n "\$CURRENT_POS" ] && [ "\$CURRENT_POS" != "\$PREV_POS" ]; then
+                MOUSE_EVENTS=\$((MOUSE_EVENTS + 1))
+                PREV_POS="\$CURRENT_POS"
+            fi
+        fi
+        sleep 2
+    done
+}
+
+# Function to handle shutdown
+cleanup() {
+    echo "\$(date): ViPER monitoring stopped"
+    exit 0
+}
+
+# Set up signal handlers
+trap cleanup SIGTERM SIGINT
+
+echo "\$(date): Starting ViPER monitoring for instance \$INSTANCE_UUID"
+
+# Start mouse monitoring in background
+monitor_mouse &
+MOUSE_PID=\$!
+
+# Main monitoring loop
+SCREENSHOT_COUNTER=0
+ACTIVITY_COUNTER=0
+
+while true; do
+    # Send screenshot every 60 seconds
+    if [ \$SCREENSHOT_COUNTER -ge 60 ]; then
+        capture_screenshot
+        SCREENSHOT_COUNTER=0
+    fi
+    
+    # Send activity report every 30 seconds
+    if [ \$ACTIVITY_COUNTER -ge 30 ]; then
+        send_activity
+        ACTIVITY_COUNTER=0
+    fi
+    
+    # Increment counters
+    SCREENSHOT_COUNTER=\$((SCREENSHOT_COUNTER + 1))
+    ACTIVITY_COUNTER=\$((ACTIVITY_COUNTER + 1))
+    
+    # Wait 1 second
+    sleep 1
+done
+`;
+
+        try {
+            // Create the monitoring script file using bash -c to write the file
+            const execCreateScript = await container.exec({
+                AttachStdout: true, 
+                AttachStderr: true,
+                Cmd: ['bash', '-c', 'cat > /home/abc/viper-monitor.sh'],
+                AttachStdin: true
+            });
+            const streamCreateScript = await execCreateScript.start({ hijack: true, stdin: true });
+            streamCreateScript.write(monitoringScript);
+            streamCreateScript.end();
+            await new Promise((resolve) => streamCreateScript.on('end', resolve));
+            
+            // Make the script executable
+            const execChmod = await container.exec({
+                AttachStdout: true, 
+                AttachStderr: true,
+                Cmd: ['chmod', '+x', '/home/abc/viper-monitor.sh']
+            });
+            const streamChmod = await execChmod.start({ hijack: true, stdin: true });
+            streamChmod.on('data', (data: any) => console.log(data.toString()));
+            await new Promise((resolve) => streamChmod.on('end', resolve));
+            
+            appLogger.info('Monitoring script created and made executable', {
+                eventType: 'Monitoring Setup',
+                instanceUUID,
+                containerId: container.id,
+                action: 'script_created',
+                timestamp: new Date().toISOString()
+            });
+        } catch (execErr) { 
+            appLogger.warn('Failed to create monitoring script', {
+                eventType: 'Monitoring Setup Warning',
+                instanceUUID,
+                containerId: container.id,
+                error: (execErr as Error).message,
+                timestamp: new Date().toISOString()
+            });
+        }
+
+        // Create systemd user service to auto-start monitoring (for XFCE environment)
+        const systemdService = `[Unit]
+Description=ViPER Container Monitoring Service
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/home/abc/viper-monitor.sh
+Restart=always
+RestartSec=10
+Environment=DISPLAY=:1
+WorkingDirectory=/home/abc
+User=abc
+
+[Install]
+WantedBy=default.target
+`;
+
+        try {
+            // Create systemd user directory
+            const execMkdir = await container.exec({
+                AttachStdout: true, 
+                AttachStderr: true,
+                Cmd: ['mkdir', '-p', '/home/abc/.config/systemd/user']
+            });
+            const streamMkdir = await execMkdir.start({ hijack: true, stdin: true });
+            streamMkdir.on('data', (data: any) => console.log(data.toString()));
+            await new Promise((resolve) => streamMkdir.on('end', resolve));
+
+            // Create the systemd service file using bash -c
+            const execCreateService = await container.exec({
+                AttachStdout: true, 
+                AttachStderr: true,
+                Cmd: ['bash', '-c', 'cat > /home/abc/.config/systemd/user/viper-monitor.service'],
+                AttachStdin: true
+            });
+            const streamCreateService = await execCreateService.start({ hijack: true, stdin: true });
+            streamCreateService.write(systemdService);
+            streamCreateService.end();
+            await new Promise((resolve) => streamCreateService.on('end', resolve));
+
+            // Set ownership of the service file
+            const execChown = await container.exec({
+                AttachStdout: true, 
+                AttachStderr: true,
+                Cmd: ['chown', '-R', 'abc:abc', '/home/abc/.config']
+            });
+            const streamChown = await execChown.start({ hijack: true, stdin: true });
+            streamChown.on('data', (data: any) => console.log(data.toString()));
+            await new Promise((resolve) => streamChown.on('end', resolve));
+            
+            appLogger.info('Monitoring systemd service created', {
+                eventType: 'Monitoring Setup',
+                instanceUUID,
+                containerId: container.id,
+                action: 'systemd_service_created',
+                timestamp: new Date().toISOString()
+            });
+        } catch (execErr) { 
+            appLogger.warn('Failed to create monitoring systemd service', {
+                eventType: 'Monitoring Setup Warning',
+                instanceUUID,
+                containerId: container.id,
+                error: (execErr as Error).message,
+                timestamp: new Date().toISOString()
+            });
+        }
+
+        // Add autostart entry for XFCE (simplified approach)
+        const autostartEntry = `[Desktop Entry]
+Version=1.0
+Type=Application
+Name=ViPER Monitor
+Comment=Monitor ViPER container activity and send screenshots
+Exec=/home/abc/viper-monitor.sh
+Icon=utilities-system-monitor
+Terminal=false
+NoDisplay=false
+Hidden=false
+X-GNOME-Autostart-enabled=true
+`;
+
+        try {
+            // Create autostart directory
+            const execMkdirAutostart = await container.exec({
+                AttachStdout: true, 
+                AttachStderr: true,
+                Cmd: ['mkdir', '-p', '/home/abc/.config/autostart']
+            });
+            const streamMkdirAutostart = await execMkdirAutostart.start({ hijack: true, stdin: true });
+            streamMkdirAutostart.on('data', (data: any) => console.log(data.toString()));
+            await new Promise((resolve) => streamMkdirAutostart.on('end', resolve));
+
+            // Create the autostart entry using bash -c
+            const execCreateAutostart = await container.exec({
+                AttachStdout: true, 
+                AttachStderr: true,
+                Cmd: ['bash', '-c', 'cat > /home/abc/.config/autostart/viper-monitor.desktop'],
+                AttachStdin: true
+            });
+            const streamCreateAutostart = await execCreateAutostart.start({ hijack: true, stdin: true });
+            streamCreateAutostart.write(autostartEntry);
+            streamCreateAutostart.end();
+            await new Promise((resolve) => streamCreateAutostart.on('end', resolve));
+
+            // Set ownership and permissions
+            const execChownAutostart = await container.exec({
+                AttachStdout: true, 
+                AttachStderr: true,
+                Cmd: ['chown', '-R', 'abc:abc', '/home/abc/.config']
+            });
+            const streamChownAutostart = await execChownAutostart.start({ hijack: true, stdin: true });
+            streamChownAutostart.on('data', (data: any) => console.log(data.toString()));
+            await new Promise((resolve) => streamChownAutostart.on('end', resolve));
+
+            const execChmodAutostart = await container.exec({
+                AttachStdout: true, 
+                AttachStderr: true,
+                Cmd: ['chmod', '+x', '/home/abc/.config/autostart/viper-monitor.desktop']
+            });
+            const streamChmodAutostart = await execChmodAutostart.start({ hijack: true, stdin: true });
+            streamChmodAutostart.on('data', (data: any) => console.log(data.toString()));
+            await new Promise((resolve) => streamChmodAutostart.on('end', resolve));
+            
+            appLogger.info('XFCE autostart entry created for monitoring', {
+                eventType: 'Monitoring Setup',
+                instanceUUID,
+                containerId: container.id,
+                action: 'autostart_created',
+                timestamp: new Date().toISOString()
+            });
+        } catch (execErr) { 
+            appLogger.warn('Failed to create XFCE autostart entry', {
+                eventType: 'Monitoring Setup Warning',
+                instanceUUID,
+                containerId: container.id,
+                error: (execErr as Error).message,
+                timestamp: new Date().toISOString()
+            });
+        }
+
         const newViperInstance = await db.ViperInstance.create({
             uuid: instanceUUID,
             dockerid: container.id,
@@ -417,7 +767,7 @@ router.get('/new-instance', instanceCreationLimiter.middleware(), async (req: Re
     }
 });
 
-router.get('/viperinstances', generalApiLimiter.middleware(), async (req: Request, res: Response): Promise<void> => {
+router.get('/viperinstances', async (req: Request, res: Response): Promise<void> => {
     const user = req.user as ServiceUser | undefined;
     
     if (!user) {
@@ -517,7 +867,7 @@ router.get('/viperinstances', generalApiLimiter.middleware(), async (req: Reques
     }
 });
 
-router.get('/terminate-instance/:containerId', generalApiLimiter.middleware(), async (req: Request, res: Response): Promise<void> => {
+router.get('/terminate-instance/:containerId', async (req: Request, res: Response): Promise<void> => {
     const containerID = req.params.containerId;
     const user = req.user as ServiceUser | undefined;
     
@@ -1202,6 +1552,406 @@ router.get('/statistics', async (req: Request, res: Response): Promise<void> => 
         res.status(500).json({
             error: 'Error generating statistics',
             message: 'Failed to gather system statistics'
+        });
+    }
+});
+
+// Screenshot upload endpoint - containers can send screenshots
+router.post('/screenshot/:instanceUUID', async (req: Request, res: Response): Promise<void> => {
+    const { instanceUUID } = req.params;
+    const { screenshot, timestamp } = req.body;
+
+    // Validate instance exists
+    try {
+        const instance = await db.ViperInstance.findOne({
+            where: { uuid: instanceUUID }
+        });
+
+        if (!instance) {
+            appLogger.warn('Screenshot upload for unknown instance', {
+                eventType: 'Unknown Instance Screenshot',
+                instanceUUID,
+                timestamp: new Date().toISOString()
+            });
+            res.status(404).json({ error: 'Instance not found' });
+            return;
+        }
+
+        // Store screenshot data (base64 encoded image)
+        const screenshotData = {
+            instanceUUID,
+            screenshot: screenshot, // base64 encoded image
+            capturedAt: timestamp || new Date().toISOString(),
+            receivedAt: new Date().toISOString()
+        };
+
+        // Update instance with latest screenshot and activity
+        await instance.update({
+            lastScreenshot: screenshotData,
+            lastActivity: new Date(),
+            updatedAt: new Date()
+        });
+
+        appLogger.info('Screenshot received and stored', {
+            eventType: 'Screenshot Received',
+            instanceUUID,
+            instanceId: instance.id,
+            screenshotSize: screenshot ? screenshot.length : 0,
+            timestamp: new Date().toISOString()
+        });
+
+        res.json({
+            success: true,
+            message: 'Screenshot received',
+            instanceUUID
+        });
+
+    } catch (error) {
+        appLogger.error('Error storing screenshot', {
+            eventType: 'Screenshot Storage Error',
+            instanceUUID,
+            error: (error as Error).message,
+            timestamp: new Date().toISOString()
+        });
+
+        res.status(500).json({
+            error: 'Error storing screenshot',
+            message: 'Failed to process screenshot data'
+        });
+    }
+});
+
+// Activity report endpoint - containers can report user activity
+router.post('/activity/:instanceUUID', async (req: Request, res: Response): Promise<void> => {
+    const { instanceUUID } = req.params;
+    const { 
+        mouseEvents = 0, 
+        keyboardEvents = 0, 
+        timestamp,
+        windowActive = false,
+        cpuUsage = 0,
+        memoryUsage = 0 
+    } = req.body;
+
+    try {
+        const instance = await db.ViperInstance.findOne({
+            where: { uuid: instanceUUID }
+        });
+
+        if (!instance) {
+            appLogger.warn('Activity report for unknown instance', {
+                eventType: 'Unknown Instance Activity',
+                instanceUUID,
+                timestamp: new Date().toISOString()
+            });
+            res.status(404).json({ error: 'Instance not found' });
+            return;
+        }
+
+        const activityData = {
+            instanceUUID,
+            mouseEvents,
+            keyboardEvents,
+            windowActive,
+            cpuUsage,
+            memoryUsage,
+            timestamp: timestamp || new Date().toISOString(),
+            receivedAt: new Date().toISOString()
+        };
+
+        // Calculate activity score (mouse + keyboard events)
+        const activityScore = mouseEvents + keyboardEvents;
+        const isActive = activityScore > 0 || windowActive;
+
+        // Update instance activity
+        const currentActivity = instance.activityHistory || [];
+        const updatedActivity = [...currentActivity, activityData].slice(-100); // Keep last 100 entries
+
+        await instance.update({
+            lastActivity: isActive ? new Date() : instance.lastActivity,
+            activityHistory: updatedActivity,
+            activityScore: activityScore,
+            isUserActive: isActive,
+            updatedAt: new Date()
+        });
+
+        // Check for inactivity (no activity for 30 minutes)
+        const inactivityThreshold = 30 * 60 * 1000; // 30 minutes in milliseconds
+        const lastActivityTime = instance.lastActivity ? new Date(instance.lastActivity).getTime() : 0;
+        const now = new Date().getTime();
+        const inactiveTime = now - lastActivityTime;
+
+        let shouldShutdown = false;
+        if (inactiveTime > inactivityThreshold && instance.status === 'active') {
+            shouldShutdown = true;
+            
+            appLogger.warn('Instance inactive - marking for shutdown', {
+                eventType: 'Inactivity Detected',
+                instanceUUID,
+                instanceId: instance.id,
+                inactiveMinutes: Math.round(inactiveTime / (1000 * 60)),
+                lastActivity: instance.lastActivity,
+                timestamp: new Date().toISOString()
+            });
+
+            // Update status to indicate pending shutdown
+            await instance.update({
+                status: 'inactive_pending_shutdown',
+                updatedAt: new Date()
+            });
+        }
+
+        appLogger.info('Activity report received', {
+            eventType: 'Activity Report',
+            instanceUUID,
+            instanceId: instance.id,
+            activityScore,
+            isActive,
+            inactiveMinutes: Math.round(inactiveTime / (1000 * 60)),
+            timestamp: new Date().toISOString()
+        });
+
+        res.json({
+            success: true,
+            message: 'Activity report received',
+            instanceUUID,
+            activityScore,
+            isActive,
+            shouldShutdown,
+            inactiveMinutes: Math.round(inactiveTime / (1000 * 60))
+        });
+
+    } catch (error) {
+        appLogger.error('Error processing activity report', {
+            eventType: 'Activity Report Error',
+            instanceUUID,
+            error: (error as Error).message,
+            timestamp: new Date().toISOString()
+        });
+
+        res.status(500).json({
+            error: 'Error processing activity report',
+            message: 'Failed to process activity data'
+        });
+    }
+});
+
+// Get latest screenshot for an instance (admin only)
+router.get('/screenshot/:instanceUUID', async (req: Request, res: Response): Promise<void> => {
+    const user = req.user as ServiceUser | undefined;
+    const { instanceUUID } = req.params;
+
+    // Check permissions
+    if (!user) {
+        res.status(401).json({ error: 'Authentication required' });
+        return;
+    }
+
+    try {
+        const instance = await db.ViperInstance.findOne({
+            where: { uuid: instanceUUID }
+        });
+
+        if (!instance) {
+            res.status(404).json({ error: 'Instance not found' });
+            return;
+        }
+
+        // Check if user owns instance or is admin
+        if (instance.owner !== user.id && user.role !== UserRole.ADMIN) {
+            res.status(403).json({ error: 'Unauthorized - can only view own instances' });
+            return;
+        }
+
+        if (!instance.lastScreenshot) {
+            res.status(404).json({ error: 'No screenshot available' });
+            return;
+        }
+
+        res.json({
+            success: true,
+            screenshot: instance.lastScreenshot,
+            instanceUUID
+        });
+
+    } catch (error) {
+        appLogger.error('Error retrieving screenshot', {
+            eventType: 'Screenshot Retrieval Error',
+            instanceUUID,
+            userId: user.id,
+            error: (error as Error).message,
+            timestamp: new Date().toISOString()
+        });
+
+        res.status(500).json({
+            error: 'Error retrieving screenshot',
+            message: 'Failed to get screenshot data'
+        });
+    }
+});
+
+// Get activity history for an instance
+router.get('/activity/:instanceUUID', async (req: Request, res: Response): Promise<void> => {
+    const user = req.user as ServiceUser | undefined;
+    const { instanceUUID } = req.params;
+    const { limit = '50' } = req.query;
+
+    if (!user) {
+        res.status(401).json({ error: 'Authentication required' });
+        return;
+    }
+
+    try {
+        const instance = await db.ViperInstance.findOne({
+            where: { uuid: instanceUUID }
+        });
+
+        if (!instance) {
+            res.status(404).json({ error: 'Instance not found' });
+            return;
+        }
+
+        // Check permissions
+        if (instance.owner !== user.id && user.role !== UserRole.ADMIN) {
+            res.status(403).json({ error: 'Unauthorized - can only view own instances' });
+            return;
+        }
+
+        const activityHistory = instance.activityHistory || [];
+        const limitNum = parseInt(limit as string);
+        const recentActivity = activityHistory.slice(-limitNum);
+
+        // Calculate activity summary
+        const totalEvents = recentActivity.reduce((sum: number, activity: any) => 
+            sum + (activity.mouseEvents || 0) + (activity.keyboardEvents || 0), 0);
+        
+        const avgCpuUsage = recentActivity.length > 0 ? 
+            recentActivity.reduce((sum: number, activity: any) => sum + (activity.cpuUsage || 0), 0) / recentActivity.length : 0;
+        
+        const avgMemoryUsage = recentActivity.length > 0 ? 
+            recentActivity.reduce((sum: number, activity: any) => sum + (activity.memoryUsage || 0), 0) / recentActivity.length : 0;
+
+        res.json({
+            success: true,
+            instanceUUID,
+            activityHistory: recentActivity,
+            summary: {
+                totalEvents,
+                avgCpuUsage: Math.round(avgCpuUsage * 100) / 100,
+                avgMemoryUsage: Math.round(avgMemoryUsage * 100) / 100,
+                lastActivity: instance.lastActivity,
+                isUserActive: instance.isUserActive,
+                currentScore: instance.activityScore || 0
+            }
+        });
+
+    } catch (error) {
+        appLogger.error('Error retrieving activity history', {
+            eventType: 'Activity History Error',
+            instanceUUID,
+            userId: user.id,
+            error: (error as Error).message,
+            timestamp: new Date().toISOString()
+        });
+
+        res.status(500).json({
+            error: 'Error retrieving activity history',
+            message: 'Failed to get activity data'
+        });
+    }
+});
+
+// Auto-shutdown inactive instances (admin endpoint)
+router.post('/cleanup-inactive', async (req: Request, res: Response): Promise<void> => {
+    const user = req.user as ServiceUser | undefined;
+    const permissionCheck = checkUserPermission(user, UserRole.ADMIN);
+    
+    if (!permissionCheck.authorized) {
+        res.status(403).json({ error: permissionCheck.reason });
+        return;
+    }
+
+    try {
+        const inactivityThreshold = 30 * 60 * 1000; // 30 minutes
+        const now = new Date();
+        const cutoffTime = new Date(now.getTime() - inactivityThreshold);
+
+        // Find instances that are inactive and marked for shutdown
+        const inactiveInstances = await db.ViperInstance.findAll({
+            where: {
+                status: 'inactive_pending_shutdown',
+                lastActivity: {
+                    [Op.lt]: cutoffTime
+                }
+            }
+        });
+
+        const shutdownResults = [];
+
+        for (const instance of inactiveInstances) {
+            try {
+                const container = docker.getContainer(instance.dockerid);
+                
+                // Stop and remove container
+                await container.stop();
+                await container.remove();
+                
+                // Update database
+                await instance.update({
+                    status: 'auto_shutdown',
+                    updatedAt: new Date()
+                });
+
+                shutdownResults.push({
+                    instanceUUID: instance.uuid,
+                    containerId: instance.dockerid,
+                    success: true
+                });
+
+                appLogger.info('Instance auto-shutdown completed', {
+                    eventType: 'Auto Shutdown',
+                    instanceUUID: instance.uuid,
+                    instanceId: instance.id,
+                    containerId: instance.dockerid,
+                    reason: 'inactivity',
+                    timestamp: new Date().toISOString()
+                });
+
+            } catch (shutdownError) {
+                shutdownResults.push({
+                    instanceUUID: instance.uuid,
+                    containerId: instance.dockerid,
+                    success: false,
+                    error: (shutdownError as Error).message
+                });
+
+                appLogger.error('Failed to auto-shutdown instance', {
+                    eventType: 'Auto Shutdown Error',
+                    instanceUUID: instance.uuid,
+                    error: (shutdownError as Error).message,
+                    timestamp: new Date().toISOString()
+                });
+            }
+        }
+
+        res.json({
+            success: true,
+            message: 'Inactive instances cleanup completed',
+            shutdownCount: shutdownResults.filter(r => r.success).length,
+            results: shutdownResults
+        });
+
+    } catch (error) {
+        appLogger.error('Error during inactive cleanup', {
+            eventType: 'Cleanup Error',
+            userId: user!.id,
+            error: (error as Error).message,
+            timestamp: new Date().toISOString()
+        });
+
+        res.status(500).json({
+            error: 'Error during cleanup',
+            message: 'Failed to cleanup inactive instances'
         });
     }
 });

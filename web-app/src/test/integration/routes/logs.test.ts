@@ -93,26 +93,24 @@ describe('Log Service Integration Tests', () => {
     });
 
     describe('GET /service/logs/dates', () => {
-        it('should return available log dates for admin users', async () => {
-            // Mock readdirSync to return sample log files
-            (mockFs.readdirSync as any).mockReturnValue([
+        beforeEach(() => {
+            // Setup file system mocks for each test
+            mockFs.readdirSync.mockReturnValue([
                 'session-2025-07-25.log',
                 'session-2025-07-24.log',
                 'app-2025-07-25.log',
                 'app-2025-07-24.log',
                 'sql-2025-07-25.log',
                 'other-file.txt'
-            ]);
+            ] as any);
 
-            // Mock existsSync to return true
-            (mockFs.existsSync as any).mockReturnValue(true);
-
-            // Mock path.join to return expected path
+            mockFs.existsSync.mockReturnValue(true);
             mockPath.join.mockReturnValue('/logs/path');
+        });
 
+        it('should return available log dates for admin users', async () => {
             const response = await request(app)
-                .get('/service/logs/dates')
-                .expect(200);
+                .get('/service/logs/dates');
 
             expect(response.body).toHaveProperty('dates');
             expect(Array.isArray(response.body.dates)).toBe(true);

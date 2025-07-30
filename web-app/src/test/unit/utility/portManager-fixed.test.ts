@@ -37,15 +37,27 @@ describe('Port Manager Utility', () => {
         });
 
         it('should reject if no ports are available in range', async () => {
-            // Test with a restricted port that's likely to be in use or restricted
-            // Port 1 is typically restricted and not available for user applications
+            // Create multiple servers to occupy a small range of ports
+            const testServers: net.Server[] = [];
+            const startPort = 60000;
+            const endPort = 60002;
+            
             try {
-                await getAvailablePort(1, 1);
-                // If it somehow succeeds, that's also valid behavior
-                expect(true).toBe(true);
-            } catch (error: any) {
-                // Should either be permission denied or no ports available
-                expect(error.message).toMatch(/(?:No available ports found|EACCES|permission denied)/i);
+                // Occupy all ports in the range
+                for (let port = startPort; port <= endPort; port++) {
+                    const server = net.createServer();
+                    await new Promise<void>((resolve, reject) => {
+                        server.listen(port, '127.0.0.1', () => resolve());
+                        server.on('error', reject);
+                    });
+                    testServers.push(server);
+                }
+                
+                // Now test should fail since all ports are occupied
+                await expect(getAvailablePort(startPort, endPort)).rejects.toThrow(`No available ports found between ${startPort} and ${endPort}`);
+            } finally {
+                // Clean up all test servers
+                testServers.forEach(server => server.close());
             }
         });
     });

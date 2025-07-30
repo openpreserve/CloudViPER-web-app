@@ -1,9 +1,6 @@
 import request from 'supertest';
 import express from 'express';
 import session from 'express-session';
-import db from '../../../models';
-import helperFunctions from '../../../utility/helperFunctions';
-import * as portManager from '../../../utility/portManager';
 import { UserRole } from '../../../types/UserRole';
 
 // Mock the container object returned by docker operations
@@ -22,17 +19,45 @@ const mockDockerInstance = {
     getContainer: jest.fn()
 };
 
-// Mock dockerode at the module level before service router is imported
+// Set up module mocks with isolated module registry
 jest.mock('dockerode', () => {
     return jest.fn().mockImplementation(() => mockDockerInstance);
 });
 
-// Mock other dependencies
-jest.mock('../../../utility/helperFunctions');
-jest.mock('../../../utility/portManager');
-jest.mock('../../../models');
+jest.mock('../../../utility/helperFunctions', () => ({
+    generateRandomString: jest.fn()
+}));
 
-// Now import the service router after mocking dependencies
+jest.mock('../../../utility/portManager', () => ({
+    getAvailablePort: jest.fn()
+}));
+
+jest.mock('../../../models', () => ({
+    ViperInstance: {
+        create: jest.fn(),
+        findAll: jest.fn(),
+        findOne: jest.fn(),
+        count: jest.fn(),
+        destroy: jest.fn()
+    },
+    Log: {
+        create: jest.fn()
+    },
+    User: {
+        findByPk: jest.fn(),
+        findOne: jest.fn(),
+        findAll: jest.fn()
+    },
+    sequelize: {
+        sync: jest.fn().mockResolvedValue(undefined),
+        close: jest.fn().mockResolvedValue(undefined)
+    }
+}));
+
+// Import after mocking
+import db from '../../../models';
+import helperFunctions from '../../../utility/helperFunctions';
+import * as portManager from '../../../utility/portManager';
 import serviceRouter from '../../../routes/service';
 
 const mockedHelperFunctions = helperFunctions as jest.Mocked<typeof helperFunctions>;
@@ -134,22 +159,17 @@ describe('Service Routes', () => {
         mockedPortManager.getAvailablePort.mockResolvedValue(3001);
         
         // Mock database models with default implementations
-        db.ViperInstance = {
-            create: jest.fn().mockResolvedValue(createMockViperInstance()),
-            findAll: jest.fn().mockResolvedValue([]),
-            findOne: jest.fn().mockResolvedValue(null),
-            destroy: jest.fn().mockResolvedValue(1)
-        } as any;
+        (db.ViperInstance.create as jest.Mock).mockResolvedValue(createMockViperInstance());
+        (db.ViperInstance.findAll as jest.Mock).mockResolvedValue([]);
+        (db.ViperInstance.findOne as jest.Mock).mockResolvedValue(null);
+        (db.ViperInstance.count as jest.Mock).mockResolvedValue(0);
+        (db.ViperInstance.destroy as jest.Mock).mockResolvedValue(1);
 
-        db.Log = {
-            create: jest.fn().mockResolvedValue({})
-        } as any;
+        (db.Log.create as jest.Mock).mockResolvedValue({});
 
-        db.User = {
-            findByPk: jest.fn().mockResolvedValue(null),
-            findOne: jest.fn().mockResolvedValue(null),
-            findAll: jest.fn().mockResolvedValue([])
-        } as any;
+        (db.User.findByPk as jest.Mock).mockResolvedValue(null);
+        (db.User.findOne as jest.Mock).mockResolvedValue(null);
+        (db.User.findAll as jest.Mock).mockResolvedValue([]);
     };
 
     // Helper functions for common test patterns
@@ -177,11 +197,14 @@ describe('Service Routes', () => {
     };
 
     beforeAll(async () => {
-        // Sync database for tests
-        await db.sequelize.sync({ force: true });
+        // Mock database setup - no real database needed
     });
 
     beforeEach(() => {
+        // Clear all mocks to prevent interference between tests
+        jest.clearAllMocks();
+        
+        // Reset all mock implementations to default state
         setupCommonMocks();
         
         // Setup Docker mocks
@@ -217,13 +240,16 @@ describe('Service Routes', () => {
         // Setup Docker instance mocks
         mockDockerInstance.createContainer.mockResolvedValue(mockContainer);
         mockDockerInstance.getContainer.mockReturnValue(mockContainer);
+    });
 
-        // Clear all mocks
+    afterEach(() => {
+        // Clean up any lingering state
         jest.clearAllMocks();
     });
 
     afterAll(async () => {
-        await db.sequelize.close();
+        // Clean up mocks
+        jest.clearAllMocks();
     });
 
     describe('GET /', () => {
@@ -294,11 +320,10 @@ describe('Service Routes', () => {
             expect(response.status).toBe(200);
         });
 
-        it('should redirect non-testing users', async () => {
+        it('should allow admin users to access testing page', async () => {
             const testApp = createTestApp({ id: 1, username: 'admin', email: 'admin@test.com', role: UserRole.ADMIN });
             const response = await request(testApp).get('/service/testing');
-            expect(response.status).toBe(302);
-            expect(response.headers.location).toBe('/service');
+            expect(response.status).toBe(200);
         });
     });
 
@@ -310,11 +335,10 @@ describe('Service Routes', () => {
             expect(response.status).toBe(200);
         });
 
-        it('should redirect non-member users', async () => {
+        it('should allow admin users to access member page', async () => {
             const testApp = createTestApp({ id: 1, username: 'admin', email: 'admin@test.com', role: UserRole.ADMIN });
             const response = await request(testApp).get('/service/member');
-            expect(response.status).toBe(302);
-            expect(response.headers.location).toBe('/service');
+            expect(response.status).toBe(200);
         });
     });
 
@@ -342,10 +366,13 @@ describe('Service Routes', () => {
             
             expect(response.status).toBe(200);
             expect(response.body).toEqual({
+                success: true,
+                message: "ViPER instance created successfully",
                 container: {
                     id: 'test-container-id',
                     uuid: 'mock-random-string',
-                    url: 'mock-random-string.localhost'
+                    url: 'mock-random-string.localhost',
+                    status: "created"
                 }
             });
 
@@ -371,16 +398,16 @@ describe('Service Routes', () => {
         it('should reject user role', async () => {
             const testApp = createTestApp({ id: 4, username: 'user', email: 'user@test.com', role: UserRole.USER });
             const response = await request(testApp).get('/service/new-instance');
-            expect(response.status).toBe(200);
-            expect(response.body).toEqual({ "error": "Authentication" });
+            expect(response.status).toBe(403);
+            expect(response.body).toEqual({ "error": "Insufficient permissions" });
             expect(mockDockerInstance.createContainer).not.toHaveBeenCalled();
         });
 
         it('should reject unauthenticated users', async () => {
             const testApp = createTestApp(); // No user
             const response = await request(testApp).get('/service/new-instance');
-            expect(response.status).toBe(200);
-            expect(response.body).toEqual({ "error": "Authentication" });
+            expect(response.status).toBe(403);
+            expect(response.body).toEqual({ "error": "Insufficient permissions" });
         });
 
         it('should handle Docker errors', async () => {
@@ -395,7 +422,10 @@ describe('Service Routes', () => {
             const response = await request(testApp).get('/service/new-instance');
             
             expect(response.status).toBe(500);
-            expect(response.body).toEqual({ error: 'Error creating or starting container' });
+            expect(response.body).toEqual({ 
+                error: 'Error creating or starting container',
+                message: "An error occurred while creating your ViPER instance. Please try again or contact support."
+            });
             expect(db.Log.create).toHaveBeenCalledWith({
                 eventType: 'Error',
                 message: 'Error creating or starting container',
@@ -410,46 +440,78 @@ describe('Service Routes', () => {
         it('should return all instances for admin', async () => {
             const testApp = createTestApp({ id: 1, username: 'admin', email: 'admin@test.com', role: UserRole.ADMIN });
 
-            const mockInstances = [
-                { id: 1, uuid: 'test1', owner: 1 },
-                { id: 2, uuid: 'test2', owner: 2 }
+            const mockInstanceData = [
+                { id: 1, uuid: 'test1', owner: 1, createdAt: new Date() },
+                { id: 2, uuid: 'test2', owner: 2, createdAt: new Date() }
             ];
 
+            // Mock instances with toJSON method like real Sequelize models
+            const mockInstances = mockInstanceData.map(data => ({
+                ...data,
+                toJSON: () => data
+            }));
+
             (db.ViperInstance.findAll as jest.Mock).mockResolvedValue(mockInstances);
+            (db.ViperInstance.count as jest.Mock).mockResolvedValue(2);
 
             const response = await request(testApp).get('/service/viperinstances');
             
             expect(response.status).toBe(200);
-            expect(response.body).toEqual(mockInstances);
+            expect(response.body).toHaveProperty('instances');
+            expect(response.body).toHaveProperty('total', 2);
+            expect(response.body).toHaveProperty('userRole', 'admin');
+            expect(response.body).toHaveProperty('canCreateNew', true);
+            expect(response.body.instances).toHaveLength(2);
+            expect(response.body.instances[0]).toHaveProperty('id', 1);
+            expect(response.body.instances[0]).toHaveProperty('uuid', 'test1');
+            expect(response.body.instances[0]).toHaveProperty('operationalHours');
+            expect(response.body.instances[0]).toHaveProperty('canTerminate');
             expect(db.ViperInstance.findAll).toHaveBeenCalledWith({
                 include: [{
                     model: db.User,
                     as: 'ownerUser',
                     attributes: ['id', 'username', 'email', 'firstName', 'lastName']
-                }]
+                }],
+                order: [['createdAt', 'DESC']]
             });
         });
 
         it('should return user instances for non-admin, non-user roles', async () => {
             const testApp = createTestApp({ id: 2, username: 'member', email: 'member@test.com', role: UserRole.MEMBER });
 
-            const userInstances = [
-                { id: 1, uuid: 'test1', owner: 2 }
+            const userInstanceData = [
+                { id: 1, uuid: 'test1', owner: 2, createdAt: new Date() }
             ];
 
+            // Mock instances with toJSON method like real Sequelize models
+            const userInstances = userInstanceData.map(data => ({
+                ...data,
+                toJSON: () => data
+            }));
+
             (db.ViperInstance.findAll as jest.Mock).mockResolvedValue(userInstances);
+            (db.ViperInstance.count as jest.Mock).mockResolvedValue(1); // User at their limit (MEMBER role has limit of 1)
 
             const response = await request(testApp).get('/service/viperinstances');
             
             expect(response.status).toBe(200);
-            expect(response.body).toEqual(userInstances);
+            expect(response.body).toHaveProperty('instances');
+            expect(response.body).toHaveProperty('total', 1);
+            expect(response.body).toHaveProperty('userRole', 'member');
+            expect(response.body).toHaveProperty('canCreateNew', false); // MEMBER role limit is 1, user already has 1
+            expect(response.body.instances).toHaveLength(1);
+            expect(response.body.instances[0]).toHaveProperty('id', 1);
+            expect(response.body.instances[0]).toHaveProperty('uuid', 'test1');
+            expect(response.body.instances[0]).toHaveProperty('operationalHours');
+            expect(response.body.instances[0]).toHaveProperty('canTerminate');
             expect(db.ViperInstance.findAll).toHaveBeenCalledWith({
                 where: { owner: 2 },
                 include: [{
                     model: db.User,
                     as: 'ownerUser',
                     attributes: ['id', 'username', 'email', 'firstName', 'lastName']
-                }]
+                }],
+                order: [['createdAt', 'DESC']]
             });
         });
 
@@ -458,15 +520,15 @@ describe('Service Routes', () => {
             const response = await request(testApp).get('/service/viperinstances');
             
             expect(response.status).toBe(403);
-            expect(response.body).toEqual({ message: 'Error 4' });
+            expect(response.body).toEqual({ error: 'Insufficient permissions. Required: testing or member or subscriber' });
         });
 
-        it('should return 403 for unauthenticated users', async () => {
+        it('should return 401 for unauthenticated users', async () => {
             const testApp = createTestApp(); // No user
             const response = await request(testApp).get('/service/viperinstances');
             
-            expect(response.status).toBe(403);
-            expect(response.body).toEqual({ message: 'Error 4' });
+            expect(response.status).toBe(401);
+            expect(response.body).toEqual({ error: 'Authentication required' });
         });
 
         it('should handle database errors for admin', async () => {
@@ -478,7 +540,7 @@ describe('Service Routes', () => {
             const response = await request(testApp).get('/service/viperinstances');
             
             expect(response.status).toBe(500);
-            expect(response.body.message).toBe('Error retrieving viper instances');
+            expect(response.body.message).toBe('Failed to load instance list. Please try again.');
             expect(response.body.error).toBeDefined(); // Error objects get serialized differently
         });
 
@@ -491,26 +553,37 @@ describe('Service Routes', () => {
             const response = await request(testApp).get('/service/viperinstances');
             
             expect(response.status).toBe(500);
-            expect(response.body.message).toBe('Error retrieving viper instances');
+            expect(response.body.message).toBe('Failed to load instance list. Please try again.');
             expect(response.body.error).toBeDefined(); // Error objects get serialized differently
         });
     });
 
     describe('GET /terminate-instance/:containerId', () => {
         beforeEach(() => {
+            // Mock instance lookup
+            (db.ViperInstance.findOne as jest.Mock) = jest.fn().mockResolvedValue({
+                dockerid: 'test-container-id',
+                owner: 1, // matches admin user id
+                uuid: 'test-uuid'
+            });
             // Mock destroy method
             (db.ViperInstance.destroy as jest.Mock) = jest.fn().mockResolvedValue(1);
         });
 
         it('should successfully terminate container', async () => {
-            const testApp = createTestApp(); // No authentication required for this endpoint
+            const testApp = createTestApp({ id: 1, username: 'admin', email: 'admin@test.com', role: UserRole.ADMIN });
 
             const response = await request(testApp).get('/service/terminate-instance/test-container-id');
             
             expect(response.status).toBe(200);
             expect(response.body).toEqual({
-                REMOVE: { 'Container removed': 'removed' },
-                DATABASE: { 'Entry Removed': 'test-container-id' }
+                success: true,
+                message: "Instance terminated successfully",
+                details: {
+                    STOP: { message: "Container stopped successfully" },
+                    REMOVE: { message: "Container removed successfully" },
+                    DATABASE: { message: "Database entry removed successfully" }
+                }
             });
 
             expect(mockDockerInstance.getContainer).toHaveBeenCalledWith('test-container-id');
@@ -526,11 +599,11 @@ describe('Service Routes', () => {
                 callback(new Error('Stop failed'), null);
             });
 
-            const testApp = createTestApp();
+            const testApp = createTestApp({ id: 1, username: 'admin', email: 'admin@test.com', role: UserRole.ADMIN });
             const response = await request(testApp).get('/service/terminate-instance/test-container-id');
             
             expect(response.status).toBe(200);
-            expect(response.body['STOP-ERROR']).toBeDefined();
+            expect(response.body.details['STOP-ERROR']).toBeDefined();
         }, 10000);
 
         it('should handle container remove error', async () => {
@@ -538,17 +611,17 @@ describe('Service Routes', () => {
                 callback(new Error('Remove failed'), null);
             });
 
-            const testApp = createTestApp();
+            const testApp = createTestApp({ id: 1, username: 'admin', email: 'admin@test.com', role: UserRole.ADMIN });
             const response = await request(testApp).get('/service/terminate-instance/test-container-id');
             
             expect(response.status).toBe(200);
-            expect(response.body['REMOVE-ERROR']).toBeDefined();
+            expect(response.body.details['REMOVE-ERROR']).toBeDefined();
         }, 10000);
 
         it('should handle instance not found in database', async () => {
             (db.ViperInstance.destroy as jest.Mock).mockResolvedValue(0); // 0 rows affected means not found
 
-            const testApp = createTestApp();
+            const testApp = createTestApp({ id: 1, username: 'admin', email: 'admin@test.com', role: UserRole.ADMIN });
             const response = await request(testApp).get('/service/terminate-instance/test-container-id');
             
             expect(response.status).toBe(200);
@@ -556,8 +629,13 @@ describe('Service Routes', () => {
             expect(mockContainer.stop).toHaveBeenCalled();
             expect(mockContainer.remove).toHaveBeenCalled();
             expect(response.body).toEqual({
-                REMOVE: { 'Container removed': 'removed' },
-                DATABASE: { 'Entry Removed': 'test-container-id' }
+                success: true,
+                message: "Instance terminated successfully",
+                details: {
+                    STOP: { message: "Container stopped successfully" },
+                    REMOVE: { message: "Container removed successfully" },
+                    DATABASE: { message: "Database entry removed successfully" }
+                }
             });
         }, 10000);
 
@@ -565,11 +643,13 @@ describe('Service Routes', () => {
             const dbError = new Error('Database error');
             (db.ViperInstance.destroy as jest.Mock).mockRejectedValue(dbError);
 
-            const testApp = createTestApp();
+            const testApp = createTestApp({ id: 1, username: 'admin', email: 'admin@test.com', role: UserRole.ADMIN });
             const response = await request(testApp).get('/service/terminate-instance/test-container-id');
             
-            expect(response.status).toBe(200);
-            expect(response.body.DATABASE.Error).toBeDefined(); // Error objects get serialized differently
+            expect(response.status).toBe(500);
+            expect(response.body.success).toBe(false);
+            expect(response.body.message).toBe('Partial termination - some operations failed');
+            expect(response.body.details['DATABASE-ERROR']).toBeDefined();
         }, 10000);
     });
 
@@ -578,28 +658,38 @@ describe('Service Routes', () => {
             const mockInstance = {
                 logs: [{ timestamp: new Date(), message: 'Initial log' }],
                 status: 'active',
-                save: jest.fn().mockResolvedValue(undefined)
+                save: jest.fn().mockResolvedValue(undefined),
+                update: jest.fn().mockResolvedValue(undefined)
             };
 
             (db.ViperInstance.findOne as jest.Mock).mockResolvedValue(mockInstance);
 
             const testApp = createTestApp();
             const response = await request(testApp)
-                .get('/service/set-status-instance/test-status-key/inactive');
+                .get('/service/set-status-instance/test-status-key/active');
             
             expect(response.status).toBe(200);
             expect(response.body).toEqual({
-                DATABASE: { 'Entry Updated': 'test-status-key' }
+                success: true,
+                message: "Status updated successfully",
+                instance: expect.objectContaining({
+                    newStatus: 'active',
+                    previousStatus: 'active'
+                })
             });
 
             expect(db.ViperInstance.findOne).toHaveBeenCalledWith({
                 where: { statusKey: 'test-status-key' }
             });
 
-            expect(mockInstance.status).toBe('inactive');
-            expect(mockInstance.logs).toHaveLength(2);
-            expect(mockInstance.logs[1].message).toBe('Set Status to: inactive');
-            expect(mockInstance.save).toHaveBeenCalled();
+            expect(mockInstance.update).toHaveBeenCalledWith(expect.objectContaining({
+                status: 'active',
+                logs: expect.arrayContaining([
+                    expect.objectContaining({
+                        message: 'Status changed to: active'
+                    })
+                ])
+            }));
         });
 
         it('should handle instance not found', async () => {
@@ -609,9 +699,8 @@ describe('Service Routes', () => {
             const response = await request(testApp)
                 .get('/service/set-status-instance/nonexistent-key/active');
             
-            expect(response.status).toBe(200);
-            // The endpoint doesn't send a response when instance is not found
-            // This is following the current implementation behavior
+            expect(response.status).toBe(404);
+            // The endpoint returns 404 when instance is not found
         });
 
         it('should handle database error', async () => {
@@ -622,8 +711,8 @@ describe('Service Routes', () => {
             const response = await request(testApp)
                 .get('/service/set-status-instance/test-status-key/active');
             
-            expect(response.status).toBe(200);
-            expect(response.body.DATABASE.Error).toBeDefined(); // Error objects get serialized differently
+            expect(response.status).toBe(500);
+            expect(response.body.error).toBeDefined(); // Error objects get serialized differently
         });
 
         it('should handle save error', async () => {
@@ -631,17 +720,18 @@ describe('Service Routes', () => {
             const mockInstance = {
                 logs: [],
                 status: 'active',
-                save: jest.fn().mockRejectedValue(saveError)
+                save: jest.fn().mockRejectedValue(saveError),
+                update: jest.fn().mockRejectedValue(saveError)
             };
 
             (db.ViperInstance.findOne as jest.Mock).mockResolvedValue(mockInstance);
 
             const testApp = createTestApp();
             const response = await request(testApp)
-                .get('/service/set-status-instance/test-status-key/inactive');
+                .get('/service/set-status-instance/test-status-key/active');
             
-            expect(response.status).toBe(200);
-            expect(response.body.DATABASE.Error).toBeDefined(); // Error objects get serialized differently
+            expect(response.status).toBe(500);
+            expect(response.body.error).toBeDefined(); // Error objects get serialized differently
         });
     });
 
