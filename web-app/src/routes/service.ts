@@ -9,6 +9,7 @@ import helperFunctions from '../utility/helperFunctions';
 import { getAvailablePort } from '../utility/portManager';
 import { appLogger } from '../config/logger';
 import { UserRole } from '../types/UserRole';
+import { readAndProcessScript, validateRequiredScripts } from '../utility/scriptManager';
 
 dotenv.config();
 
@@ -253,13 +254,18 @@ router.get('/new-instance', async (req: Request, res: Response): Promise<void> =
         "PASSWORD=" + kasmvncPassword,
         "PUID=1000",
         "PGID=1000",
-        "ACME_PRE_HOOK=curl https://" + DOMAIN_NAME + "/service/set-status-instance/"+statusKey+"/begin_cert",
-        "ACME_POST_HOOK=curl https://" + DOMAIN_NAME + "/service/set-status-instance/"+statusKey+"/active",
+        "ACME_PRE_HOOK=curl " + (process.env.SERVICE_URL || (process.env.NODE_ENV === 'production' ? 
+            `http://cloud-viper-gui-app:3000` : 
+            `http://localhost:3000`)) + "/service/set-status-instance/"+statusKey+"/begin_cert",
+        "ACME_POST_HOOK=curl " + (process.env.SERVICE_URL || (process.env.NODE_ENV === 'production' ? 
+            `http://cloud-viper-gui-app:3000` : 
+            `http://localhost:3000`)) + "/service/set-status-instance/"+statusKey+"/active",
     ];
+    console.log('Container Environment Variables:', envVars);
 
     try {
         // Find an available port for development, production uses reverse proxy
-        const availablePort = process.env.NODE_ENV === 'dev' ? await getAvailablePort(3001) : 3000;
+        const availablePort = process.env.NODE_ENV === 'dev' ? await getAvailablePort(3010) : 3000;
 
         const containerOptions: any = {
             Image: 'darrendignam/opf-viper-cloud:v0.0.10',
@@ -267,12 +273,17 @@ router.get('/new-instance', async (req: Request, res: Response): Promise<void> =
             HostConfig: {
                 ShmSize: 1024 * 1024 * 1024,
                 Binds: ['/var/viper-docker-project/volumes/test-corpus/test-root/corpora:/config/Desktop/test-corpus:ro'],
-                ...(process.env.NODE_ENV === 'dev' && { PortBindings: { '3000/tcp': [{ HostPort: `${availablePort}` }] } })
+                ...(process.env.NODE_ENV === 'dev' && { PortBindings: { 
+                    '3000/tcp': [{ HostPort: `${availablePort}` }],
+                    '3001/tcp': [] // Empty binding to prevent null value
+                } })
             },
-            ExposedPorts: { '3000/tcp': {}, '3001/tcp': {} },
+            ExposedPorts: { '3000/tcp': {} },
             NetworkingConfig: {
                 EndpointsConfig: {
-                    ...(process.env.NODE_ENV === 'prod' && { 'ingress-proxy': {} })
+                    'cloud-viper-net': {},
+                    ...(process.env.NODE_ENV === 'prod' && { 'ingress-proxy': {} }),
+                    ...(process.env.NODE_ENV === 'production' && { 'ingress-proxy': {} })
                 }
             },
             Env: envVars,
@@ -293,412 +304,7 @@ router.get('/new-instance', async (req: Request, res: Response): Promise<void> =
             timestamp: new Date().toISOString()
         });
 
-        // Remove sudo access (security hardening) with better error handling
-        try {
-            const exec1 = await container.exec({
-                AttachStdout: true, 
-                AttachStderr: true,
-                Cmd: ['rm', '-f', '/etc/sudoers.d/abc']
-            });
-            const stream1 = await exec1.start({ hijack: true, stdin: true });
-            stream1.on('data', (data: any) => console.log(data.toString()));
-            await new Promise((resolve) => stream1.on('end', resolve));
-            
-            appLogger.info('Sudoers file removed successfully', {
-                eventType: 'Security Hardening',
-                instanceUUID,
-                containerId: container.id,
-                action: 'sudoers_removal',
-                timestamp: new Date().toISOString()
-            });
-        } catch (execErr) { 
-            appLogger.warn('Failed to remove sudoers file', {
-                eventType: 'Security Hardening Warning',
-                instanceUUID,
-                containerId: container.id,
-                error: (execErr as Error).message,
-                timestamp: new Date().toISOString()
-            });
-        }
-
-        try {
-            const exec2 = await container.exec({
-                AttachStdout: true, 
-                AttachStderr: true,
-                Cmd: ['gpasswd', '-d', 'abc', 'sudo']
-            });
-            const stream2 = await exec2.start({ hijack: true, stdin: true });
-            stream2.on('data', (data: any) => console.log(data.toString()));
-            await new Promise((resolve) => stream2.on('end', resolve));
-            
-            appLogger.info('User removed from sudo group successfully', {
-                eventType: 'Security Hardening',
-                instanceUUID,
-                containerId: container.id,
-                action: 'sudo_group_removal',
-                timestamp: new Date().toISOString()
-            });
-        } catch (execErr) { 
-            appLogger.warn('Failed to remove user from sudo group', {
-                eventType: 'Security Hardening Warning',
-                instanceUUID,
-                containerId: container.id,
-                error: (execErr as Error).message,
-                timestamp: new Date().toISOString()
-            });
-        }
-
-        // Install monitoring dependencies and create monitoring script
-        try {
-            // Install required packages for monitoring (split into individual commands)
-            const execUpdate = await container.exec({
-                AttachStdout: true, 
-                AttachStderr: true,
-                Cmd: ['apt-get', 'update']
-            });
-            const streamUpdate = await execUpdate.start({ hijack: true, stdin: true });
-            streamUpdate.on('data', (data: any) => console.log(data.toString()));
-            await new Promise((resolve) => streamUpdate.on('end', resolve));
-
-            const execInstall = await container.exec({
-                AttachStdout: true, 
-                AttachStderr: true,
-                Cmd: ['apt-get', 'install', '-y', 'scrot', 'xdotool', 'curl', 'bc']
-            });
-            const streamInstall = await execInstall.start({ hijack: true, stdin: true });
-            streamInstall.on('data', (data: any) => console.log(data.toString()));
-            await new Promise((resolve) => streamInstall.on('end', resolve));
-            
-            appLogger.info('Monitoring dependencies installed', {
-                eventType: 'Monitoring Setup',
-                instanceUUID,
-                containerId: container.id,
-                action: 'dependencies_installed',
-                timestamp: new Date().toISOString()
-            });
-        } catch (execErr) { 
-            appLogger.warn('Failed to install monitoring dependencies', {
-                eventType: 'Monitoring Setup Warning',
-                instanceUUID,
-                containerId: container.id,
-                error: (execErr as Error).message,
-                timestamp: new Date().toISOString()
-            });
-        }
-
-        // Create the monitoring script inside the container
-        const monitoringScript = `#!/bin/bash
-# ViPER Container Monitoring Script
-INSTANCE_UUID="${instanceUUID}"
-SERVICE_URL="https://${DOMAIN_NAME}"
-SCREENSHOT_URL="\${SERVICE_URL}/service/screenshot/\${INSTANCE_UUID}"
-ACTIVITY_URL="\${SERVICE_URL}/service/activity/\${INSTANCE_UUID}"
-
-# Activity counters
-MOUSE_EVENTS=0
-KEYBOARD_EVENTS=0
-
-# Function to capture and send screenshot
-capture_screenshot() {
-    if command -v scrot &> /dev/null && [ -n "\$DISPLAY" ]; then
-        scrot -z /tmp/screenshot.png 2>/dev/null
-        
-        if [ -f /tmp/screenshot.png ]; then
-            SCREENSHOT_B64=\$(base64 -w 0 /tmp/screenshot.png)
-            TIMESTAMP=\$(date -Iseconds)
-            
-            curl -X POST "\$SCREENSHOT_URL" \\
-                -H "Content-Type: application/json" \\
-                -d "{\\"screenshot\\":\\"\$SCREENSHOT_B64\\",\\"timestamp\\":\\"\$TIMESTAMP\\"}" \\
-                --max-time 30 --silent &
-            
-            rm -f /tmp/screenshot.png
-            echo "\$(date): Screenshot sent"
-        fi
-    fi
-}
-
-# Function to get and send activity data
-send_activity() {
-    # Get CPU usage
-    CPU_USAGE=\$(top -bn1 | grep "Cpu(s)" | sed "s/.*, *\\([0-9.]*\\)%* id.*/\\1/" | awk '{print 100 - \$1}' 2>/dev/null || echo "0")
-    
-    # Get memory usage
-    if [ -f /proc/meminfo ]; then
-        MEMORY_TOTAL=\$(grep MemTotal /proc/meminfo | awk '{print \$2}')
-        MEMORY_AVAILABLE=\$(grep MemAvailable /proc/meminfo | awk '{print \$2}')
-        MEMORY_USAGE=\$(echo "scale=1; ((\$MEMORY_TOTAL - \$MEMORY_AVAILABLE) * 100) / \$MEMORY_TOTAL" | bc -l 2>/dev/null || echo "0")
-    else
-        MEMORY_USAGE=0
-    fi
-    
-    # Check if window is active
-    WINDOW_ACTIVE=false
-    if [ -n "\$DISPLAY" ] && command -v xdotool &> /dev/null; then
-        if xdotool getactivewindow &>/dev/null; then
-            WINDOW_ACTIVE=true
-        fi
-    fi
-    
-    TIMESTAMP=\$(date -Iseconds)
-    
-    # Send activity report
-    curl -X POST "\$ACTIVITY_URL" \\
-        -H "Content-Type: application/json" \\
-        -d "{
-            \\"mouseEvents\\": \$MOUSE_EVENTS,
-            \\"keyboardEvents\\": \$KEYBOARD_EVENTS,
-            \\"windowActive\\": \$WINDOW_ACTIVE,
-            \\"cpuUsage\\": \${CPU_USAGE:-0},
-            \\"memoryUsage\\": \${MEMORY_USAGE:-0},
-            \\"timestamp\\": \\"\$TIMESTAMP\\"
-        }" \\
-        --max-time 15 --silent &
-    
-    # Reset counters
-    MOUSE_EVENTS=0
-    KEYBOARD_EVENTS=0
-    
-    echo "\$(date): Activity report sent (CPU: \${CPU_USAGE:-0}%, Memory: \${MEMORY_USAGE:-0}%)"
-}
-
-# Function to monitor mouse activity
-monitor_mouse() {
-    PREV_POS=""
-    while true; do
-        if command -v xdotool &> /dev/null && [ -n "\$DISPLAY" ]; then
-            CURRENT_POS=\$(xdotool getmouselocation 2>/dev/null)
-            if [ -n "\$CURRENT_POS" ] && [ "\$CURRENT_POS" != "\$PREV_POS" ]; then
-                MOUSE_EVENTS=\$((MOUSE_EVENTS + 1))
-                PREV_POS="\$CURRENT_POS"
-            fi
-        fi
-        sleep 2
-    done
-}
-
-# Function to handle shutdown
-cleanup() {
-    echo "\$(date): ViPER monitoring stopped"
-    exit 0
-}
-
-# Set up signal handlers
-trap cleanup SIGTERM SIGINT
-
-echo "\$(date): Starting ViPER monitoring for instance \$INSTANCE_UUID"
-
-# Start mouse monitoring in background
-monitor_mouse &
-MOUSE_PID=\$!
-
-# Main monitoring loop
-SCREENSHOT_COUNTER=0
-ACTIVITY_COUNTER=0
-
-while true; do
-    # Send screenshot every 60 seconds
-    if [ \$SCREENSHOT_COUNTER -ge 60 ]; then
-        capture_screenshot
-        SCREENSHOT_COUNTER=0
-    fi
-    
-    # Send activity report every 30 seconds
-    if [ \$ACTIVITY_COUNTER -ge 30 ]; then
-        send_activity
-        ACTIVITY_COUNTER=0
-    fi
-    
-    # Increment counters
-    SCREENSHOT_COUNTER=\$((SCREENSHOT_COUNTER + 1))
-    ACTIVITY_COUNTER=\$((ACTIVITY_COUNTER + 1))
-    
-    # Wait 1 second
-    sleep 1
-done
-`;
-
-        try {
-            // Create the monitoring script file using bash -c to write the file
-            const execCreateScript = await container.exec({
-                AttachStdout: true, 
-                AttachStderr: true,
-                Cmd: ['bash', '-c', 'cat > /home/abc/viper-monitor.sh'],
-                AttachStdin: true
-            });
-            const streamCreateScript = await execCreateScript.start({ hijack: true, stdin: true });
-            streamCreateScript.write(monitoringScript);
-            streamCreateScript.end();
-            await new Promise((resolve) => streamCreateScript.on('end', resolve));
-            
-            // Make the script executable
-            const execChmod = await container.exec({
-                AttachStdout: true, 
-                AttachStderr: true,
-                Cmd: ['chmod', '+x', '/home/abc/viper-monitor.sh']
-            });
-            const streamChmod = await execChmod.start({ hijack: true, stdin: true });
-            streamChmod.on('data', (data: any) => console.log(data.toString()));
-            await new Promise((resolve) => streamChmod.on('end', resolve));
-            
-            appLogger.info('Monitoring script created and made executable', {
-                eventType: 'Monitoring Setup',
-                instanceUUID,
-                containerId: container.id,
-                action: 'script_created',
-                timestamp: new Date().toISOString()
-            });
-        } catch (execErr) { 
-            appLogger.warn('Failed to create monitoring script', {
-                eventType: 'Monitoring Setup Warning',
-                instanceUUID,
-                containerId: container.id,
-                error: (execErr as Error).message,
-                timestamp: new Date().toISOString()
-            });
-        }
-
-        // Create systemd user service to auto-start monitoring (for XFCE environment)
-        const systemdService = `[Unit]
-Description=ViPER Container Monitoring Service
-After=graphical-session.target
-
-[Service]
-Type=simple
-ExecStart=/home/abc/viper-monitor.sh
-Restart=always
-RestartSec=10
-Environment=DISPLAY=:1
-WorkingDirectory=/home/abc
-User=abc
-
-[Install]
-WantedBy=default.target
-`;
-
-        try {
-            // Create systemd user directory
-            const execMkdir = await container.exec({
-                AttachStdout: true, 
-                AttachStderr: true,
-                Cmd: ['mkdir', '-p', '/home/abc/.config/systemd/user']
-            });
-            const streamMkdir = await execMkdir.start({ hijack: true, stdin: true });
-            streamMkdir.on('data', (data: any) => console.log(data.toString()));
-            await new Promise((resolve) => streamMkdir.on('end', resolve));
-
-            // Create the systemd service file using bash -c
-            const execCreateService = await container.exec({
-                AttachStdout: true, 
-                AttachStderr: true,
-                Cmd: ['bash', '-c', 'cat > /home/abc/.config/systemd/user/viper-monitor.service'],
-                AttachStdin: true
-            });
-            const streamCreateService = await execCreateService.start({ hijack: true, stdin: true });
-            streamCreateService.write(systemdService);
-            streamCreateService.end();
-            await new Promise((resolve) => streamCreateService.on('end', resolve));
-
-            // Set ownership of the service file
-            const execChown = await container.exec({
-                AttachStdout: true, 
-                AttachStderr: true,
-                Cmd: ['chown', '-R', 'abc:abc', '/home/abc/.config']
-            });
-            const streamChown = await execChown.start({ hijack: true, stdin: true });
-            streamChown.on('data', (data: any) => console.log(data.toString()));
-            await new Promise((resolve) => streamChown.on('end', resolve));
-            
-            appLogger.info('Monitoring systemd service created', {
-                eventType: 'Monitoring Setup',
-                instanceUUID,
-                containerId: container.id,
-                action: 'systemd_service_created',
-                timestamp: new Date().toISOString()
-            });
-        } catch (execErr) { 
-            appLogger.warn('Failed to create monitoring systemd service', {
-                eventType: 'Monitoring Setup Warning',
-                instanceUUID,
-                containerId: container.id,
-                error: (execErr as Error).message,
-                timestamp: new Date().toISOString()
-            });
-        }
-
-        // Add autostart entry for XFCE (simplified approach)
-        const autostartEntry = `[Desktop Entry]
-Version=1.0
-Type=Application
-Name=ViPER Monitor
-Comment=Monitor ViPER container activity and send screenshots
-Exec=/home/abc/viper-monitor.sh
-Icon=utilities-system-monitor
-Terminal=false
-NoDisplay=false
-Hidden=false
-X-GNOME-Autostart-enabled=true
-`;
-
-        try {
-            // Create autostart directory
-            const execMkdirAutostart = await container.exec({
-                AttachStdout: true, 
-                AttachStderr: true,
-                Cmd: ['mkdir', '-p', '/home/abc/.config/autostart']
-            });
-            const streamMkdirAutostart = await execMkdirAutostart.start({ hijack: true, stdin: true });
-            streamMkdirAutostart.on('data', (data: any) => console.log(data.toString()));
-            await new Promise((resolve) => streamMkdirAutostart.on('end', resolve));
-
-            // Create the autostart entry using bash -c
-            const execCreateAutostart = await container.exec({
-                AttachStdout: true, 
-                AttachStderr: true,
-                Cmd: ['bash', '-c', 'cat > /home/abc/.config/autostart/viper-monitor.desktop'],
-                AttachStdin: true
-            });
-            const streamCreateAutostart = await execCreateAutostart.start({ hijack: true, stdin: true });
-            streamCreateAutostart.write(autostartEntry);
-            streamCreateAutostart.end();
-            await new Promise((resolve) => streamCreateAutostart.on('end', resolve));
-
-            // Set ownership and permissions
-            const execChownAutostart = await container.exec({
-                AttachStdout: true, 
-                AttachStderr: true,
-                Cmd: ['chown', '-R', 'abc:abc', '/home/abc/.config']
-            });
-            const streamChownAutostart = await execChownAutostart.start({ hijack: true, stdin: true });
-            streamChownAutostart.on('data', (data: any) => console.log(data.toString()));
-            await new Promise((resolve) => streamChownAutostart.on('end', resolve));
-
-            const execChmodAutostart = await container.exec({
-                AttachStdout: true, 
-                AttachStderr: true,
-                Cmd: ['chmod', '+x', '/home/abc/.config/autostart/viper-monitor.desktop']
-            });
-            const streamChmodAutostart = await execChmodAutostart.start({ hijack: true, stdin: true });
-            streamChmodAutostart.on('data', (data: any) => console.log(data.toString()));
-            await new Promise((resolve) => streamChmodAutostart.on('end', resolve));
-            
-            appLogger.info('XFCE autostart entry created for monitoring', {
-                eventType: 'Monitoring Setup',
-                instanceUUID,
-                containerId: container.id,
-                action: 'autostart_created',
-                timestamp: new Date().toISOString()
-            });
-        } catch (execErr) { 
-            appLogger.warn('Failed to create XFCE autostart entry', {
-                eventType: 'Monitoring Setup Warning',
-                instanceUUID,
-                containerId: container.id,
-                error: (execErr as Error).message,
-                timestamp: new Date().toISOString()
-            });
-        }
-
+        // Create database entry immediately after container starts successfully
         const newViperInstance = await db.ViperInstance.create({
             uuid: instanceUUID,
             dockerid: container.id,
@@ -710,6 +316,476 @@ X-GNOME-Autostart-enabled=true
             status: 'created',
             logs: [{ timestamp: new Date(), message: "Created" }],
         });
+
+        appLogger.info('ViPER instance database entry created', {
+            eventType: 'Database Entry Created',
+            instanceId: newViperInstance.id,
+            instanceUUID,
+            containerId: container.id,
+            userId: user!.id,
+            userEmail: user!.email,
+            userRole: user!.role,
+            timestamp: new Date().toISOString()
+        });
+
+        // In development mode, simulate ACME hook completion since SSL certs won't be issued
+        if (process.env.NODE_ENV === 'dev') {
+            setTimeout(async () => {
+                try {
+                    // Simulate the begin_cert status first
+                    await db.ViperInstance.update(
+                        { 
+                            status: 'begin_cert',
+                            logs: [...(newViperInstance.logs || []), { 
+                                timestamp: new Date(), 
+                                message: "Certificate process started (simulated)" 
+                            }]
+                        },
+                        { where: { uuid: instanceUUID } }
+                    );
+
+                    appLogger.info('Dev mode: Certificate process started (simulated)', {
+                        eventType: 'Dev Status Update',
+                        instanceUUID,
+                        status: 'begin_cert',
+                        timestamp: new Date().toISOString()
+                    });
+
+                    // Wait a bit more then set to active
+                    setTimeout(async () => {
+                        try {
+                            const updatedInstance = await db.ViperInstance.findOne({ where: { uuid: instanceUUID } });
+                            if (updatedInstance) {
+                                await updatedInstance.update({
+                                    status: 'active',
+                                    logs: [...(updatedInstance.logs || []), { 
+                                        timestamp: new Date(), 
+                                        message: "Instance activated (simulated ACME completion)" 
+                                    }]
+                                });
+
+                                appLogger.info('Dev mode: Instance activated (simulated)', {
+                                    eventType: 'Dev Status Update',
+                                    instanceUUID,
+                                    status: 'active',
+                                    timestamp: new Date().toISOString()
+                                });
+                            }
+                        } catch (activateError) {
+                            appLogger.warn('Failed to activate instance in dev mode', {
+                                eventType: 'Dev Status Update Error',
+                                instanceUUID,
+                                error: (activateError as Error).message,
+                                timestamp: new Date().toISOString()
+                            });
+                        }
+                    }, 10000); // Wait 10 seconds then activate
+
+                } catch (certError) {
+                    appLogger.warn('Failed to start cert process in dev mode', {
+                        eventType: 'Dev Status Update Error',
+                        instanceUUID,
+                        error: (certError as Error).message,
+                        timestamp: new Date().toISOString()
+                    });
+                }
+            }, 5000); // Wait 5 seconds then start cert process
+        }
+
+        // Setup monitoring and security (non-critical - don't fail instance creation if these fail)
+        try {
+            // Validate required scripts exist
+            const scriptValidation = validateRequiredScripts();
+            if (!scriptValidation.valid) {
+                throw new Error(`Missing required scripts: ${scriptValidation.missing.join(', ')}`);
+            }
+
+            // Remove sudo access (security hardening) with better error handling
+            try {
+                const exec1 = await container.exec({
+                    AttachStdout: true, 
+                    AttachStderr: true,
+                    Cmd: ['rm', '-f', '/etc/sudoers.d/abc']
+                });
+                const stream1 = await exec1.start({ hijack: true, stdin: true });
+                stream1.on('data', (data: any) => console.log(data.toString()));
+                await new Promise((resolve) => stream1.on('end', resolve));
+                
+                appLogger.info('Sudoers file removed successfully', {
+                    eventType: 'Security Hardening',
+                    instanceUUID,
+                    containerId: container.id,
+                    action: 'sudoers_removal',
+                    timestamp: new Date().toISOString()
+                });
+            } catch (execErr) { 
+                appLogger.warn('Failed to remove sudoers file', {
+                    eventType: 'Security Hardening Warning',
+                    instanceUUID,
+                    containerId: container.id,
+                    error: (execErr as Error).message,
+                    timestamp: new Date().toISOString()
+                });
+            }
+
+            try {
+                const exec2 = await container.exec({
+                    AttachStdout: true, 
+                    AttachStderr: true,
+                    Cmd: ['gpasswd', '-d', 'abc', 'sudo']
+                });
+                const stream2 = await exec2.start({ hijack: true, stdin: true });
+                stream2.on('data', (data: any) => console.log(data.toString()));
+                await new Promise((resolve) => stream2.on('end', resolve));
+                
+                appLogger.info('User removed from sudo group successfully', {
+                    eventType: 'Security Hardening',
+                    instanceUUID,
+                    containerId: container.id,
+                    action: 'sudo_group_removal',
+                    timestamp: new Date().toISOString()
+                });
+            } catch (execErr) { 
+                appLogger.warn('Failed to remove user from sudo group', {
+                    eventType: 'Security Hardening Warning',
+                    instanceUUID,
+                    containerId: container.id,
+                    error: (execErr as Error).message,
+                    timestamp: new Date().toISOString()
+                });
+            }
+
+            // Install monitoring dependencies and create monitoring script
+            try {
+                // Install required packages for monitoring (split into individual commands)
+                const execUpdate = await container.exec({
+                    AttachStdout: true, 
+                    AttachStderr: true,
+                    Cmd: ['apt-get', 'update']
+                });
+                const streamUpdate = await execUpdate.start({ hijack: true, stdin: true });
+                streamUpdate.on('data', (data: any) => console.log(data.toString()));
+                await new Promise((resolve) => streamUpdate.on('end', resolve));
+
+                const execInstall = await container.exec({
+                    AttachStdout: true, 
+                    AttachStderr: true,
+                    Cmd: ['apt-get', 'install', '-y', 'scrot', 'xdotool', 'curl', 'bc', 'xinput']
+                });
+                const streamInstall = await execInstall.start({ hijack: true, stdin: true });
+                streamInstall.on('data', (data: any) => console.log(data.toString()));
+                await new Promise((resolve) => streamInstall.on('end', resolve)); 
+                
+                appLogger.info('Monitoring dependencies installed', {
+                    eventType: 'Monitoring Setup',
+                    instanceUUID,
+                    containerId: container.id,
+                    action: 'dependencies_installed',
+                    timestamp: new Date().toISOString()
+                });
+            } catch (execErr) { 
+                appLogger.warn('Failed to install monitoring dependencies', {
+                    eventType: 'Monitoring Setup Warning',
+                    instanceUUID,
+                    containerId: container.id,
+                    error: (execErr as Error).message,
+                    timestamp: new Date().toISOString()
+                });
+            }
+
+            // Create the monitoring script inside the container using external script file
+            try {
+                const monitoringScript = readAndProcessScript('viper-monitor.sh', {
+                    INSTANCE_UUID: instanceUUID,
+                    SERVICE_URL: process.env.SERVICE_URL || (process.env.NODE_ENV === 'production' ? 
+                        `http://cloud-viper-gui-app:3000` : 
+                        `http://localhost:3000`),
+                    DOMAIN_NAME: DOMAIN_NAME
+                });
+
+                // Create hidden config directory and monitoring script file for abc user
+                const execMkdirConfig = await container.exec({
+                    AttachStdout: true, 
+                    AttachStderr: true,
+                    Cmd: ['mkdir', '-p', '/config/.config']
+                });
+                const streamMkdirConfig = await execMkdirConfig.start({ hijack: true, stdin: true });
+                streamMkdirConfig.on('data', (data: any) => console.log(data.toString()));
+                await new Promise((resolve) => streamMkdirConfig.on('end', resolve));
+
+                const execCreateScript = await container.exec({
+                    AttachStdout: true, 
+                    AttachStderr: true,
+                    Cmd: ['bash', '-c', 'cat > /config/.config/viper-monitor.sh'],
+                    AttachStdin: true
+                });
+                const streamCreateScript = await execCreateScript.start({ hijack: true, stdin: true });
+                streamCreateScript.write(monitoringScript);
+                streamCreateScript.end();
+                await new Promise((resolve) => streamCreateScript.on('end', resolve));
+                
+                // Make the script executable and read-only, set ownership to abc user
+                const execChmod = await container.exec({
+                    AttachStdout: true, 
+                    AttachStderr: true,
+                    Cmd: ['chmod', '544', '/config/.config/viper-monitor.sh']
+                });
+                const streamChmod = await execChmod.start({ hijack: true, stdin: true });
+                streamChmod.on('data', (data: any) => console.log(data.toString()));
+                await new Promise((resolve) => streamChmod.on('end', resolve));
+
+                // Set ownership to abc user
+                const execChownScript = await container.exec({
+                    AttachStdout: true, 
+                    AttachStderr: true,
+                    Cmd: ['chown', 'abc:abc', '/config/.config/viper-monitor.sh']
+                });
+                const streamChownScript = await execChownScript.start({ hijack: true, stdin: true });
+                streamChownScript.on('data', (data: any) => console.log(data.toString()));
+                await new Promise((resolve) => streamChownScript.on('end', resolve));
+                
+                appLogger.info('Monitoring script created and made executable', {
+                    eventType: 'Monitoring Setup',
+                    instanceUUID,
+                    containerId: container.id,
+                    action: 'script_created',
+                    timestamp: new Date().toISOString()
+                });
+            } catch (execErr) { 
+                appLogger.warn('Failed to create monitoring script', {
+                    eventType: 'Monitoring Setup Warning',
+                    instanceUUID,
+                    containerId: container.id,
+                    error: (execErr as Error).message,
+                    timestamp: new Date().toISOString()
+                });
+            }
+
+            // Create systemd user service to auto-start monitoring (for XFCE environment)
+            try {
+                const systemdService = readAndProcessScript('viper-monitor.service', {
+                    INSTANCE_UUID: instanceUUID,
+                   SERVICE_URL: process.env.SERVICE_URL || (process.env.NODE_ENV === 'production' ? 
+                        `http://cloud-viper-gui-app:3000` : 
+                        `http://localhost:3000`),
+                    DOMAIN_NAME: DOMAIN_NAME
+                });
+
+                // Create systemd user directory in /config for abc user
+                const execMkdir = await container.exec({
+                    AttachStdout: true, 
+                    AttachStderr: true,
+                    Cmd: ['mkdir', '-p', '/config/.config/systemd/user']
+                });
+                const streamMkdir = await execMkdir.start({ hijack: true, stdin: true });
+                streamMkdir.on('data', (data: any) => console.log(data.toString()));
+                await new Promise((resolve) => streamMkdir.on('end', resolve));
+
+                // Create the systemd service file using bash -c
+                const execCreateService = await container.exec({
+                    AttachStdout: true, 
+                    AttachStderr: true,
+                    Cmd: ['bash', '-c', 'cat > /config/.config/systemd/user/viper-monitor.service'],
+                    AttachStdin: true
+                });
+                const streamCreateService = await execCreateService.start({ hijack: true, stdin: true });
+                streamCreateService.write(systemdService);
+                streamCreateService.end();
+                await new Promise((resolve) => streamCreateService.on('end', resolve));
+
+                // Set ownership of the service file to abc user (read-only for security)
+                const execChown = await container.exec({
+                    AttachStdout: true, 
+                    AttachStderr: true,
+                    Cmd: ['chown', '-R', 'abc:abc', '/config/.config']
+                });
+                const streamChown = await execChown.start({ hijack: true, stdin: true });
+                streamChown.on('data', (data: any) => console.log(data.toString()));
+                await new Promise((resolve) => streamChown.on('end', resolve));
+
+                // Make systemd service file read-only
+                const execChmodService = await container.exec({
+                    AttachStdout: true, 
+                    AttachStderr: true,
+                    Cmd: ['chmod', '444', '/config/.config/systemd/user/viper-monitor.service']
+                });
+                const streamChmodService = await execChmodService.start({ hijack: true, stdin: true });
+                streamChmodService.on('data', (data: any) => console.log(data.toString()));
+                await new Promise((resolve) => streamChmodService.on('end', resolve));
+                
+                appLogger.info('Monitoring systemd service created', {
+                    eventType: 'Monitoring Setup',
+                    instanceUUID,
+                    containerId: container.id,
+                    action: 'systemd_service_created',
+                    timestamp: new Date().toISOString()
+                });
+            } catch (execErr) { 
+                appLogger.warn('Failed to create monitoring systemd service', {
+                    eventType: 'Monitoring Setup Warning',
+                    instanceUUID,
+                    containerId: container.id,
+                    error: (execErr as Error).message,
+                    timestamp: new Date().toISOString()
+                });
+            }
+
+            // Add autostart entry for XFCE (simplified approach)
+            try {
+                const autostartEntry = readAndProcessScript('viper-monitor.desktop', {
+                    INSTANCE_UUID: instanceUUID,
+                   SERVICE_URL: process.env.SERVICE_URL || (process.env.NODE_ENV === 'production' ? 
+                        `http://cloud-viper-gui-app:3000` : 
+                        `http://localhost:3000`),
+                    DOMAIN_NAME: DOMAIN_NAME
+                });
+
+                // Create autostart directory in /config for abc user
+                const execMkdirAutostart = await container.exec({
+                    AttachStdout: true, 
+                    AttachStderr: true,
+                    Cmd: ['mkdir', '-p', '/config/.config/autostart']
+                });
+                const streamMkdirAutostart = await execMkdirAutostart.start({ hijack: true, stdin: true });
+                streamMkdirAutostart.on('data', (data: any) => console.log(data.toString()));
+                await new Promise((resolve) => streamMkdirAutostart.on('end', resolve));
+
+                // Create the autostart entry using bash -c
+                const execCreateAutostart = await container.exec({
+                    AttachStdout: true, 
+                    AttachStderr: true,
+                    Cmd: ['bash', '-c', 'cat > /config/.config/autostart/viper-monitor.desktop'],
+                    AttachStdin: true
+                });
+                const streamCreateAutostart = await execCreateAutostart.start({ hijack: true, stdin: true });
+                streamCreateAutostart.write(autostartEntry);
+                streamCreateAutostart.end();
+                await new Promise((resolve) => streamCreateAutostart.on('end', resolve));
+
+                // Set ownership and permissions for abc user (read-only for security)
+                const execChownAutostart = await container.exec({
+                    AttachStdout: true, 
+                    AttachStderr: true,
+                    Cmd: ['chown', '-R', 'abc:abc', '/config/.config']
+                });
+                const streamChownAutostart = await execChownAutostart.start({ hijack: true, stdin: true });
+                streamChownAutostart.on('data', (data: any) => console.log(data.toString()));
+                await new Promise((resolve) => streamChownAutostart.on('end', resolve));
+
+                const execChmodAutostart = await container.exec({
+                    AttachStdout: true, 
+                    AttachStderr: true,
+                    Cmd: ['chmod', '444', '/config/.config/autostart/viper-monitor.desktop']
+                });
+                const streamChmodAutostart = await execChmodAutostart.start({ hijack: true, stdin: true });
+                streamChmodAutostart.on('data', (data: any) => console.log(data.toString()));
+                await new Promise((resolve) => streamChmodAutostart.on('end', resolve));
+                
+                appLogger.info('XFCE autostart entry created for monitoring', {
+                    eventType: 'Monitoring Setup',
+                    instanceUUID,
+                    containerId: container.id,
+                    action: 'autostart_created',
+                    timestamp: new Date().toISOString()
+                });
+
+                // Start the monitoring script directly
+                try {
+                    const execDirectStart = await container.exec({
+                        AttachStdout: true, 
+                        AttachStderr: true,
+                        Cmd: ['su', 'abc', '-c', 'cd /config/.config && nohup ./viper-monitor.sh > /tmp/viper-monitor.log 2>&1 &']
+                    });
+                    const streamDirectStart = await execDirectStart.start({ hijack: true, stdin: true });
+                    streamDirectStart.on('data', (data: any) => console.log(data.toString()));
+                    await new Promise((resolve) => streamDirectStart.on('end', resolve));
+
+                    // Give it a moment to start
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+
+                    // Verify the service is running
+                    const execCheckProcess = await container.exec({
+                        AttachStdout: true, 
+                        AttachStderr: true,
+                        Cmd: ['ps', 'aux']
+                    });
+                    const streamCheckProcess = await execCheckProcess.start({ hijack: true, stdin: true });
+                    let processOutput = '';
+                    streamCheckProcess.on('data', (data: any) => {
+                        processOutput += data.toString();
+                    });
+                    await new Promise((resolve) => streamCheckProcess.on('end', resolve));
+
+                    const viperProcesses = processOutput.split('\n').filter(line => line.includes('viper-monitor'));
+                    if (viperProcesses.length > 0) {
+                        appLogger.info('Monitoring script started successfully', {
+                            eventType: 'Monitoring Setup',
+                            instanceUUID,
+                            containerId: container.id,
+                            action: 'script_started_successfully',
+                            processCount: viperProcesses.length,
+                            timestamp: new Date().toISOString()
+                        });
+                    } else {
+                        appLogger.warn('Monitoring script may not have started properly', {
+                            eventType: 'Monitoring Setup Warning',
+                            instanceUUID,
+                            containerId: container.id,
+                            action: 'script_start_uncertain',
+                            timestamp: new Date().toISOString()
+                        });
+                    }
+
+                } catch (directStartError) {
+                    appLogger.warn('Failed to start monitoring script', {
+                        eventType: 'Monitoring Setup Warning',
+                        instanceUUID,
+                        containerId: container.id,
+                        error: (directStartError as Error).message,
+                        timestamp: new Date().toISOString()
+                    });
+                }
+            } catch (execErr) { 
+                appLogger.warn('Failed to create XFCE autostart entry', {
+                    eventType: 'Monitoring Setup Warning',
+                    instanceUUID,
+                    containerId: container.id,
+                    error: (execErr as Error).message,
+                    timestamp: new Date().toISOString()
+                });
+            }
+
+        } catch (monitoringError) {
+            // Log monitoring setup failure but don't fail the instance creation
+            appLogger.warn('Monitoring setup failed - instance created but monitoring may not work', {
+                eventType: 'Monitoring Setup Failed',
+                instanceUUID,
+                containerId: container.id,
+                error: (monitoringError as Error).message,
+                userId: user!.id,
+                timestamp: new Date().toISOString()
+            });
+            
+            // Update database status to indicate monitoring issues
+            try {
+                await db.ViperInstance.update(
+                    { 
+                        status: 'active_no_monitoring',
+                        logs: [...(newViperInstance.logs || []), { 
+                            timestamp: new Date(), 
+                            message: "Warning: Monitoring setup failed" 
+                        }]
+                    },
+                    { where: { uuid: instanceUUID } }
+                );
+            } catch (dbUpdateError) {
+                appLogger.error('Failed to update instance status after monitoring failure', {
+                    instanceUUID,
+                    error: (dbUpdateError as Error).message,
+                    timestamp: new Date().toISOString()
+                });
+            }
+        }
 
         appLogger.info('ViPER instance created successfully', {
             eventType: 'Instance Creation Complete',
@@ -1625,13 +1701,19 @@ router.post('/screenshot/:instanceUUID', async (req: Request, res: Response): Pr
 router.post('/activity/:instanceUUID', async (req: Request, res: Response): Promise<void> => {
     const { instanceUUID } = req.params;
     const { 
-        mouseEvents = 0, 
-        keyboardEvents = 0, 
+        mouseEvents: rawMouseEvents = 0, 
+        keyboardEvents: rawKeyboardEvents = 0, 
         timestamp,
         windowActive = false,
-        cpuUsage = 0,
-        memoryUsage = 0 
+        cpuUsage: rawCpuUsage = 0,
+        memoryUsage: rawMemoryUsage = 0 
     } = req.body;
+
+    // Ensure numeric values
+    const mouseEvents = Number(rawMouseEvents) || 0;
+    const keyboardEvents = Number(rawKeyboardEvents) || 0;
+    const cpuUsage = Number(rawCpuUsage) || 0;
+    const memoryUsage = Number(rawMemoryUsage) || 0;
 
     try {
         const instance = await db.ViperInstance.findOne({
@@ -1732,6 +1814,55 @@ router.post('/activity/:instanceUUID', async (req: Request, res: Response): Prom
         res.status(500).json({
             error: 'Error processing activity report',
             message: 'Failed to process activity data'
+        });
+    }
+});
+
+// Test endpoint for monitoring script debugging (no auth required)
+router.get('/monitoring-test/:instanceUUID', async (req: Request, res: Response): Promise<void> => {
+    const { instanceUUID } = req.params;
+    
+    try {
+        const instance = await db.ViperInstance.findOne({
+            where: { uuid: instanceUUID }
+        });
+
+        if (!instance) {
+            res.status(404).json({ 
+                error: 'Instance not found',
+                instanceUUID,
+                message: 'No instance found with this UUID'
+            });
+            return;
+        }
+
+        res.json({
+            success: true,
+            instanceUUID,
+            message: 'Monitoring test endpoint - instance found',
+            instance: {
+                id: instance.id,
+                uuid: instance.uuid,
+                status: instance.status,
+                lastActivity: instance.lastActivity,
+                isUserActive: instance.isUserActive,
+                activityScore: instance.activityScore
+            },
+            endpoints: {
+                screenshot: `/service/screenshot/${instanceUUID}`,
+                activity: `/service/activity/${instanceUUID}`,
+                test: `/service/monitoring-test/${instanceUUID}`
+            },
+            testCurl: {
+                activity: `curl -X POST '${req.protocol}://${req.get('host')}/service/activity/${instanceUUID}' -H 'Content-Type: application/json' -d '{"mouseEvents":1,"keyboardEvents":1,"windowActive":true,"cpuUsage":10,"memoryUsage":20}'`
+            }
+        });
+
+    } catch (error) {
+        res.status(500).json({
+            error: 'Database error',
+            message: (error as Error).message,
+            instanceUUID
         });
     }
 });

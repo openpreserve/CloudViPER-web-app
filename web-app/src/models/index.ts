@@ -26,7 +26,6 @@ const config: {
   logging: boolean | ((...msg: any[]) => void);
   dialectOptions?: {
     charset?: string;
-    collate?: string;
   };
   pool?: {
     max: number;
@@ -40,7 +39,6 @@ const config: {
   logging: logSQL,
   dialectOptions: {
     charset: 'utf8mb4',
-    collate: 'utf8mb4_unicode_ci',
   },
   pool: {
     max: 5,

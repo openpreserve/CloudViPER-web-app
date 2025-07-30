@@ -27,6 +27,7 @@ appLogger.info('Application starting', {
 
 // Begin server setup
 app.use( bodyParser.urlencoded({ extended: true}) );
+app.use( bodyParser.json() ); // Add JSON body parser
 let path = require('path');
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
