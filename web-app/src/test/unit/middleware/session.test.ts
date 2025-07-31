@@ -2,6 +2,9 @@ import request from 'supertest';
 import express from 'express';
 import session from 'express-session';
 
+const DOMAIN_NAME = process.env.DOMAIN_NAME || 'cloudviper.org';
+const DOMAIN_WITHOUT_WWW = DOMAIN_NAME.replace(/^www\./, '');
+
 describe('Session and Authentication Middleware', () => {
   let app: express.Application;
 
@@ -51,7 +54,7 @@ describe('Session and Authentication Middleware', () => {
       
       app.use((req, res, next) => {
         if (req.headers['x-forwarded-proto'] !== 'https') {
-          return res.redirect(302, ['https://vipercloud.cc', req.url].join(''));
+          return res.redirect(302, [`https://${DOMAIN_WITHOUT_WWW}`, req.url].join(''));
         }
         next();
       });
@@ -65,7 +68,7 @@ describe('Session and Authentication Middleware', () => {
         .set('x-forwarded-proto', 'http');
 
       expect(response.status).toBe(302);
-      expect(response.headers.location).toBe('https://vipercloud.cc/test');
+      expect(response.headers.location).toBe(`https://${DOMAIN_WITHOUT_WWW}/test`);
     });
 
     it('should not redirect HTTPS requests', async () => {
@@ -73,7 +76,7 @@ describe('Session and Authentication Middleware', () => {
       
       app.use((req, res, next) => {
         if (req.headers['x-forwarded-proto'] !== 'https') {
-          return res.redirect(302, ['https://vipercloud.cc', req.url].join(''));
+          return res.redirect(302, [`https://${DOMAIN_WITHOUT_WWW}`, req.url].join(''));
         }
         next();
       });
@@ -96,8 +99,8 @@ describe('Session and Authentication Middleware', () => {
       process.env.NODE_ENV = 'production';
       
       app.use((req, res, next) => {
-        if (req.headers.host === 'vipercloud.cc') {
-          res.redirect(302, 'https://www.vipercloud.cc' + req.originalUrl);
+        if (req.headers.host === DOMAIN_WITHOUT_WWW) {
+          res.redirect(302, `https://${DOMAIN_NAME}` + req.originalUrl);
         } else {
           next();
         }
@@ -109,10 +112,10 @@ describe('Session and Authentication Middleware', () => {
 
       const response = await request(app)
         .get('/test')
-        .set('host', 'vipercloud.cc');
+        .set('host', DOMAIN_WITHOUT_WWW);
 
       expect(response.status).toBe(302);
-      expect(response.headers.location).toBe('https://www.vipercloud.cc/test');
+      expect(response.headers.location).toBe(`https://${DOMAIN_NAME}/test`);
     });
   });
 

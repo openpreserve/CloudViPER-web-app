@@ -1,55 +1,64 @@
-<div class="auth-layout">
-    <div class="container">
-        <div class="row justify-content-center">
-            <div class="col-md-8">
-                <div>
-                    <h1>{{{form_h1}}}</h1>
-                    <p>{{{form_p}}}</p>
-                </div>
+<div class="cloud-page">
+    <!-- Password Reset Token Cloud -->
+    <div class="login-cloud">
+        <h1>{{{form_h1}}}</h1>
+        <p>{{{form_p}}}</p>
 
-                {{#if error_message}}
-                    {{#ifNotEquals error_message ""}}
-                    <div class="alert alert-danger" role="alert">
-                        <p>There was an error!</p>
-                        <p>{{error_message}}</p>
-                    </div>
-                    {{/ifNotEquals}}
-                {{/if}}
+        {{#if error_message}}
+            {{#ifNotEquals error_message ""}}
+            <div class="error-alert">
+                <p>There was an error!</p>
+                <p>{{error_message}}</p>
+            </div>
+            {{/ifNotEquals}}
+        {{/if}}
 
-                <div class="row">
-                    <div class="col-md-6">
-                        <form method="post" action="/account/reset-token" class="modern-form" onsubmit="return validatePassword()">
-                            <input type="hidden" id="token" name="token" value="{{{token}}}">
-                            
-                            <div class="form-group">
-                                <label for="password" class="form-label">New Password:</label>
-                                <input type="password" id="password" name="password" placeholder="Enter new password" required class="form-control">
-                            </div>
-                            
-                            <div class="form-group">
-                                <label for="confirm-password" class="form-label">Confirm Password:</label>
-                                <input type="password" id="confirm-password" name="confirm-password" placeholder="Confirm new password" required class="form-control">
-                            </div>
-                            
-                            <div class="form-group">
-                                <label>
-                                    <input type="checkbox" id="show-password" onclick="togglePasswordVisibility()"> 
-                                    Show Password
-                                </label>
-                            </div>
-                            
-                            <div class="form-group">
-                                <button type="submit" class="btn btn-secondary w-100">Update Password</button>
-                            </div>
-                        </form>
-                        
-                        <div id="AlertMessageDiv"></div>
-                        <p class="cookie-notice">The admin section of the website uses functional cookies.</p>
+        <div class="login-content">
+            <div class="login-form">
+                <form method="post" action="/account/reset-token" onsubmit="return validatePassword()">
+                    <input type="hidden" id="token" name="token" value="{{{token}}}">
+                    
+                    <label for="password">New Password:</label>
+                    <input type="password" id="password" name="password" placeholder="Enter new password" required>
+                    
+                    <label for="confirm-password">Confirm Password:</label>
+                    <input type="password" id="confirm-password" name="confirm-password" placeholder="Confirm new password" required>
+                    
+                    <div class="password-toggle" style="padding: 10px 0; margin: 5px 0;">
+                        <span id="password-toggle-btn" onclick="togglePasswordVisibility()" style="cursor: pointer; color: #137DA4; text-decoration: underline; font-size: 14px; padding: 5px; display: inline-block;">
+                            <i class="fas fa-eye" id="toggle-icon"></i> <span id="toggle-text">Show Password</span>
+                        </span>
                     </div>
                     
-                    <div class="col-md-6">
-                        <h2>Password Reset</h2>
-                        <p>Please enter a new password for this account.</p>
+                    <button type="submit">Update Password</button>
+                </form>
+                
+                <div id="AlertMessageDiv"></div>
+                <p class="cookie-notice">The admin section of the website uses functional cookies.</p>
+                <p class="login-links"><a href="/account/login">Back to Login</a></p>
+            </div>
+            
+            <div class="welcome-text">
+                <h2>Create New Password</h2>
+                <p>Please enter a new password for your account. Your password must be at least 8 characters long and both password fields must match exactly.</p>
+                <p>Once you've successfully reset your password, you'll be able to log in with your new credentials immediately.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Information Section -->
+    <div class="info-section">
+        <div class="info-column">
+            <h3><i class="fas fa-key" style="color: #87CEEB;"></i> Password Requirements</h3>
+            <p>Your new password must be at least 8 characters long. For security, we recommend using a combination of letters, numbers, and special characters.</p>
+        </div>
+        <div class="info-column">
+            <h3><i class="fas fa-shield-alt" style="color: #137DA4;"></i> Secure Reset</h3>
+            <p>Can only be used once.</p>
+        </div>
+        <div class="info-column">
+            <h3><i class="fas fa-check-circle" style="color: #20B2AA;"></i> Almost Done</h3>
+            <p>After setting your new password, you'll be immediately ready to log in and access all Cloud ViPER features with your updated credentials.</p>
         </div>
     </div>
 </div>
@@ -84,12 +93,19 @@ function validatePassword() {
 function togglePasswordVisibility() {
     var passwordField = document.getElementById("password");
     var confirmPasswordField = document.getElementById("confirm-password");
-    if (passwordField.type === "password" && confirmPasswordField.type === "password") {
+    var toggleIcon = document.getElementById("toggle-icon");
+    var toggleText = document.getElementById("toggle-text");
+    
+    if (passwordField.type === "password") {
         passwordField.type = "text";
         confirmPasswordField.type = "text";
+        toggleIcon.className = "fas fa-eye-slash";
+        toggleText.textContent = "Hide Password";
     } else {
         passwordField.type = "password";
         confirmPasswordField.type = "password";
+        toggleIcon.className = "fas fa-eye";
+        toggleText.textContent = "Show Password";
     }
 }
 </script>

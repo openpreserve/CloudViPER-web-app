@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=ViPER Monitor
+Comment=Monitor ViPER container activity and send screenshots
+Exec=/config/.config/viper-monitor.sh
+Icon=utilities-system-monitor
+Terminal=false
+NoDisplay=false
+Hidden=false
+X-GNOME-Autostart-enabled=true

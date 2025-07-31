@@ -1,5 +1,21 @@
+/**
+ * Account Logging Unit Tests
+ * 
+ * This test suite focuses specifically on testing the logging functionality within account routes.
+ * Tests audit trails, security logging, error logging, and user activity tracking without
+ * involving the actual HTTP routes or database operations.
+ * 
+ * Part of a multi-file testing strategy for account functionality:
+ * - account.test.ts: Core functionality with real DB connections
+ * - account-basic.test.ts: Basic HTTP endpoint validation with mocks
+ * - account-extended.test.ts: Extended functionality and edge cases
+ * - account-error-coverage.test.ts: Comprehensive error scenario testing
+ * - accountLogging.test.ts (this file): Unit tests for logging functionality
+ */
+
 import { jest } from '@jest/globals';
 import { appLogger, logSession } from '../../../config/logger';
+import { UserRole } from '../../../types/UserRole';
 
 // Mock the logger functions
 jest.mock('../../../config/logger', () => ({
@@ -234,7 +250,7 @@ describe('Account Route Logging Tests', () => {
         it('should integrate with session logging for user actions', () => {
             const mockRequest = {
                 sessionID: 'session-123',
-                user: { id: 1, username: 'test.user', role: 'admin' },
+                user: { id: 1, username: 'test.user', role: UserRole.ADMIN },
                 ip: '127.0.0.1',
                 method: 'POST',
                 originalUrl: '/account/update-role',

@@ -3,6 +3,7 @@
 import { Sequelize, DataTypes, Model } from 'sequelize';
 import crypto from 'crypto';
 import util from 'util';
+import { UserRole, isValidRole, toUserRole } from '../types/UserRole';
 
 /*
 ROLES:
@@ -13,6 +14,8 @@ member - can run one viper
 subscriber - pays for use
 admin - viper and user management
 
+Note: Role values are stored as strings in the database for backward compatibility,
+but should use the UserRole enum in TypeScript code.
 */
 
 const options = {
@@ -38,7 +41,7 @@ interface UserAttributes {
     title?: string;
     firstName?: string;
     lastName?: string;
-    role: string;
+    role: UserRole; // Use enum type for TypeScript
     oauthID?: string;
     oauthProvider?: string;
     salt?: string;
@@ -58,7 +61,7 @@ export default (sequelize: Sequelize) => {
         public title?: string;
         public firstName?: string;
         public lastName?: string;
-        public role!: string;
+        public role!: UserRole;
         public oauthID?: string;
         public oauthProvider?: string;
         public salt?: string;
@@ -170,7 +173,18 @@ export default (sequelize: Sequelize) => {
             title: { type: DataTypes.STRING, allowNull: true },
             firstName: { type: DataTypes.STRING, allowNull: true },
             lastName: { type: DataTypes.STRING, allowNull: true },
-            role: { type: DataTypes.STRING, allowNull: false },
+            role: { 
+                type: DataTypes.STRING, 
+                allowNull: false,
+                validate: {
+                    isValidRole(value: string) {
+                        if (!isValidRole(value)) {
+                            throw new Error(`Invalid role: ${value}. Must be one of: ${Object.values(UserRole).join(', ')}`);
+                        }
+                    }
+                },
+                defaultValue: UserRole.USER
+            },
             oauthID: { type: DataTypes.STRING },
             oauthProvider: { type: DataTypes.STRING },
             salt: { type: DataTypes.STRING },

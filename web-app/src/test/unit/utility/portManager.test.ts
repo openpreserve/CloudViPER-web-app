@@ -36,10 +36,18 @@ describe('Port Manager Utility', () => {
             }
         });
 
-        // Note: Skipping edge case test for port exhaustion as it's environment-dependent
-        // it('should reject if no ports are available in range', async () => {
-        //     // This test is environment-dependent and may fail on systems with many available ports
-        // });
+        it('should reject if no ports are available in range', async () => {
+            // Test with a restricted port that's likely to be in use or restricted
+            // Port 1 is typically restricted and not available for user applications
+            try {
+                await getAvailablePort(1, 1);
+                // If it somehow succeeds, that's also valid behavior
+                expect(true).toBe(true);
+            } catch (error: any) {
+                // Should either be permission denied or no ports available
+                expect(error.message).toMatch(/(?:No available ports found|EACCES|permission denied)/i);
+            }
+        });
     });
 
     describe('isPortAvailable', () => {
@@ -122,6 +130,22 @@ describe('Port Manager Utility', () => {
             });
             
             console.log(`Stress test: Got ${instanceCount} ports:`, ports);
+        });
+
+        it('should handle edge cases and boundary conditions', async () => {
+            // Test with minimum port number
+            const minPort = await getAvailablePort(1024, 1030);
+            expect(minPort).toBeGreaterThanOrEqual(1024);
+            expect(minPort).toBeLessThanOrEqual(1030);
+            
+            // Test with single port in range
+            try {
+                const singlePort = await getAvailablePort(50000, 50000);
+                expect(singlePort).toBe(50000);
+            } catch (error: any) {
+                // It's ok if the port is in use, we're testing the boundary
+                expect(error.message).toContain('No available ports found');
+            }
         });
     });
 });

@@ -27,16 +27,21 @@ appLogger.info('Application starting', {
 
 // Begin server setup
 app.use( bodyParser.urlencoded({ extended: true}) );
+app.use( bodyParser.json({ limit: '10mb' }) ); // Add JSON body parser with 10MB limit for screenshots
 let path = require('path');
 app.disable('x-powered-by');
 app.set('trust proxy', 1);
+
+// Get domain name from environment variable
+const DOMAIN_NAME = process.env.DOMAIN_NAME || 'cloudviper.org';
+const DOMAIN_WITHOUT_WWW = DOMAIN_NAME.replace('www.', '');
 
 // Prod specific 
 if (process.env.NODE_ENV === 'production') {
     app.use((req, res, next)=>{
         //force https
         if (req.headers['x-forwarded-proto'] !== 'https') {
-            return res.redirect(302, ['https://vipercloud.cc', req.url].join('')); 
+            return res.redirect(302, [`https://${DOMAIN_NAME}`, req.url].join('')); 
         }
         next();
     });
@@ -82,8 +87,8 @@ app.use('/service', require('./routes/service').default);
 if (process.env.NODE_ENV === 'production') {
     app.use(function (req, res, next) {
         console.log( req.headers.host );
-        if (req.headers.host === 'vipercloud.cc') {
-            res.redirect(302, 'https://www.vipercloud.cc' + req.originalUrl);
+        if (req.headers.host === DOMAIN_WITHOUT_WWW) {
+            res.redirect(302, `https://${DOMAIN_NAME}` + req.originalUrl);
         } else {
             next();
         }

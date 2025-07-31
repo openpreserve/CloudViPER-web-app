@@ -1,3 +1,5 @@
+import { UserRole } from '../types/UserRole';
+
 const helperFunctions = {
     sanitizeUsername: (name: string): string => {
         return name.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -10,12 +12,12 @@ const helperFunctions = {
             return email.toLowerCase().replace(/[^a-z0-9]/g, '');
         }
     },
-    updateRoleIfAdmin: (email: string): string => {
+    updateRoleIfAdmin: (email: string): UserRole => {
         const domain = email.split('@')[1];
         if (domain === 'openpreservation.org') {
-            return 'admin';
+            return UserRole.ADMIN;
         }
-        return 'user';
+        return UserRole.USER;
     },
     generateRandomString: (length: number): string => {
         const characters = 'abcdefghijklmnopqrstuvwxyz0123456789';

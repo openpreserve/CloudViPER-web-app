@@ -1,0 +1,287 @@
+// System Statistics Dashboard Component
+class SystemStatistics extends React.Component {
+    constructor(props) {
+        super(props);
+        this.state = {
+            statisticsData: null,
+            isLoading: true,
+            error: null,
+            lastUpdated: null
+        };
+    }
+
+    componentDidMount() {
+        this.fetchStatistics();
+        // Auto-refresh every 60 seconds
+        this.interval = setInterval(() => {
+            this.fetchStatistics();
+        }, 60000);
+    }
+
+    componentWillUnmount() {
+        if (this.interval) {
+            clearInterval(this.interval);
+        }
+    }
+
+    componentDidUpdate() {
+        // Set background colors and widths for bars with data attributes
+        const barElements = document.querySelectorAll('.bar-fill[data-color]');
+        barElements.forEach(element => {
+            const color = element.getAttribute('data-color');
+            const width = element.getAttribute('data-width');
+            
+            if (color) {
+                element.style.backgroundColor = color;
+            }
+            if (width) {
+                element.style.width = width + '%';
+            }
+        });
+    }
+
+    fetchStatistics = async () => {
+        try {
+            const response = await fetch('/service/statistics');
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            const data = await response.json();
+            
+            this.setState({
+                statisticsData: data,
+                isLoading: false,
+                error: null,
+                lastUpdated: new Date()
+            });
+        } catch (error) {
+            this.setState({
+                error: error.message,
+                isLoading: false
+            });
+        }
+    }
+
+    renderChart = (data, title, colorScheme = 'blue') => {
+        if (!data || data.length === 0) {
+            return <div className="no-data">No data available</div>;
+        }
+
+        const colors = {
+            blue: ['#007bff', '#0056b3', '#004085'],
+            green: ['#28a745', '#1e7e34', '#155724'],
+            orange: ['#fd7e14', '#e55100', '#d63384'],
+            purple: ['#6f42c1', '#5a32a3', '#4c2a85']
+        };
+
+        const colorPalette = colors[colorScheme] || colors.blue;
+
+        return (
+            <div className="chart-container">
+                <h5>{title}</h5>
+                <div className="chart-bars">
+                    {data.map((item, index) => {
+                        const maxValue = Math.max(...data.map(d => d.count || d.value || 0));
+                        const percentage = maxValue > 0 ? ((item.count || item.value || 0) / maxValue) * 100 : 0;
+                        const color = colorPalette[index % colorPalette.length];
+                        
+                        return (
+                            <div key={index} className="chart-bar-item">
+                                <div className="bar-label">
+                                    {item.role || item.status || item.label || `Item ${index + 1}`}
+                                </div>
+                                <div className="bar-container">
+                                    <div 
+                                        className="bar-fill" 
+                                        data-width={percentage}
+                                        data-color={color}
+                                    ></div>
+                                    <span className="bar-value">{item.count || item.value || 0}</span>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+        );
+    }
+
+    render() {
+        const { statisticsData, isLoading, error, lastUpdated } = this.state;
+
+        if (isLoading) {
+            return (
+                <div className="loading">
+                    <i className="fas fa-spinner fa-spin"></i>
+                    <p>Loading system statistics...</p>
+                </div>
+            );
+        }
+
+        if (error) {
+            return (
+                <div className="alert alert-danger">
+                    <h4><i className="fas fa-exclamation-triangle"></i> Error Loading Statistics</h4>
+                    <p>{error}</p>
+                    <button className="btn btn-outline-danger" onClick={this.fetchStatistics}>
+                        <i className="fas fa-redo"></i> Retry
+                    </button>
+                </div>
+            );
+        }
+
+        if (!statisticsData) {
+            return <div className="alert alert-warning">No statistics data available</div>;
+        }
+
+        return (
+            <div className="statistics-dashboard">
+                <div className="statistics-header">
+                    <h2><i className="fas fa-chart-line"></i> System Statistics</h2>
+                    <div className="header-actions">
+                        <span className="last-updated">
+                            Last updated: {lastUpdated ? lastUpdated.toLocaleString() : 'Unknown'}
+                        </span>
+                        <button className="btn btn-outline-primary" onClick={this.fetchStatistics}>
+                            <i className="fas fa-sync-alt"></i> Refresh
+                        </button>
+                    </div>
+                </div>
+
+                {/* Summary Cards */}
+                <div className="summary-cards">
+                    <div className="summary-card">
+                        <div className="card-icon">
+                            <i className="fas fa-server"></i>
+                        </div>
+                        <div className="card-content">
+                            <div className="card-number">{(statisticsData.summary && statisticsData.summary.totalInstances) || 0}</div>
+                            <div className="card-label">Total Instances</div>
+                        </div>
+                    </div>
+                    
+                    <div className="summary-card active">
+                        <div className="card-icon">
+                            <i className="fas fa-play-circle"></i>
+                        </div>
+                        <div className="card-content">
+                            <div className="card-number">{(statisticsData.summary && statisticsData.summary.activeInstances) || 0}</div>
+                            <div className="card-label">Active Instances</div>
+                        </div>
+                    </div>
+                    
+                    <div className="summary-card inactive">
+                        <div className="card-icon">
+                            <i className="fas fa-pause-circle"></i>
+                        </div>
+                        <div className="card-content">
+                            <div className="card-number">{(statisticsData.summary && statisticsData.summary.inactiveInstances) || 0}</div>
+                            <div className="card-label">Inactive Instances</div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Charts Section */}
+                <div className="charts-grid">
+                    <div className="chart-section">
+                        {this.renderChart(
+                            statisticsData.byRole, 
+                            'Instances by User Role', 
+                            'blue'
+                        )}
+                    </div>
+                    
+                    <div className="chart-section">
+                        {this.renderChart(
+                            statisticsData.byStatus, 
+                            'Instances by Status', 
+                            'green'
+                        )}
+                    </div>
+                </div>
+
+                {/* Recent Instances Table */}
+                {statisticsData.recentInstances && statisticsData.recentInstances.length > 0 && (
+                    <div className="recent-instances">
+                        <h4><i className="fas fa-clock"></i> Recent Instances</h4>
+                        <div className="table-responsive">
+                            <table className="table table-striped">
+                                <thead>
+                                    <tr>
+                                        <th>UUID</th>
+                                        <th>Owner</th>
+                                        <th>Role</th>
+                                        <th>Status</th>
+                                        <th>URL</th>
+                                        <th>Age</th>
+                                        <th>Created</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {statisticsData.recentInstances.map((instance, index) => (
+                                        <tr key={index}>
+                                            <td>
+                                                <code>{instance.uuid}</code>
+                                            </td>
+                                            <td>
+                                                {instance.ownerUser ? (
+                                                    <div>
+                                                        <strong>{instance.ownerUser.username}</strong>
+                                                        <br />
+                                                        <small className="text-muted">{instance.ownerUser.email}</small>
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-muted">Unknown</span>
+                                                )}
+                                            </td>
+                                            <td>
+                                                <span className={`badge badge-${this.getRoleBadgeColor(instance.ownerUser && instance.ownerUser.role)}`}>
+                                                    {(instance.ownerUser && instance.ownerUser.role) || 'unknown'}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <span className={`status-badge status-${instance.status}`}>
+                                                    {instance.status}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                {instance.url ? (
+                                                    <a href={`https://${instance.url}`} target="_blank" rel="noopener noreferrer" className="text-primary">
+                                                        {instance.url}
+                                                    </a>
+                                                ) : (
+                                                    <span className="text-muted">N/A</span>
+                                                )}
+                                            </td>
+                                            <td>{instance.age}</td>
+                                            <td>{new Date(instance.createdAt).toLocaleString()}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
+
+                {/* Timestamp Footer */}
+                <div className="statistics-footer">
+                    <p className="text-muted">
+                        <i className="fas fa-info-circle"></i>
+                        Statistics generated at: {new Date(statisticsData.timestamp).toLocaleString()}
+                    </p>
+                </div>
+            </div>
+        );
+    }
+
+    getRoleBadgeColor = (role) => {
+        switch (role) {
+            case 'admin': return 'danger';
+            case 'subscriber': return 'success';
+            case 'member': return 'info';
+            case 'testing': return 'warning';
+            case 'user': return 'secondary';
+            default: return 'light';
+        }
+    }
+}

@@ -3,13 +3,26 @@ FROM node:22-alpine3.19
 # Set the working directory
 WORKDIR /usr/src/app
 
-COPY ./web-app/dist/ ./
+# Copy package files first for better caching
+COPY ./web-app/package*.json ./
+COPY ./web-app/tsconfig.json ./
+COPY ./web-app/gulpfile.js ./
 
-# Install dependencies
-RUN npm install
+# Install all dependencies (including dev dependencies for build)
+RUN npm ci
+
+# Copy source code
+COPY ./web-app/src/ ./src/
+COPY ./web-app/scripts/ ./scripts/
+
+# Build the TypeScript application
+RUN npm run build
+
+# Remove dev dependencies to reduce image size
+RUN npm prune --production
 
 # Expose the port
 EXPOSE 3000
 
 # Start the application
-CMD [ "node", "app.js" ]
+CMD [ "node", "dist/app.js" ]

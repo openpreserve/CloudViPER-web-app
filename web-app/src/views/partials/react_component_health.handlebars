@@ -1,0 +1,261 @@
+// System Health Monitor Component
+class SystemHealth extends React.Component {
+    constructor(props) {
+        super(props);
+        this.state = {
+            healthData: null,
+            isLoading: true,
+            error: null,
+            lastUpdated: null
+        };
+    }
+
+    componentDidMount() {
+        this.fetchHealthData();
+        // Auto-refresh every 30 seconds
+        this.interval = setInterval(() => {
+            this.fetchHealthData();
+        }, 30000);
+    }
+
+    componentWillUnmount() {
+        if (this.interval) {
+            clearInterval(this.interval);
+        }
+    }
+
+    componentDidUpdate() {
+        // Set colors for elements with data-color attributes
+        const colorElements = document.querySelectorAll('[data-color]');
+        colorElements.forEach(element => {
+            const color = element.getAttribute('data-color');
+            if (color) {
+                element.style.color = color;
+            }
+        });
+    }
+
+    fetchHealthData = async () => {
+        try {
+            const response = await fetch('/service/health');
+            const data = await response.json();
+            
+            this.setState({
+                healthData: data,
+                isLoading: false,
+                error: null,
+                lastUpdated: new Date()
+            });
+        } catch (error) {
+            this.setState({
+                error: error.message,
+                isLoading: false
+            });
+        }
+    }
+
+    getStatusIcon = (status) => {
+        switch (status) {
+            case 'healthy':
+                return { icon: 'fas fa-check-circle', color: '#28a745' };
+            case 'degraded':
+                return { icon: 'fas fa-exclamation-triangle', color: '#ffc107' };
+            case 'error':
+                return { icon: 'fas fa-times-circle', color: '#dc3545' };
+            default:
+                return { icon: 'fas fa-question-circle', color: '#6c757d' };
+        }
+    }
+
+    formatUptime = (seconds) => {
+        const days = Math.floor(seconds / 86400);
+        const hours = Math.floor((seconds % 86400) / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+        
+        if (days > 0) {
+            return `${days}d ${hours}h ${minutes}m`;
+        } else if (hours > 0) {
+            return `${hours}h ${minutes}m`;
+        } else {
+            return `${minutes}m`;
+        }
+    }
+
+    formatMemory = (bytes) => {
+        const mb = bytes / 1024 / 1024;
+        return `${mb.toFixed(1)} MB`;
+    }
+
+    render() {
+        const { healthData, isLoading, error, lastUpdated } = this.state;
+
+        if (isLoading) {
+            return (
+                <div className="loading">
+                    <i className="fas fa-spinner fa-spin"></i>
+                    <p>Loading system health data...</p>
+                </div>
+            );
+        }
+
+        if (error) {
+            return (
+                <div className="alert alert-danger">
+                    <h4><i className="fas fa-exclamation-triangle"></i> Error Loading Health Data</h4>
+                    <p>{error}</p>
+                    <button className="btn btn-outline-danger" onClick={this.fetchHealthData}>
+                        <i className="fas fa-redo"></i> Retry
+                    </button>
+                </div>
+            );
+        }
+
+        if (!healthData) {
+            return <div className="alert alert-warning">No health data available</div>;
+        }
+
+        const statusInfo = this.getStatusIcon(healthData.status);
+
+        return (
+            <div className="health-monitor">
+                <div className="health-header">
+                    <div className="health-status">
+                        <i className={statusInfo.icon + ' health-status-icon'} 
+                           data-color={statusInfo.color}></i>
+                        <div className="status-info">
+                            <h3 className="system-status-title" data-color={statusInfo.color}>
+                                System {healthData.status}
+                            </h3>
+                            <p className="text-muted">
+                                Last updated: {lastUpdated ? lastUpdated.toLocaleString() : 'Unknown'}
+                            </p>
+                        </div>
+                    </div>
+                    <button className="btn btn-outline-primary" onClick={this.fetchHealthData}>
+                        <i className="fas fa-sync-alt"></i> Refresh
+                    </button>
+                </div>
+
+                <div className="health-cards">
+                    {/* System Info Card */}
+                    <div className="health-card">
+                        <div className="card-header">
+                            <h4><i className="fas fa-server"></i> System Information</h4>
+                        </div>
+                        <div className="card-body">
+                            <div className="health-metric">
+                                <span className="metric-label">Environment:</span>
+                                <span className="metric-value">{healthData.environment}</span>
+                            </div>
+                            <div className="health-metric">
+                                <span className="metric-label">Uptime:</span>
+                                <span className="metric-value">{this.formatUptime(healthData.uptime)}</span>
+                            </div>
+                            <div className="health-metric">
+                                <span className="metric-label">Timestamp:</span>
+                                <span className="metric-value">
+                                    {new Date(healthData.timestamp).toLocaleString()}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Database Card */}
+                    <div className="health-card">
+                        <div className="card-header">
+                            <h4>
+                                <i className="fas fa-database"></i> Database
+                                <span className={`status-badge ${healthData.database && healthData.database.status === 'connected' ? 'status-active' : 'status-error'}`}>
+                                    {(healthData.database && healthData.database.status) || 'unknown'}
+                                </span>
+                            </h4>
+                        </div>
+                        <div className="card-body">
+                            {healthData.database && healthData.database.status === 'connected' ? (
+                                <div className="success-message">
+                                    <i className="fas fa-check-circle text-success"></i>
+                                    Database connection is healthy
+                                </div>
+                            ) : (
+                                <div className="error-message">
+                                    <i className="fas fa-times-circle text-danger"></i>
+                                    {(healthData.database && healthData.database.message) || 'Database connection failed'}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Docker Card */}
+                    <div className="health-card">
+                        <div className="card-header">
+                            <h4>
+                                <i className="fab fa-docker"></i> Docker
+                                <span className={`status-badge ${healthData.docker && healthData.docker.status === 'connected' ? 'status-active' : 'status-error'}`}>
+                                    {(healthData.docker && healthData.docker.status) || 'unknown'}
+                                </span>
+                            </h4>
+                        </div>
+                        <div className="card-body">
+                            {healthData.docker && healthData.docker.status === 'connected' ? (
+                                <div className="success-message">
+                                    <i className="fas fa-check-circle text-success"></i>
+                                    Docker daemon is accessible
+                                </div>
+                            ) : (
+                                <div className="error-message">
+                                    <i className="fas fa-times-circle text-danger"></i>
+                                    {(healthData.docker && healthData.docker.message) || 'Docker connection failed'}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Statistics Card (Admin only) */}
+                    {healthData.statistics && (
+                        <div className="health-card statistics-card">
+                            <div className="card-header">
+                                <h4><i className="fas fa-chart-bar"></i> System Statistics</h4>
+                            </div>
+                            <div className="card-body">
+                                <div className="stats-grid">
+                                    <div className="stat-item">
+                                        <div className="stat-number">{healthData.statistics.totalInstances}</div>
+                                        <div className="stat-label">Total Instances</div>
+                                    </div>
+                                    <div className="stat-item">
+                                        <div className="stat-number">{healthData.statistics.activeInstances}</div>
+                                        <div className="stat-label">Active Instances</div>
+                                    </div>
+                                    <div className="stat-item">
+                                        <div className="stat-number">{healthData.statistics.totalUsers}</div>
+                                        <div className="stat-label">Total Users</div>
+                                    </div>
+                                </div>
+                                
+                                {healthData.statistics.memoryUsage && (
+                                    <div className="memory-usage">
+                                        <h5>Memory Usage</h5>
+                                        <div className="memory-stats">
+                                            <div className="memory-stat">
+                                                <span>RSS:</span>
+                                                <span>{this.formatMemory(healthData.statistics.memoryUsage.rss)}</span>
+                                            </div>
+                                            <div className="memory-stat">
+                                                <span>Heap Used:</span>
+                                                <span>{this.formatMemory(healthData.statistics.memoryUsage.heapUsed)}</span>
+                                            </div>
+                                            <div className="memory-stat">
+                                                <span>Heap Total:</span>
+                                                <span>{this.formatMemory(healthData.statistics.memoryUsage.heapTotal)}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
+    }
+}

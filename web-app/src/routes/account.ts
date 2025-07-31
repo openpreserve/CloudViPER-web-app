@@ -9,6 +9,7 @@ import helperFunctions from '../utility/helperFunctions';
 import emailRelay, { EmailRelay } from '../utility/emailRelay';
 import configAuth from '../config/auth';
 import { appLogger } from '../config/logger';
+import { UserRole, isValidRole, toUserRole } from '../types/UserRole';
 
 dotenv.config();
 
@@ -25,6 +26,7 @@ member - can run one viper
 subscriber - pays for use
 admin - viper and user management
 
+Note: These roles are now defined as an enum in ../types/UserRole.ts
 */
 
 function userAsJSON(user: any): object {
@@ -32,6 +34,7 @@ function userAsJSON(user: any): object {
         return {
             id: user.id,
             username: user.username,
+            email: user.email,
             role: user.role
         };
     } catch (err) {
@@ -42,14 +45,15 @@ function userAsJSON(user: any): object {
 interface AccountUser {
     id: number;
     username: string;
-    role: string;
+    email: string;
+    role: UserRole;
 }
 
 interface SafeUser {
     id: number;
     username: string;
     email: string;
-    role: string;
+    role: UserRole;
     // Add other properties as needed
 }
 
@@ -60,21 +64,48 @@ router.get('/', (req: Request, res: Response) => {
         //console.log( JSON.stringify(user) );
 
         switch (user.role) {
-            case 'admin':
+            case UserRole.ADMIN:
                 res.redirect('/service/admin');
                 break;
-            case 'testing':
+            case UserRole.TESTING:
                 res.redirect('/service/testing');
                 break;
-            case 'member':
+            case UserRole.MEMBER:
                 res.redirect('/service/member');
                 break;
 
             default:
-                res.render('user_account_index', {
-                    // csrfToken: req.csrfToken(),
-                    user: req.user ? userAsJSON( req.user ) : {},
-                    alertSuccess: alertSuccess
+                console.log("DEBUG: Full req.user object:", JSON.stringify(req.user, null, 2));
+                console.log("DEBUG: userAsJSON result:", JSON.stringify(userAsJSON(req.user), null, 2));
+                
+                // Fetch full user data from database to ensure we have email
+                db.User.findByPk(user.id).then((fullUser: any | null) => {
+                    if (fullUser) {
+                        console.log("DEBUG: Full user from DB:", JSON.stringify({
+                            id: fullUser.id,
+                            username: fullUser.username,
+                            email: fullUser.email,
+                            role: fullUser.role
+                        }, null, 2));
+                        
+                        res.render('user_account_index', {
+                            user: userAsJSON(fullUser),
+                            alertSuccess: alertSuccess
+                        });
+                    } else {
+                        // Fallback to session user if DB lookup fails
+                        res.render('user_account_index', {
+                            user: req.user ? userAsJSON( req.user ) : {},
+                            alertSuccess: alertSuccess
+                        });
+                    }
+                }).catch((err: Error) => {
+                    console.error("Error fetching full user data:", err);
+                    // Fallback to session user if DB lookup fails
+                    res.render('user_account_index', {
+                        user: req.user ? userAsJSON( req.user ) : {},
+                        alertSuccess: alertSuccess
+                    });
                 });
         }
 
@@ -89,7 +120,7 @@ router.post('/update', (req: Request, res: Response) => {
 
     const user = req.user as AccountUser | undefined;
 
-    if (user && (user.role == 'admin' || user.id == _userid)) {
+    if (user && (user.role == UserRole.ADMIN || user.id == _userid)) {
         switch (_action) {
             case 'get':
                 interface FindUserResponse {
@@ -123,7 +154,7 @@ router.post('/update', (req: Request, res: Response) => {
 router.get('/users', (req: Request, res: Response) => {
     const user = req.user as AccountUser | undefined;
 
-    if (user && user.role == 'admin') {
+    if (user && user.role == UserRole.ADMIN) {
         db.User.findAll().then((users: any[]) => {
             // // Remove 'salt' and 'hash' from each user
             // const safeUsers: SafeUser[] = users.map(user => {
@@ -142,11 +173,20 @@ router.get('/users', (req: Request, res: Response) => {
     }
 });
 
-router.put('/users/:id/role', async (req: Request, res: Response) => {
+router.put('/users/:id/role', async (req: Request, res: Response): Promise<void> => {
     const currentUser = req.user as AccountUser;
-    if (currentUser && currentUser.role == 'admin') {
+    if (currentUser && currentUser.role == UserRole.ADMIN) {
         const userId = req.params.id;
         const newRole = req.body.role;
+
+        // Validate the new role
+        if (!isValidRole(newRole)) {
+            res.status(400).send({ 
+                message: 'Invalid role', 
+                validRoles: Object.values(UserRole) 
+            });
+            return;
+        }
 
         try {
             // Get the target user's current role for logging
@@ -190,12 +230,16 @@ router.put('/users/:id/role', async (req: Request, res: Response) => {
 
 router.post('/users/invite', async (req: Request, res: Response): Promise<void> => {
     const currentUser = req.user as AccountUser;
-    if (currentUser && currentUser.role == 'admin') {   
+    if (currentUser && currentUser.role == UserRole.ADMIN) {   
+        // Validate the role before processing
+        const assignedRole = toUserRole(req.body.role);
+        
         try {
             const newUsername = helperFunctions.generateUsername(req.body.email);
+            
             const user = await db.User.register({
                 username: newUsername,
-                role: req.body.role,
+                role: assignedRole,
                 email: req.body.email,
                 oauthProvider: "vipercloud",
                 // created: Date.now()
@@ -207,7 +251,7 @@ router.post('/users/invite', async (req: Request, res: Response): Promise<void> 
                 newUserId: user.id,
                 newUserEmail: req.body.email,
                 newUsername,
-                assignedRole: req.body.role,
+                assignedRole: assignedRole,
                 invitedByUserId: currentUser.id,
                 invitedByUsername: currentUser.username,
                 timestamp: new Date().toISOString()
@@ -245,7 +289,7 @@ router.post('/users/invite', async (req: Request, res: Response): Promise<void> 
             appLogger.error('User invitation failed', {
                 eventType: 'User Invitation Error',
                 targetEmail: req.body.email,
-                targetRole: req.body.role,
+                targetRole: assignedRole,
                 invitedByUserId: currentUser.id,
                 invitedByUsername: currentUser.username,
                 error: err.message,
@@ -260,7 +304,7 @@ router.post('/users/invite', async (req: Request, res: Response): Promise<void> 
 });
 
 router.get('/sessions', (req: Request, res: Response) => {
-    if (req.user && (req.user as AccountUser).role == 'admin') {
+    if (req.user && (req.user as AccountUser).role == UserRole.ADMIN) {
         const connection = mysql.createConnection(configAuth.mysqlSessionAuth);
         const query = 'SELECT session_id, expires, data FROM sessions';
 
@@ -292,6 +336,115 @@ router.get('/sessions', (req: Request, res: Response) => {
         });   
     } else {
         res.status(403).send({ message: 'Error 2' });
+    }
+});
+
+// Delete individual session (admin only)
+router.delete('/sessions/:sessionId', (req: Request, res: Response): void => {
+    if (req.user && (req.user as AccountUser).role == UserRole.ADMIN) {
+        const sessionId = req.params.sessionId;
+        
+        if (!sessionId || typeof sessionId !== 'string') {
+            res.status(400).json({ 
+                success: false, 
+                message: 'Invalid session ID provided' 
+            });
+            return;
+        }
+
+        const connection = mysql.createConnection(configAuth.mysqlSessionAuth);
+        const query = 'DELETE FROM sessions WHERE session_id = ?';
+
+        connection.query(query, [sessionId], (error, results: mysql.OkPacket) => {
+            if (error) {
+                console.error('Error deleting session:', error);
+                res.status(500).json({ 
+                    success: false, 
+                    message: 'Error deleting session', 
+                    error: error.message 
+                });
+                return;
+            }
+
+            if (results.affectedRows === 0) {
+                res.status(404).json({ 
+                    success: false, 
+                    message: 'Session not found' 
+                });
+                return;
+            }
+
+            res.json({ 
+                success: true, 
+                message: 'Session deleted successfully',
+                sessionId: sessionId,
+                affectedRows: results.affectedRows
+            });
+        });
+    } else {
+        res.status(403).json({ 
+            success: false, 
+            message: 'Admin access required' 
+        });
+    }
+});
+
+// Revoke all sessions (admin only)
+router.delete('/sessions', (req: Request, res: Response): void => {
+    if (req.user && (req.user as AccountUser).role == UserRole.ADMIN) {
+        const connection = mysql.createConnection(configAuth.mysqlSessionAuth);
+        
+        // First get count of sessions to be deleted
+        const countQuery = 'SELECT COUNT(*) as count FROM sessions';
+        
+        connection.query(countQuery, (countError, countResults: mysql.RowDataPacket[]) => {
+            if (countError) {
+                console.error('Error counting sessions:', countError);
+                res.status(500).json({ 
+                    success: false, 
+                    message: 'Error counting sessions', 
+                    error: countError.message 
+                });
+                return;
+            }
+
+            const sessionCount = countResults[0].count;
+            
+            if (sessionCount === 0) {
+                res.json({ 
+                    success: true, 
+                    message: 'No sessions to revoke',
+                    deletedCount: 0
+                });
+                return;
+            }
+
+            // Delete all sessions
+            const deleteQuery = 'DELETE FROM sessions';
+            
+            connection.query(deleteQuery, (deleteError, deleteResults: mysql.OkPacket) => {
+                if (deleteError) {
+                    console.error('Error revoking all sessions:', deleteError);
+                    res.status(500).json({ 
+                        success: false, 
+                        message: 'Error revoking all sessions', 
+                        error: deleteError.message 
+                    });
+                    return;
+                }
+
+                res.json({ 
+                    success: true, 
+                    message: `Successfully revoked ${deleteResults.affectedRows} session(s)`,
+                    deletedCount: deleteResults.affectedRows
+                });
+            });
+        });
+    } else {
+        res.status(403).json({ 
+            success: false, 
+            message: 'Admin access required' 
+        });
     }
 });
 
@@ -633,7 +786,7 @@ router.post('/reset-token', async (req: Request, res: Response): Promise<void> =
 
 router.get('/debug-tokens', async (req: Request, res: Response) => {
     // Debug endpoint to check tokens in database
-    if (req.user && (req.user as AccountUser).role == 'admin') {
+    if (req.user && (req.user as AccountUser).role == UserRole.ADMIN) {
         try {
             const users = await db.User.findAll({
                 attributes: ['id', 'username', 'email', 'resetPasswordToken', 'resetPasswordExpires']

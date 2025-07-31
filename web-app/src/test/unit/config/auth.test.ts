@@ -32,7 +32,7 @@ describe('Auth Configuration', () => {
     });
 
     it('should have correct callback URL', () => {
-      expect(auth.googleAuth.callbackURL).toBe('https://www.vipercloud.cc/account/google/return/');
+      expect(auth.googleAuth.callbackURL).toBe(`https://${process.env.DOMAIN_NAME || 'cloudviper.org'}/account/google/return/`);
     });
 
     it('should handle environment configuration properly', () => {
