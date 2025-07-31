@@ -1047,13 +1047,47 @@
     class AdminDashboard extends React.Component {
         constructor(props) {
             super(props);
+            
+            // Define available tabs
+            this.availableTabs = ['users', 'sessions', 'instances', 'health', 'statistics', 'logs'];
+            
             this.state = {
-                activeTab: 'users'
+                activeTab: this.getInitialTab()
             };
         }
 
+        componentDidMount() {
+            // Listen for hash changes (browser back/forward navigation)
+            window.addEventListener('hashchange', this.handleHashChange);
+        }
+
+        componentWillUnmount() {
+            // Clean up event listener
+            window.removeEventListener('hashchange', this.handleHashChange);
+        }
+
+        getInitialTab = () => {
+            // Get tab from URL hash, fallback to 'users' if invalid
+            const hash = window.location.hash.substring(1); // Remove the # symbol
+            return this.availableTabs.includes(hash) ? hash : 'users';
+        }
+
+        handleHashChange = () => {
+            // Update active tab when hash changes (e.g., browser navigation)
+            const newTab = this.getInitialTab();
+            if (newTab !== this.state.activeTab) {
+                this.setState({ activeTab: newTab });
+            }
+        }
+
         switchTab = (tabName) => {
+            // Update both state and URL hash
             this.setState({ activeTab: tabName });
+            
+            // Update URL hash without triggering page reload
+            if (window.location.hash !== `#${tabName}`) {
+                window.history.pushState(null, null, `#${tabName}`);
+            }
         }
 
         render() {
