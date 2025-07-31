@@ -2204,7 +2204,8 @@ router.get('/screenshots/:instanceUUID', async (req: Request, res: Response): Pr
         const uniqueScreenshots = [];
         const seenHashes = new Set();
 
-        for (const screenshot of allScreenshots) {
+        for (let i = 0; i < allScreenshots.length; i++) {
+            const screenshot = allScreenshots[i];
             const imageData = screenshot.screenshotData;
             if (imageData) {
                 // Create a simple hash from image size and first 100 characters
@@ -2217,7 +2218,8 @@ router.get('/screenshots/:instanceUUID', async (req: Request, res: Response): Pr
                         instanceUUID: screenshot.instanceUUID,
                         capturedAt: screenshot.capturedAt,
                         receivedAt: screenshot.receivedAt,
-                        index: uniqueScreenshots.length,
+                        index: i, // Use the actual index in the allScreenshots array
+                        uniqueIndex: uniqueScreenshots.length, // Position in unique array
                         isLatest: uniqueScreenshots.length === 0
                     });
                 }
