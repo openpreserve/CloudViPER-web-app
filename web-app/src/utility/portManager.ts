@@ -3,6 +3,9 @@ import Docker from 'dockerode';
 
 const docker = new Docker({ socketPath: '/var/run/docker.sock' });
 
+// Track ports being allocated to prevent race conditions
+const allocatingPorts = new Set<number>();
+
 /**
  * Get list of ports currently used by Docker containers
  * @returns Promise<Set<number>> - Set of ports in use by Docker
@@ -46,22 +49,32 @@ export async function getAvailablePort(startPort: number = 3001, endPort: number
                 return;
             }
 
-            // Skip ports used by Docker
-            if (dockerUsedPorts.has(port)) {
+            // Skip ports used by Docker or currently being allocated
+            if (dockerUsedPorts.has(port) || allocatingPorts.has(port)) {
                 checkPort(port + 1);
                 return;
             }
+
+            // Mark port as being allocated to prevent race conditions
+            allocatingPorts.add(port);
 
             const server = net.createServer();
             
             server.listen(port, '127.0.0.1', () => {
                 const availablePort = port;
                 server.close(() => {
+                    // Keep port marked as allocated for a short time to prevent race conditions
+                    setTimeout(() => {
+                        allocatingPorts.delete(port);
+                    }, 100);
                     resolve(availablePort);
                 });
             });
 
             server.on('error', (err: NodeJS.ErrnoException) => {
+                // Remove from allocating set on error
+                allocatingPorts.delete(port);
+                
                 if (err.code === 'EADDRINUSE') {
                     // Port is in use, try the next one
                     checkPort(port + 1);
@@ -83,8 +96,8 @@ export async function getAvailablePort(startPort: number = 3001, endPort: number
 export async function isPortAvailable(port: number): Promise<boolean> {
     const dockerUsedPorts = await getDockerUsedPorts();
     
-    // Check if Docker is using this port
-    if (dockerUsedPorts.has(port)) {
+    // Check if Docker is using this port or it's being allocated
+    if (dockerUsedPorts.has(port) || allocatingPorts.has(port)) {
         return false;
     }
     

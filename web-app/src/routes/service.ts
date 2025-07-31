@@ -309,7 +309,7 @@ router.get('/new-instance', async (req: Request, res: Response): Promise<void> =
         const availablePort = process.env.NODE_ENV === 'dev' ? await getAvailablePort(3010) : 3000;
 
         const containerOptions: any = {
-            Image: 'darrendignam/opf-viper-cloud:v0.0.10',
+            Image: 'darrendignam/opf-viper-cloud:v0.0.11',
             name: containerName,
             HostConfig: {
                 ShmSize: 1024 * 1024 * 1024,
