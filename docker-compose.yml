@@ -35,8 +35,8 @@ services:
     ##########################################
     # Production command  
     command: [ "node", "dist/app.js" ]
-    # Development command (commented out for production)
-    # command: ["sh", "-c", "npm install && npm install -g nodemon && nodemon app.js"]
+    # Development command - optimized for TypeScript + Handlebars
+    # command: ["sh", "-c", "npm ci && npx nodemon --watch src --ext ts,js,handlebars --exec 'npx ts-node --transpile-only src/app.ts'"]
     
   mysqldb:
     image: mysql:8.0
