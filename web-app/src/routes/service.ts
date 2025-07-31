@@ -2079,6 +2079,182 @@ router.get('/screenshot/:instanceUUID', async (req: Request, res: Response): Pro
     }
 });
 
+// Get screenshot image data only (returns base64 image for direct use in img src)
+router.get('/screenshot-image/:instanceUUID', async (req: Request, res: Response): Promise<void> => {
+    const user = req.user as ServiceUser | undefined;
+    const { instanceUUID } = req.params;
+    const { index = '0' } = req.query; // Allow specifying which screenshot by index
+
+    // Check permissions
+    if (!user) {
+        res.status(401).json({ error: 'Authentication required' });
+        return;
+    }
+
+    try {
+        const instance = await db.ViperInstance.findOne({
+            where: { uuid: instanceUUID }
+        });
+
+        if (!instance) {
+            res.status(404).json({ error: 'Instance not found' });
+            return;
+        }
+
+        // Check if user owns instance or is admin
+        if (instance.owner !== user.id && user.role !== UserRole.ADMIN) {
+            res.status(403).json({ error: 'Unauthorized - can only view own instances' });
+            return;
+        }
+
+        // Get screenshots from Screenshot table
+        const screenshots = await db.Screenshot.findAll({
+            where: { instanceId: instance.id },
+            order: [['createdAt', 'DESC']],
+            limit: 10
+        });
+
+        if (!screenshots || screenshots.length === 0) {
+            res.status(404).json({ error: 'No screenshots available' });
+            return;
+        }
+
+        const screenshotIndex = parseInt(index as string) || 0;
+        const selectedScreenshot = screenshots[screenshotIndex];
+
+        if (!selectedScreenshot) {
+            res.status(404).json({ error: 'Screenshot index out of range' });
+            return;
+        }
+
+        // Return just the base64 image data with proper content type
+        const base64Data = selectedScreenshot.screenshotData;
+        if (base64Data) {
+            // Set proper headers for image response
+            res.setHeader('Content-Type', 'image/png');
+            res.setHeader('Cache-Control', 'public, max-age=300'); // Cache for 5 minutes
+            
+            // Convert base64 to buffer and send
+            const imageBuffer = Buffer.from(base64Data, 'base64');
+            res.send(imageBuffer);
+        } else {
+            res.status(404).json({ error: 'Screenshot data not found' });
+        }
+
+    } catch (error) {
+        appLogger.error('Error retrieving screenshot image', {
+            eventType: 'Screenshot Image Retrieval Error',
+            instanceUUID,
+            userId: user.id,
+            error: (error as Error).message,
+            timestamp: new Date().toISOString()
+        });
+
+        res.status(500).json({ error: 'Error retrieving screenshot image' });
+    }
+});
+
+// Get unique screenshots for carousel (detects duplicates)
+router.get('/screenshots/:instanceUUID', async (req: Request, res: Response): Promise<void> => {
+    const user = req.user as ServiceUser | undefined;
+    const { instanceUUID } = req.params;
+
+    // Check permissions
+    if (!user) {
+        res.status(401).json({ error: 'Authentication required' });
+        return;
+    }
+
+    try {
+        const instance = await db.ViperInstance.findOne({
+            where: { uuid: instanceUUID }
+        });
+
+        if (!instance) {
+            res.status(404).json({ error: 'Instance not found' });
+            return;
+        }
+
+        // Check if user owns instance or is admin
+        if (instance.owner !== user.id && user.role !== UserRole.ADMIN) {
+            res.status(403).json({ error: 'Unauthorized - can only view own instances' });
+            return;
+        }
+
+        // Get all screenshots from Screenshot table
+        const allScreenshots = await db.Screenshot.findAll({
+            where: { instanceId: instance.id },
+            order: [['createdAt', 'DESC']],
+            limit: 10,
+            attributes: ['id', 'instanceUUID', 'capturedAt', 'receivedAt', 'screenshotData']
+        });
+
+        if (!allScreenshots || allScreenshots.length === 0) {
+            res.json({
+                success: true,
+                screenshots: [],
+                uniqueScreenshots: [],
+                totalScreenshots: 0,
+                uniqueCount: 0
+            });
+            return;
+        }
+
+        // Simple duplicate detection using image size and first few characters
+        const uniqueScreenshots = [];
+        const seenHashes = new Set();
+
+        for (const screenshot of allScreenshots) {
+            const imageData = screenshot.screenshotData;
+            if (imageData) {
+                // Create a simple hash from image size and first 100 characters
+                const simpleHash = `${imageData.length}-${imageData.substring(0, 100)}`;
+                
+                if (!seenHashes.has(simpleHash)) {
+                    seenHashes.add(simpleHash);
+                    uniqueScreenshots.push({
+                        id: screenshot.id,
+                        instanceUUID: screenshot.instanceUUID,
+                        capturedAt: screenshot.capturedAt,
+                        receivedAt: screenshot.receivedAt,
+                        index: uniqueScreenshots.length,
+                        isLatest: uniqueScreenshots.length === 0
+                    });
+                }
+            }
+        }
+
+        res.json({
+            success: true,
+            screenshots: allScreenshots.map((s, index) => ({
+                id: s.id,
+                instanceUUID: s.instanceUUID,
+                capturedAt: s.capturedAt,
+                receivedAt: s.receivedAt,
+                index
+            })),
+            uniqueScreenshots,
+            totalScreenshots: allScreenshots.length,
+            uniqueCount: uniqueScreenshots.length,
+            instanceUUID
+        });
+
+    } catch (error) {
+        appLogger.error('Error retrieving screenshots list', {
+            eventType: 'Screenshots List Error',
+            instanceUUID,
+            userId: user.id,
+            error: (error as Error).message,
+            timestamp: new Date().toISOString()
+        });
+
+        res.status(500).json({
+            error: 'Error retrieving screenshots',
+            message: 'Failed to get screenshots data'
+        });
+    }
+});
+
 // Get activity history for an instance
 router.get('/activity/:instanceUUID', async (req: Request, res: Response): Promise<void> => {
     const user = req.user as ServiceUser | undefined;
@@ -2118,11 +2294,18 @@ router.get('/activity/:instanceUUID', async (req: Request, res: Response): Promi
         const totalEvents = activityHistory.reduce((sum: number, activity) => 
             sum + activity.mouseEvents + activity.keyboardEvents, 0);
         
+        // Ensure proper number conversion for decimal fields from database
         const avgCpuUsage = activityHistory.length > 0 ? 
-            activityHistory.reduce((sum: number, activity) => sum + activity.cpuUsage, 0) / activityHistory.length : 0;
+            activityHistory.reduce((sum: number, activity) => {
+                const cpuValue = parseFloat(activity.cpuUsage as any) || 0;
+                return sum + cpuValue;
+            }, 0) / activityHistory.length : 0;
         
         const avgMemoryUsage = activityHistory.length > 0 ? 
-            activityHistory.reduce((sum: number, activity) => sum + activity.memoryUsage, 0) / activityHistory.length : 0;
+            activityHistory.reduce((sum: number, activity) => {
+                const memoryValue = parseFloat(activity.memoryUsage as any) || 0;
+                return sum + memoryValue;
+            }, 0) / activityHistory.length : 0;
 
         res.json({
             success: true,

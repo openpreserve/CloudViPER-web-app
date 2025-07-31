@@ -1,4 +1,227 @@
-class ViPERInstanceList extends React.Component {
+    /* Activity Chart Styles */
+    const chartStyles = `
+      .activity-chart-container {
+        text-align: center;
+        padding: 10px;
+        background: #f8f9fa;
+        border-radius: 8px;
+        margin: 5px;
+      }
+      .chart-title {
+        color: #495057;
+        margin-bottom: 8px;
+        font-weight: 600;
+      }
+      .chart-legend {
+        display: flex;
+        justify-content: space-around;
+        margin-top: 5px;
+      }
+      .instance-buttons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+        justify-content: center;
+      }
+      .instance-buttons .btn {
+        margin: 2px;
+      }
+      .card-footer {
+        background-color: #f8f9fa;
+        border-top: 1px solid #dee2e6;
+        padding: 10px;
+      }
+      
+      /* Screenshot Carousel Styles */
+      .screenshot-container {
+        position: relative;
+        width: 100%;
+        overflow: hidden;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      
+      .screenshot-container.loading {
+        background: #f8f9fa;
+      }
+      
+      .loading-overlay {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: rgba(0,0,0,0.8);
+        color: white;
+        padding: 5px;
+        font-size: 10px;
+        text-align: center;
+      }
+      
+      .carousel-container {
+        border: 2px solid #dee2e6;
+        transition: border-color 0.3s ease;
+      }
+      
+      .carousel-container:hover {
+        border-color: #007bff;
+      }
+      
+      .screenshot-wrapper {
+        position: relative;
+        width: 100%;
+      }
+      
+      .screenshot-image {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        cursor: pointer;
+      }
+      
+      .carousel-btn {
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        background: rgba(0,0,0,0.7);
+        color: white;
+        border: none;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        font-size: 18px;
+        font-weight: bold;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.3s ease;
+        z-index: 10;
+      }
+      
+      .carousel-btn:hover {
+        background: rgba(0,0,0,0.9);
+        transform: translateY(-50%) scale(1.1);
+      }
+      
+      .carousel-prev {
+        left: 5px;
+      }
+      
+      .carousel-next {
+        right: 5px;
+      }
+      
+      .screenshot-info {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: linear-gradient(transparent, rgba(0,0,0,0.8));
+        color: white;
+        padding: 8px 5px 5px 5px;
+        font-size: 10px;
+        display: flex;
+        justify-content: space-between;
+        align-items: end;
+      }
+      
+      .screenshot-counter {
+        background: rgba(255,255,255,0.2);
+        padding: 2px 6px;
+        border-radius: 10px;
+        font-weight: bold;
+      }
+      
+      .screenshot-badge {
+        background: rgba(40,167,69,0.8);
+        padding: 2px 6px;
+        border-radius: 10px;
+        font-size: 9px;
+      }
+      
+      /* Screenshot Modal Styles */
+      .screenshot-modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.9);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1050;
+        padding: 20px;
+      }
+      
+      .screenshot-modal-content {
+        position: relative;
+        max-width: 95vw;
+        max-height: 95vh;
+        background: white;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+      }
+      
+      .screenshot-modal-header {
+        padding: 15px 20px;
+        background: #f8f9fa;
+        border-bottom: 1px solid #dee2e6;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      
+      .modal-title {
+        margin: 0;
+        font-size: 16px;
+      }
+      
+      .screenshot-modal-body {
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        max-height: calc(95vh - 80px);
+      }
+      
+      .screenshot-modal-image {
+        max-width: 100%;
+        max-height: 100%;
+        object-fit: contain;
+      }
+      
+      .screenshot-modal-close {
+        background: none;
+        border: none;
+        font-size: 24px;
+        color: #6c757d;
+        cursor: pointer;
+        padding: 0;
+        width: 30px;
+        height: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      
+      .screenshot-modal-close:hover {
+        color: #000;
+      }
+    `;
+    
+    // Inject styles
+    if (!document.getElementById('activity-chart-styles')) {
+      const styleSheet = document.createElement('style');
+      styleSheet.id = 'activity-chart-styles';
+      styleSheet.textContent = chartStyles;
+      document.head.appendChild(styleSheet);
+    }
+
+    class ViPERInstanceList extends React.Component {
       constructor(props) {
         super(props);
         this.state = {
@@ -18,7 +241,17 @@ class ViPERInstanceList extends React.Component {
             error: true,
             pending: true
           },
-          showFilters: false
+          showFilters: false,
+          // Screenshot carousel state
+          screenshotCarousels: {}, // Store carousel data for each instance
+          // Screenshot modal state
+          screenshotModal: {
+            isOpen: false,
+            imageUrl: '',
+            instanceUUID: '',
+            screenshotIndex: 0,
+            title: ''
+          }
         };
       }
 
@@ -44,12 +277,126 @@ class ViPERInstanceList extends React.Component {
               instances = data;
             }
             console.log('Fetched instances:', instances); // Debug log
-            this.setState({ instances: instances, isLoading: false });
+            this.setState({ instances: instances, isLoading: false }, () => {
+              // Refresh charts and initialize screenshot carousels after state update
+              this.refreshAllCharts();
+              this.initializeAllScreenshotCarousels();
+            });
           })
           .catch(error => {
             console.error('Error fetching instances:', error);
             this.setState({ error, isLoading: false, instances: [] });
           });
+      }
+
+      // Initialize screenshot carousels for all instances
+      initializeAllScreenshotCarousels = () => {
+        const { instances } = this.state;
+        instances.forEach(instance => {
+          // Small delay to ensure DOM is ready
+          setTimeout(() => this.initializeScreenshotCarousel(instance.uuid), 300);
+        });
+      }
+
+      // Refresh all activity charts
+      refreshAllCharts = () => {
+        const { instances } = this.state;
+        instances.forEach(instance => {
+          const canvasId = `chart-${instance.uuid}`;
+          // Small delay to ensure DOM is updated
+          setTimeout(() => this.initializeChart(canvasId, instance.uuid), 200);
+        });
+      }
+
+      // Screenshot carousel methods
+      fetchScreenshotsForInstance = async (instanceUUID) => {
+        try {
+          const response = await fetch(`/service/screenshots/${instanceUUID}`);
+          const data = await response.json();
+          
+          if (data.success) {
+            return {
+              uniqueScreenshots: data.uniqueScreenshots || [],
+              totalCount: data.totalScreenshots || 0,
+              uniqueCount: data.uniqueCount || 0
+            };
+          }
+          return { uniqueScreenshots: [], totalCount: 0, uniqueCount: 0 };
+        } catch (error) {
+          console.error('Error fetching screenshots:', error);
+          return { uniqueScreenshots: [], totalCount: 0, uniqueCount: 0 };
+        }
+      }
+
+      // Initialize screenshot carousel for an instance
+      initializeScreenshotCarousel = async (instanceUUID) => {
+        const screenshotData = await this.fetchScreenshotsForInstance(instanceUUID);
+        
+        this.setState(prevState => ({
+          screenshotCarousels: {
+            ...prevState.screenshotCarousels,
+            [instanceUUID]: {
+              screenshots: screenshotData.uniqueScreenshots,
+              currentIndex: 0,
+              totalCount: screenshotData.totalCount,
+              uniqueCount: screenshotData.uniqueCount,
+              hasScreenshots: screenshotData.uniqueScreenshots.length > 0
+            }
+          }
+        }));
+      }
+
+      // Navigate carousel
+      navigateScreenshot = (instanceUUID, direction) => {
+        this.setState(prevState => {
+          const carousel = prevState.screenshotCarousels[instanceUUID];
+          if (!carousel || carousel.screenshots.length === 0) return prevState;
+
+          let newIndex = carousel.currentIndex;
+          if (direction === 'next') {
+            newIndex = (newIndex + 1) % carousel.screenshots.length;
+          } else if (direction === 'prev') {
+            newIndex = newIndex === 0 ? carousel.screenshots.length - 1 : newIndex - 1;
+          }
+
+          return {
+            screenshotCarousels: {
+              ...prevState.screenshotCarousels,
+              [instanceUUID]: {
+                ...carousel,
+                currentIndex: newIndex
+              }
+            }
+          };
+        });
+      }
+
+      // Screenshot modal methods
+      openScreenshotModal = (instance, currentScreenshot) => {
+        const screenshotSrc = `/service/screenshot-image/${instance.uuid}?index=${currentScreenshot && currentScreenshot.index ? currentScreenshot.index : 0}`;
+        const title = `${instance.name} - Screenshot ${currentScreenshot && currentScreenshot.capturedAt ? new Date(currentScreenshot.capturedAt).toLocaleString() : 'Unknown'}`;
+        
+        this.setState({
+          screenshotModal: {
+            isOpen: true,
+            imageUrl: screenshotSrc,
+            instanceUUID: instance.uuid,
+            screenshotIndex: currentScreenshot ? currentScreenshot.index : 0,
+            title: title
+          }
+        });
+      }
+
+      closeScreenshotModal = () => {
+        this.setState({
+          screenshotModal: {
+            isOpen: false,
+            imageUrl: '',
+            instanceUUID: '',
+            screenshotIndex: 0,
+            title: ''
+          }
+        });
       }
 
       startNewInstance = () => {
@@ -209,21 +556,258 @@ class ViPERInstanceList extends React.Component {
           const data = await response.json();
           
           if (data.success) {
+            // Enhanced display with better formatting and null checking
+            const avgCpu = data.summary.avgCpuUsage != null ? Number(data.summary.avgCpuUsage).toFixed(1) : 'N/A';
+            const avgMemory = data.summary.avgMemoryUsage != null ? Number(data.summary.avgMemoryUsage).toFixed(1) : 'N/A';
+            
             alert(`Activity Summary for ${instanceUUID}:
-Total Events: ${data.summary.totalEvents}
-Average CPU: ${data.summary.avgCpuUsage}%
-Average Memory: ${data.summary.avgMemoryUsage}%
+Total Events: ${data.summary.totalEvents || 0}
+Average CPU Usage: ${avgCpu}%
+Average Memory Usage: ${avgMemory}%
 Last Activity: ${data.summary.lastActivity ? new Date(data.summary.lastActivity).toLocaleString() : 'Never'}
-User Active: ${data.summary.isUserActive ? 'Yes' : 'No'}
-Activity Score: ${data.summary.currentScore}`);
+User Currently Active: ${data.summary.isUserActive ? 'Yes' : 'No'}
+Current Activity Score: ${data.summary.currentScore || 0}`);
           } else {
             console.error('Error loading activity:', data.error);
             alert('Error loading activity history: ' + data.error);
           }
         } catch (error) {
           console.error('Error fetching activity:', error);
-          alert('Error fetching activity history');
+          alert('Error fetching activity history: ' + error.message);
         }
+      }
+
+      // Fetch activity data for charts (last 30 points)
+      fetchActivityDataForChart = async (instanceUUID) => {
+        try {
+          const response = await fetch(`/service/activity/${instanceUUID}?limit=30`);
+          const data = await response.json();
+          
+          if (data.success && data.activityHistory) {
+            return data.activityHistory.reverse(); // Reverse to show chronological order
+          }
+          return [];
+        } catch (error) {
+          console.error('Error fetching chart data:', error);
+          return [];
+        }
+      }
+
+      // Component for screenshot carousel
+      renderScreenshotCarousel = (instance) => {
+        const { screenshotCarousels } = this.state;
+        const carousel = screenshotCarousels[instance.uuid];
+        
+        // Initialize carousel if not already done
+        if (!carousel) {
+          setTimeout(() => this.initializeScreenshotCarousel(instance.uuid), 100);
+          return React.createElement('div', { className: 'screenshot-container loading' },
+            React.createElement('img', { 
+              src: '/images/apple-icon-180x180.png',
+              className: 'card-img-custom',
+              alt: 'Loading...',
+              style: { opacity: 0.7 }
+            }),
+            React.createElement('div', { className: 'loading-overlay' }, 'Loading screenshots...')
+          );
+        }
+
+        // If no screenshots available, show default logo
+        if (!carousel.hasScreenshots) {
+          return React.createElement('div', { className: 'screenshot-container' },
+            React.createElement('img', { 
+              src: '/images/apple-icon-180x180.png',
+              className: 'card-img-custom',
+              alt: 'ViPER Instance',
+              title: 'No screenshots available'
+            })
+          );
+        }
+
+        // Show screenshot carousel
+        const currentScreenshot = carousel.screenshots[carousel.currentIndex];
+        const screenshotSrc = `/service/screenshot-image/${instance.uuid}?index=${currentScreenshot && currentScreenshot.index ? currentScreenshot.index : 0}`;
+        
+        return React.createElement('div', { className: 'screenshot-container carousel-container' },
+          // Main screenshot image
+          React.createElement('div', { className: 'screenshot-wrapper' },
+            React.createElement('img', { 
+              src: screenshotSrc,
+              className: 'card-img-custom screenshot-image',
+              alt: `Screenshot ${carousel.currentIndex + 1}`,
+              title: `Screenshot taken: ${currentScreenshot && currentScreenshot.capturedAt ? new Date(currentScreenshot.capturedAt).toLocaleString() : 'Unknown'}`,
+              onClick: (e) => {
+                e.stopPropagation();
+                this.openScreenshotModal(instance, currentScreenshot);
+              },
+              onError: (e) => {
+                // Fallback to logo on error
+                e.target.src = '/images/apple-icon-180x180.png';
+                e.target.title = 'Screenshot failed to load';
+              }
+            }),
+            
+            // Navigation buttons (only show if more than 1 unique screenshot)
+            carousel.screenshots.length > 1 && [
+              React.createElement('button', {
+                key: 'prev',
+                className: 'carousel-btn carousel-prev',
+                onClick: (e) => {
+                  e.stopPropagation();
+                  this.navigateScreenshot(instance.uuid, 'prev');
+                },
+                title: 'Previous screenshot'
+              }, '‹'),
+              
+              React.createElement('button', {
+                key: 'next', 
+                className: 'carousel-btn carousel-next',
+                onClick: (e) => {
+                  e.stopPropagation();
+                  this.navigateScreenshot(instance.uuid, 'next');
+                },
+                title: 'Next screenshot'
+              }, '›')
+            ]
+          ),
+          
+          // Screenshot info overlay
+          React.createElement('div', { className: 'screenshot-info' },
+            carousel.screenshots.length > 1 && React.createElement('span', { className: 'screenshot-counter' },
+              `${carousel.currentIndex + 1}/${carousel.screenshots.length}`
+            ),
+            React.createElement('span', { className: 'screenshot-badge' },
+              `${carousel.uniqueCount} unique of ${carousel.totalCount} total`
+            )
+          )
+        );
+      }
+      renderActivityChart = (instance) => {
+        const canvasId = `chart-${instance.uuid}`;
+        
+        // Initialize chart after a short delay to ensure DOM element exists
+        setTimeout(() => this.initializeChart(canvasId, instance.uuid), 100);
+        
+        return React.createElement('div', { className: 'activity-chart-container' },
+          React.createElement('h6', { className: 'chart-title text-center mb-2', style: { fontSize: '12px' } }, 'Recent Activity'),
+          React.createElement('canvas', { 
+            id: canvasId,
+            width: 180,
+            height: 100,
+            style: { width: '100%', height: 'auto', maxWidth: '180px', border: '1px solid #dee2e6', borderRadius: '4px' }
+          }),
+          React.createElement('div', { className: 'chart-legend mt-1', style: { fontSize: '10px' } },
+            React.createElement('span', { style: { color: '#dc3545' } }, '■ CPU '),
+            React.createElement('span', { style: { color: '#007bff' } }, '■ RAM '),
+            React.createElement('span', { style: { color: '#28a745' } }, '● Activity')
+          )
+        );
+      }
+
+      initializeChart = async (canvasId, instanceUUID) => {
+        const activityData = await this.fetchActivityDataForChart(instanceUUID);
+        
+        if (activityData.length === 0) {
+          // Draw "No Data" message
+          const canvas = document.getElementById(canvasId);
+          if (!canvas) return;
+          const ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#f8f9fa';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = '#6c757d';
+          ctx.font = '12px Arial';
+          ctx.textAlign = 'center';
+          ctx.fillText('No Activity Data', canvas.width / 2, canvas.height / 2);
+          return;
+        }
+
+        const canvas = document.getElementById(canvasId);
+        if (!canvas) return;
+        
+        const ctx = canvas.getContext('2d');
+        
+        // Prepare data
+        const cpuData = activityData.map(d => parseFloat(d.cpuUsage) || 0);
+        const memoryData = activityData.map(d => parseFloat(d.memoryUsage) || 0);
+        const activityScores = activityData.map(d => d.activityScore || 0);
+        
+        // Chart dimensions
+        const width = canvas.width;
+        const height = canvas.height;
+        const padding = 15;
+        const chartWidth = width - 2 * padding;
+        const chartHeight = height - 2 * padding;
+        
+        // Clear canvas
+        ctx.clearRect(0, 0, width, height);
+        
+        // Draw background
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, width, height);
+        
+        // Draw grid lines
+        ctx.strokeStyle = '#f1f3f4';
+        ctx.lineWidth = 0.5;
+        for (let i = 1; i < 4; i++) {
+          const y = padding + (i * chartHeight / 4);
+          ctx.beginPath();
+          ctx.moveTo(padding, y);
+          ctx.lineTo(padding + chartWidth, y);
+          ctx.stroke();
+        }
+        
+        if (activityData.length > 1) {
+          const maxCpu = Math.max(...cpuData, 20); // Minimum scale of 20%
+          const maxMemory = Math.max(...memoryData, 20);
+          const maxActivity = Math.max(...activityScores, 5); // Minimum scale of 5
+          
+          // Draw CPU line (red)
+          ctx.strokeStyle = '#dc3545';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          cpuData.forEach((value, index) => {
+            const x = padding + (index / (cpuData.length - 1)) * chartWidth;
+            const y = padding + chartHeight - (value / maxCpu) * chartHeight;
+            if (index === 0) {
+              ctx.moveTo(x, y);
+            } else {
+              ctx.lineTo(x, y);
+            }
+          });
+          ctx.stroke();
+          
+          // Draw Memory line (blue)
+          ctx.strokeStyle = '#007bff';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          memoryData.forEach((value, index) => {
+            const x = padding + (index / (memoryData.length - 1)) * chartWidth;
+            const y = padding + chartHeight - (value / maxMemory) * chartHeight;
+            if (index === 0) {
+              ctx.moveTo(x, y);
+            } else {
+              ctx.lineTo(x, y);
+            }
+          });
+          ctx.stroke();
+          
+          // Draw Activity dots (green) - only when activity > 0
+          ctx.fillStyle = '#28a745';
+          activityScores.forEach((value, index) => {
+            if (value > 0) {
+              const x = padding + (index / (activityScores.length - 1)) * chartWidth;
+              const y = padding + chartHeight - (value / maxActivity) * chartHeight;
+              ctx.beginPath();
+              ctx.arc(x, y, 2, 0, 2 * Math.PI);
+              ctx.fill();
+            }
+          });
+        }
+        
+        // Draw border
+        ctx.strokeStyle = '#dee2e6';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(0, 0, width, height);
       }
 
       viewScreenshot = async (instanceUUID) => {
@@ -276,7 +860,7 @@ Activity Score: ${data.summary.currentScore}`);
       }
 
       render() {
-        const { instances, isLoading, error, selectedInstance, instanceDetails, detailsLoading, filters, showFilters } = this.state;
+        const { instances, isLoading, error, selectedInstance, instanceDetails, detailsLoading, filters, showFilters, screenshotModal } = this.state;
         const filteredInstances = this.getFilteredInstances();
 
         if (isLoading) {
@@ -444,6 +1028,30 @@ Activity Score: ${data.summary.currentScore}`);
               </div>
             )}
 
+            {/* Screenshot Modal */}
+            {screenshotModal.isOpen && (
+              <div className="screenshot-modal-overlay" onClick={this.closeScreenshotModal}>
+                <div className="screenshot-modal-content" onClick={(e) => e.stopPropagation()}>
+                  <div className="screenshot-modal-header">
+                    <h5 className="modal-title">{screenshotModal.title}</h5>
+                    <button className="screenshot-modal-close" onClick={this.closeScreenshotModal}>
+                      ×
+                    </button>
+                  </div>
+                  <div className="screenshot-modal-body">
+                    <img 
+                      src={screenshotModal.imageUrl}
+                      className="screenshot-modal-image"
+                      alt="Screenshot"
+                      onError={(e) => {
+                        e.target.src = '/images/apple-icon-180x180.png';
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
             <table className="table table-striped">
               <thead>
                 <tr>
@@ -457,10 +1065,11 @@ Activity Score: ${data.summary.currentScore}`);
                         {{!-- <row> --}}
                         <div className="card mb-3">
                         <div className="row">
-                            <div className="col-md-4 center-image">
-                            <img src="/images/apple-icon-180x180.png" className="card-img-custom" alt="Placeholder" />
+                            <div className="col-md-5 center-image">
+                              {/* Dynamic Screenshot Carousel */}
+                              {this.renderScreenshotCarousel(instance)}
                             </div>
-                            <div className="col-md-8">
+                            <div className="col-md-4">
                             <div className="card-body">
                                 <h5 className="card-title">{instance.name}</h5>
                                 <h6 className="card-subtitle mb-2 text-muted">{instance.dockerid}</h6>
@@ -498,49 +1107,60 @@ Activity Score: ${data.summary.currentScore}`);
                                   <small className="text-muted"><strong>Activity Score: </strong>{instance.activityScore}</small>
                                 )}
                                 </p>
-                
-                <div className="instance-buttons">
-                  <button
-                    className={'btn btn-primary ' + (instance.status === 'active' ? '' : 'disabled')} 
-                    onClick={() => window.open(this.formatUrl(instance.url), '_blank')}
-                    disabled={instance.status !== 'active'}
-                  >
-                    <i className="fas fa-external-link-alt"></i> Launch Instance
-                  </button>
-                  {this.isAdmin() && (
-                    <button 
-                      className="btn btn-info" 
-                      onClick={() => this.showInstanceDetails(instance)}
-                    >
-                      <i className="fas fa-info-circle"></i> Details
-                    </button>
-                  )}
-                  {this.isAdmin() && (
-                    <button 
-                      className="btn btn-success btn-sm" 
-                      onClick={() => this.loadActivityHistory(instance.uuid)}
-                    >
-                      <i className="fas fa-chart-line"></i> Activity
-                    </button>
-                  )}
-                  {this.isAdmin() && instance.lastScreenshot && (
-                    <button 
-                      className="btn btn-secondary btn-sm" 
-                      onClick={() => this.viewScreenshot(instance.uuid)}
-                    >
-                      <i className="fas fa-camera"></i> Screenshot
-                    </button>
-                  )}
-                  <button 
-                    className={'btn btn-danger ' + (instance.status === 'deleted' ? 'disabled' : '')} 
-                    onClick={() => this.removeInstance(instance.dockerid)} 
-                    disabled={instance.status === 'deleted'}
-                  >
-                    <i className="fas fa-trash"></i> Remove Instance
-                  </button>
-                </div>
                             </div>
                             </div>
+                            <div className="col-md-3 d-flex flex-column justify-content-center align-items-center">
+                              {/* Activity Chart */}
+                              {this.renderActivityChart(instance)}
+                            </div>
+                        </div>
+                        
+                        {/* Buttons Row */}
+                        <div className="row">
+                          <div className="col-12">
+                            <div className="card-footer">
+                              <div className="instance-buttons">
+                                <button
+                                  className={'btn btn-primary ' + (instance.status === 'active' ? '' : 'disabled')} 
+                                  onClick={() => window.open(this.formatUrl(instance.url), '_blank')}
+                                  disabled={instance.status !== 'active'}
+                                >
+                                  <i className="fas fa-external-link-alt"></i> Launch Instance
+                                </button>
+                                {this.isAdmin() && (
+                                  <button 
+                                    className="btn btn-info" 
+                                    onClick={() => this.showInstanceDetails(instance)}
+                                  >
+                                    <i className="fas fa-info-circle"></i> Details
+                                  </button>
+                                )}
+                                {this.isAdmin() && (
+                                  <button 
+                                    className="btn btn-success btn-sm" 
+                                    onClick={() => this.loadActivityHistory(instance.uuid)}
+                                  >
+                                    <i className="fas fa-chart-line"></i> Activity
+                                  </button>
+                                )}
+                                {this.isAdmin() && instance.lastScreenshot && (
+                                  <button 
+                                    className="btn btn-secondary btn-sm" 
+                                    onClick={() => this.viewScreenshot(instance.uuid)}
+                                  >
+                                    <i className="fas fa-camera"></i> Screenshot
+                                  </button>
+                                )}
+                                <button 
+                                  className={'btn btn-danger ' + (instance.status === 'deleted' ? 'disabled' : '')} 
+                                  onClick={() => this.removeInstance(instance.dockerid)} 
+                                  disabled={instance.status === 'deleted'}
+                                >
+                                  <i className="fas fa-trash"></i> Remove Instance
+                                </button>
+                              </div>
+                            </div>
+                          </div>
                         </div>
                         </div>
                     {{!-- </row> --}}
