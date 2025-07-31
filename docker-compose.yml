@@ -77,5 +77,5 @@ networks:
     driver: bridge
   # If using a proxy, uncomment the following lines
   # ingress-proxy:
-  #   external:
-  #     name: ingress-proxy
+  #   external: true
+  #   name: ingress-proxy
