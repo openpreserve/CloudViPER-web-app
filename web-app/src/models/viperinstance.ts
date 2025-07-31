@@ -48,6 +48,17 @@ export default (sequelize: Sequelize) => {
             foreignKey: 'owner',
             as: 'ownerUser'
           });
+          
+          // Add associations to new tables
+          ViperInstance.hasMany(models.Screenshot, {
+            foreignKey: 'instanceId',
+            as: 'screenshots'
+          });
+          
+          ViperInstance.hasMany(models.Activity, {
+            foreignKey: 'instanceId',
+            as: 'activities'
+          });
         }
     }
 

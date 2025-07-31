@@ -10,6 +10,8 @@ import { logSQL, appLogger } from '../config/logger';
 import User from './user';
 import ViperInstance from './viperinstance';
 import Log from './log'; // Import the Logs model
+import Screenshot from './screenshot'; // Import the Screenshot model
+import Activity from './activity'; // Import the Activity model
 
 dotenv.config({ path: "../.env" });
 
@@ -66,6 +68,8 @@ sequelize = new Sequelize(database, username, password, config);
 const usermodel = User(sequelize);
 const vipermodel = ViperInstance(sequelize);
 const logmodel = Log(sequelize); // Initialize the Logs model
+const screenshotmodel = Screenshot(sequelize); // Initialize the Screenshot model
+const activitymodel = Activity(sequelize); // Initialize the Activity model
 
 interface DB {
   sequelize: Sequelize;
@@ -73,6 +77,8 @@ interface DB {
   User: typeof usermodel;
   ViperInstance: typeof vipermodel;
   Log: typeof logmodel; // Add Logs to the DB interface
+  Screenshot: typeof screenshotmodel; // Add Screenshot to the DB interface
+  Activity: typeof activitymodel; // Add Activity to the DB interface
 }
 
 const db: DB = {
@@ -81,6 +87,8 @@ const db: DB = {
   User: usermodel,
   ViperInstance: vipermodel,
   Log: logmodel, // Add Logs to the db object
+  Screenshot: screenshotmodel, // Add Screenshot to the db object
+  Activity: activitymodel, // Add Activity to the db object
 };
 
 Object.keys(db).forEach((modelName: string) => {
@@ -111,5 +119,5 @@ if (env !== 'test' || process.env.FORCE_DB_SYNC === 'true') {
   });
 }
 
-export { usermodel, vipermodel, logmodel }; 
+export { usermodel, vipermodel, logmodel, screenshotmodel, activitymodel }; 
 export default db;

@@ -855,13 +855,34 @@ router.get('/viperinstances', async (req: Request, res: Response): Promise<void>
         let instances;
         
         if (user.role === UserRole.ADMIN) {
-            // Admin can see all instances with optimized query
+            // Admin can see all instances with optimized query - exclude heavy JSON fields
             instances = await db.ViperInstance.findAll({
-                include: [{
-                    model: db.User,
-                    as: 'ownerUser',
-                    attributes: ['id', 'username', 'email', 'firstName', 'lastName']
-                }],
+                attributes: {
+                    exclude: ['lastScreenshot', 'activityHistory'] // Exclude heavy JSON fields
+                },
+                include: [
+                    {
+                        model: db.User,
+                        as: 'ownerUser',
+                        attributes: ['id', 'username', 'email', 'firstName', 'lastName']
+                    },
+                    {
+                        model: db.Screenshot,
+                        as: 'screenshots',
+                        attributes: ['id', 'capturedAt', 'receivedAt'],
+                        limit: 1,
+                        order: [['createdAt', 'DESC']],
+                        required: false
+                    },
+                    {
+                        model: db.Activity,
+                        as: 'activities',
+                        attributes: ['id', 'activityScore', 'reportedAt', 'receivedAt'],
+                        limit: 1,
+                        order: [['createdAt', 'DESC']],
+                        required: false
+                    }
+                ],
                 order: [['createdAt', 'DESC']] // Most recent first
             });
             
@@ -890,11 +911,32 @@ router.get('/viperinstances', async (req: Request, res: Response): Promise<void>
 
             instances = await db.ViperInstance.findAll({
                 where: { owner: user.id },
-                include: [{
-                    model: db.User,
-                    as: 'ownerUser',
-                    attributes: ['id', 'username', 'email', 'firstName', 'lastName']
-                }],
+                attributes: {
+                    exclude: ['lastScreenshot', 'activityHistory'] // Exclude heavy JSON fields
+                },
+                include: [
+                    {
+                        model: db.User,
+                        as: 'ownerUser',
+                        attributes: ['id', 'username', 'email', 'firstName', 'lastName']
+                    },
+                    {
+                        model: db.Screenshot,
+                        as: 'screenshots',
+                        attributes: ['id', 'capturedAt', 'receivedAt'],
+                        limit: 1,
+                        order: [['createdAt', 'DESC']],
+                        required: false
+                    },
+                    {
+                        model: db.Activity,
+                        as: 'activities',
+                        attributes: ['id', 'activityScore', 'reportedAt', 'receivedAt'],
+                        limit: 1,
+                        order: [['createdAt', 'DESC']],
+                        required: false
+                    }
+                ],
                 order: [['createdAt', 'DESC']]
             });
             
@@ -908,13 +950,25 @@ router.get('/viperinstances', async (req: Request, res: Response): Promise<void>
         }
 
         // Add additional metadata to instances
-        const enrichedInstances = instances.map(instance => ({
-            ...instance.toJSON(),
-            operationalHours: instance.createdAt ? 
-                ((new Date().getTime() - new Date(instance.createdAt).getTime()) / (1000 * 60 * 60)).toFixed(2) : 
-                'Unknown',
-            canTerminate: user.role === UserRole.ADMIN || instance.owner === user.id
-        }));
+        const enrichedInstances = instances.map(instance => {
+            const instanceData = instance.toJSON() as any;
+            return {
+                ...instanceData,
+                operationalHours: instance.createdAt ? 
+                    ((new Date().getTime() - new Date(instance.createdAt).getTime()) / (1000 * 60 * 60)).toFixed(2) : 
+                    'Unknown',
+                canTerminate: user.role === UserRole.ADMIN || instance.owner === user.id,
+                // Add summary data from related tables
+                hasRecentScreenshot: instanceData.screenshots && instanceData.screenshots.length > 0,
+                lastScreenshotAt: instanceData.screenshots && instanceData.screenshots.length > 0 ? 
+                    instanceData.screenshots[0].capturedAt : null,
+                hasRecentActivity: instanceData.activities && instanceData.activities.length > 0,
+                lastActivityScore: instanceData.activities && instanceData.activities.length > 0 ? 
+                    instanceData.activities[0].activityScore : 0,
+                lastActivityAt: instanceData.activities && instanceData.activities.length > 0 ? 
+                    instanceData.activities[0].reportedAt : null
+            };
+        });
 
         res.json({
             instances: enrichedInstances,
@@ -1653,22 +1707,31 @@ router.post('/screenshot/:instanceUUID', async (req: Request, res: Response): Pr
             return;
         }
 
-        // Store screenshot data (base64 encoded image)
-        const screenshotData = {
+        // Store screenshot in dedicated Screenshot table
+        await db.Screenshot.create({
+            instanceId: instance.id!,
             instanceUUID,
-            screenshot: screenshot, // base64 encoded image
-            capturedAt: timestamp || new Date().toISOString(),
-            receivedAt: new Date().toISOString()
-        };
+            screenshotData: screenshot,
+            capturedAt: timestamp ? new Date(timestamp) : new Date(),
+            receivedAt: new Date()
+        });
 
-        // Debug logging for screenshot data
-        console.log('DEBUG: Screenshot data keys:', Object.keys(screenshotData));
-        console.log('DEBUG: Screenshot field type:', typeof screenshotData.screenshot);
-        console.log('DEBUG: Screenshot field length:', screenshotData.screenshot ? screenshotData.screenshot.length : 'null/undefined');
+        // Clean up old screenshots - keep only the latest 10
+        const screenshotsToDelete = await db.Screenshot.findAll({
+            where: { instanceId: instance.id },
+            order: [['createdAt', 'DESC']],
+            offset: 10 // Skip the first 10 (most recent)
+        });
 
-        // Update instance with latest screenshot and activity
+        if (screenshotsToDelete.length > 0) {
+            const idsToDelete = screenshotsToDelete.map(s => s.id!);
+            await db.Screenshot.destroy({
+                where: { id: idsToDelete }
+            });
+        }
+
+        // Update instance activity timestamp
         await instance.update({
-            lastScreenshot: screenshotData,
             lastActivity: new Date(),
             updatedAt: new Date()
         });
@@ -1750,13 +1813,37 @@ router.post('/activity/:instanceUUID', async (req: Request, res: Response): Prom
         const activityScore = mouseEvents + keyboardEvents;
         const isActive = activityScore > 0 || windowActive;
 
-        // Update instance activity
-        const currentActivity = instance.activityHistory || [];
-        const updatedActivity = [...currentActivity, activityData].slice(-100); // Keep last 100 entries
+        // Store activity in dedicated Activity table
+        await db.Activity.create({
+            instanceId: instance.id!,
+            instanceUUID,
+            mouseEvents,
+            keyboardEvents,
+            windowActive,
+            cpuUsage,
+            memoryUsage,
+            activityScore,
+            reportedAt: timestamp ? new Date(timestamp) : new Date(),
+            receivedAt: new Date()
+        });
 
+        // Clean up old activity records - keep only the latest 100
+        const activitiesToDelete = await db.Activity.findAll({
+            where: { instanceId: instance.id },
+            order: [['createdAt', 'DESC']],
+            offset: 100 // Skip the first 100 (most recent)
+        });
+
+        if (activitiesToDelete.length > 0) {
+            const idsToDelete = activitiesToDelete.map(a => a.id!);
+            await db.Activity.destroy({
+                where: { id: idsToDelete }
+            });
+        }
+
+        // Update instance activity summary
         await instance.update({
             lastActivity: isActive ? new Date() : instance.lastActivity,
-            activityHistory: updatedActivity,
             activityScore: activityScore,
             isUserActive: isActive,
             updatedAt: new Date()
@@ -1809,15 +1896,15 @@ router.post('/activity/:instanceUUID', async (req: Request, res: Response): Prom
         });
 
     } catch (error) {
-        appLogger.error('Error processing activity report', {
-            eventType: 'Activity Report Error',
+        appLogger.error('Error storing activity', {
+            eventType: 'Activity Storage Error',
             instanceUUID,
             error: (error as Error).message,
             timestamp: new Date().toISOString()
         });
 
         res.status(500).json({
-            error: 'Error processing activity report',
+            error: 'Error storing activity',
             message: 'Failed to process activity data'
         });
     }
@@ -1899,14 +1986,26 @@ router.get('/screenshot/:instanceUUID', async (req: Request, res: Response): Pro
             return;
         }
 
-        if (!instance.lastScreenshot) {
+        // Get latest screenshot from Screenshot table
+        const latestScreenshot = await db.Screenshot.findOne({
+            where: { instanceId: instance.id },
+            order: [['createdAt', 'DESC']]
+        });
+
+        if (!latestScreenshot) {
             res.status(404).json({ error: 'No screenshot available' });
             return;
         }
 
         res.json({
             success: true,
-            screenshot: instance.lastScreenshot,
+            screenshot: {
+                id: latestScreenshot.id,
+                instanceUUID: latestScreenshot.instanceUUID,
+                screenshot: latestScreenshot.screenshotData,
+                capturedAt: latestScreenshot.capturedAt,
+                receivedAt: latestScreenshot.receivedAt
+            },
             instanceUUID
         });
 
@@ -1953,24 +2052,38 @@ router.get('/activity/:instanceUUID', async (req: Request, res: Response): Promi
             return;
         }
 
-        const activityHistory = instance.activityHistory || [];
+        // Get activity history from Activity table
         const limitNum = parseInt(limit as string);
-        const recentActivity = activityHistory.slice(-limitNum);
+        const activityHistory = await db.Activity.findAll({
+            where: { instanceId: instance.id },
+            order: [['createdAt', 'DESC']],
+            limit: limitNum
+        });
 
         // Calculate activity summary
-        const totalEvents = recentActivity.reduce((sum: number, activity: any) => 
-            sum + (activity.mouseEvents || 0) + (activity.keyboardEvents || 0), 0);
+        const totalEvents = activityHistory.reduce((sum: number, activity) => 
+            sum + activity.mouseEvents + activity.keyboardEvents, 0);
         
-        const avgCpuUsage = recentActivity.length > 0 ? 
-            recentActivity.reduce((sum: number, activity: any) => sum + (activity.cpuUsage || 0), 0) / recentActivity.length : 0;
+        const avgCpuUsage = activityHistory.length > 0 ? 
+            activityHistory.reduce((sum: number, activity) => sum + activity.cpuUsage, 0) / activityHistory.length : 0;
         
-        const avgMemoryUsage = recentActivity.length > 0 ? 
-            recentActivity.reduce((sum: number, activity: any) => sum + (activity.memoryUsage || 0), 0) / recentActivity.length : 0;
+        const avgMemoryUsage = activityHistory.length > 0 ? 
+            activityHistory.reduce((sum: number, activity) => sum + activity.memoryUsage, 0) / activityHistory.length : 0;
 
         res.json({
             success: true,
             instanceUUID,
-            activityHistory: recentActivity,
+            activityHistory: activityHistory.map(activity => ({
+                id: activity.id,
+                mouseEvents: activity.mouseEvents,
+                keyboardEvents: activity.keyboardEvents,
+                windowActive: activity.windowActive,
+                cpuUsage: activity.cpuUsage,
+                memoryUsage: activity.memoryUsage,
+                activityScore: activity.activityScore,
+                reportedAt: activity.reportedAt,
+                receivedAt: activity.receivedAt
+            })),
             summary: {
                 totalEvents,
                 avgCpuUsage: Math.round(avgCpuUsage * 100) / 100,
