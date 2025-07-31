@@ -47,7 +47,8 @@ jest.mock('../../../models', () => ({
     User: {
         findByPk: jest.fn(),
         findOne: jest.fn(),
-        findAll: jest.fn()
+        findAll: jest.fn(),
+        count: jest.fn()
     },
     Screenshot: {
         create: jest.fn(),
@@ -63,7 +64,9 @@ jest.mock('../../../models', () => ({
     },
     sequelize: {
         sync: jest.fn().mockResolvedValue(undefined),
-        close: jest.fn().mockResolvedValue(undefined)
+        close: jest.fn().mockResolvedValue(undefined),
+        authenticate: jest.fn(),
+        query: jest.fn()
     }
 }));
 
@@ -926,6 +929,469 @@ describe('Service Routes', () => {
 
                 expect(response.status).toBe(403);
                 expect(response.body).toEqual({ message: 'Admin access required' });
+            });
+        });
+
+        describe('GET /health', () => {
+            it('should return healthy status for authenticated user', async () => {
+                const testApp = createTestApp({ id: 2, username: 'member', email: 'member@test.com', role: UserRole.MEMBER });
+                
+                // Mock successful database and docker connections
+                (db.sequelize.authenticate as jest.Mock) = jest.fn().mockResolvedValue(undefined);
+                (mockDockerInstance as any).ping = jest.fn().mockResolvedValue('OK');
+
+                const response = await request(testApp).get('/service/health');
+
+                expect(response.status).toBe(200);
+                expect(response.body).toEqual(expect.objectContaining({
+                    status: 'healthy',
+                    timestamp: expect.any(String),
+                    uptime: expect.any(Number),
+                    environment: expect.any(String),
+                    database: { status: 'connected' },
+                    docker: { status: 'connected' }
+                }));
+            });
+
+            it('should return 401 for unauthenticated request', async () => {
+                const testApp = createTestApp(); // No user
+
+                const response = await request(testApp).get('/service/health');
+
+                expect(response.status).toBe(401);
+                expect(response.body.error).toBe('Authentication required');
+            });
+
+            it('should return degraded status when database fails', async () => {
+                const testApp = createTestApp({ id: 2, username: 'member', email: 'member@test.com', role: UserRole.MEMBER });
+                
+                (db.sequelize.authenticate as jest.Mock) = jest.fn().mockRejectedValue(new Error('DB connection failed'));
+                (mockDockerInstance as any).ping = jest.fn().mockResolvedValue('OK');
+
+                const response = await request(testApp).get('/service/health');
+
+                expect(response.status).toBe(503);
+                expect(response.body.status).toBe('degraded');
+                expect(response.body.database).toEqual({
+                    status: 'error',
+                    message: expect.any(String)
+                });
+            });
+
+            it('should return additional statistics for admin users', async () => {
+                const testApp = createTestApp({ id: 1, username: 'admin', email: 'admin@test.com', role: UserRole.ADMIN });
+                
+                (db.sequelize.authenticate as jest.Mock) = jest.fn().mockResolvedValue(undefined);
+                (mockDockerInstance as any).ping = jest.fn().mockResolvedValue('OK');
+                (db.ViperInstance.count as jest.Mock)
+                    .mockResolvedValueOnce(5) // total instances
+                    .mockResolvedValueOnce(3); // active instances
+                (db.User.count as jest.Mock).mockResolvedValue(10);
+
+                const response = await request(testApp).get('/service/health');
+
+                expect(response.status).toBe(200);
+                expect(response.body.statistics).toEqual({
+                    totalInstances: 5,
+                    activeInstances: 3,
+                    totalUsers: 10,
+                    memoryUsage: expect.any(Object)
+                });
+            });
+        });
+
+        describe('GET /statistics', () => {
+            beforeEach(() => {
+                jest.clearAllMocks();
+                // Mock Sequelize query results for statistics
+                (db.sequelize.query as jest.Mock)
+                    .mockResolvedValueOnce([
+                        { role: 'admin', count: 2 },
+                        { role: 'member', count: 5 },
+                        { role: 'testing', count: 3 }
+                    ])
+                    .mockResolvedValueOnce([
+                        { status: 'active', count: 8 },
+                        { status: 'inactive', count: 2 }
+                    ]);
+            });
+
+            it('should return statistics for admin users', async () => {
+                const testApp = createTestApp({ id: 1, username: 'admin', email: 'admin@test.com', role: UserRole.ADMIN });
+                
+                (db.ViperInstance.count as jest.Mock)
+                    .mockResolvedValueOnce(10) // total instances
+                    .mockResolvedValueOnce(8); // active instances
+
+                const recentInstances = [
+                    { id: 1, uuid: 'uuid1', status: 'active', createdAt: new Date(), toJSON: () => ({ id: 1, uuid: 'uuid1', status: 'active', createdAt: new Date() }) },
+                    { id: 2, uuid: 'uuid2', status: 'inactive', createdAt: new Date(), toJSON: () => ({ id: 2, uuid: 'uuid2', status: 'inactive', createdAt: new Date() }) }
+                ];
+                (db.ViperInstance.findAll as jest.Mock).mockResolvedValue(recentInstances);
+
+                const response = await request(testApp).get('/service/statistics');
+
+                expect(response.status).toBe(200);
+                expect(response.body).toEqual({
+                    summary: {
+                        totalInstances: 10,
+                        activeInstances: 8,
+                        inactiveInstances: 2
+                    },
+                    byRole: [
+                        { role: 'admin', count: 2 },
+                        { role: 'member', count: 5 },
+                        { role: 'testing', count: 3 }
+                    ],
+                    byStatus: [
+                        { status: 'active', count: 8 },
+                        { status: 'inactive', count: 2 }
+                    ],
+                    recentInstances: [
+                        expect.objectContaining({ id: 1, uuid: 'uuid1', age: expect.stringContaining('hours') }),
+                        expect.objectContaining({ id: 2, uuid: 'uuid2', age: expect.stringContaining('hours') })
+                    ],
+                    timestamp: expect.any(String)
+                });
+            });
+
+            it('should return 403 for non-admin users', async () => {
+                const testApp = createTestApp({ id: 2, username: 'member', email: 'member@test.com', role: UserRole.MEMBER });
+
+                const response = await request(testApp).get('/service/statistics');
+
+                expect(response.status).toBe(403);
+                expect(response.body.error).toBe('Insufficient permissions. Required: admin');
+            });
+
+            it('should return 403 for unauthenticated users', async () => {
+                const testApp = createTestApp(); // No user
+
+                const response = await request(testApp).get('/service/statistics');
+
+                expect(response.status).toBe(403);
+                expect(response.body.error).toBe('Authentication required');
+            });
+        });
+
+        // Tests for input validation - major untested area
+        describe('Input Validation', () => {
+            describe('GET /set-status-instance/:statuskey/:status', () => {
+                it('should reject invalid status key (too short)', async () => {
+                    const testApp = createTestApp();
+
+                    const response = await request(testApp)
+                        .get('/service/set-status-instance/short/active');
+
+                    expect(response.status).toBe(400);
+                    expect(response.body.error).toBe('Invalid status key');
+                });
+
+                it('should reject invalid status values', async () => {
+                    const testApp = createTestApp();
+
+                    const response = await request(testApp)
+                        .get('/service/set-status-instance/valid-status-key/invalid-status');
+
+                    expect(response.status).toBe(400);
+                    expect(response.body.error).toBe('Invalid status value');
+                    expect(response.body.validStatuses).toEqual(['created', 'starting', 'begin_cert', 'active', 'stopping', 'stopped', 'error']);
+                });
+            });
+
+            describe('GET /terminate-instance/:containerId', () => {
+                it('should reject invalid container ID (too short)', async () => {
+                    const testApp = createTestApp({ id: 1, username: 'admin', email: 'admin@test.com', role: UserRole.ADMIN });
+
+                    const response = await request(testApp)
+                        .get('/service/terminate-instance/short');
+
+                    expect(response.status).toBe(400);
+                    expect(response.body.error).toBe('Invalid container ID provided');
+                });
+
+                it('should return 404 for non-existent instance', async () => {
+                    const testApp = createTestApp({ id: 1, username: 'admin', email: 'admin@test.com', role: UserRole.ADMIN });
+
+                    (db.ViperInstance.findOne as jest.Mock).mockResolvedValue(null);
+
+                    const response = await request(testApp)
+                        .get('/service/terminate-instance/valid-container-id');
+
+                    expect(response.status).toBe(404);
+                    expect(response.body.error).toBe('Instance not found');
+                });
+
+                it('should return 403 for unauthorized termination', async () => {
+                    const testApp = createTestApp({ id: 2, username: 'member', email: 'member@test.com', role: UserRole.MEMBER });
+
+                    const mockInstance = {
+                        dockerid: 'valid-container-id',
+                        owner: 99, // Different owner
+                        uuid: 'test-uuid'
+                    };
+                    (db.ViperInstance.findOne as jest.Mock).mockResolvedValue(mockInstance);
+
+                    const response = await request(testApp)
+                        .get('/service/terminate-instance/valid-container-id');
+
+                    expect(response.status).toBe(403);
+                    expect(response.body.error).toBe('Unauthorized - you can only terminate your own instances');
+                });
+            });
+
+            describe('GET /new-instance - Instance Limits', () => {
+            it('should enforce instance limits for testing role', async () => {
+                const testApp = createTestApp({ id: 2, username: 'tester', email: 'test@test.com', role: UserRole.TESTING });
+
+                // Mock that user already has 1 instance (at limit for TESTING role)
+                (db.ViperInstance.count as jest.Mock).mockResolvedValue(1);
+
+                const response = await request(testApp).get('/service/new-instance');
+
+                expect(response.status).toBe(429);
+                expect(response.body).toEqual({
+                    error: 'Instance limit reached',
+                    message: 'Your testing account is limited to 1 active instance. Please terminate existing instances before creating new ones.',
+                    existingInstances: 1,
+                    limit: 1
+                });
+            });                it('should enforce instance limits for member role', async () => {
+                    const testApp = createTestApp({ id: 3, username: 'member', email: 'member@test.com', role: UserRole.MEMBER });
+
+                    // Mock that user already has 1 instance (at limit for MEMBER role)
+                    (db.ViperInstance.count as jest.Mock).mockResolvedValue(1);
+
+                    const response = await request(testApp).get('/service/new-instance');
+
+                    expect(response.status).toBe(429);
+                    expect(response.body).toEqual({
+                        error: 'Instance limit reached',
+                        message: 'Your member account is limited to 1 active instance. Please terminate existing instances before creating new ones.',
+                        existingInstances: 1,
+                        limit: 1
+                    });
+                });
+
+                it('should allow unlimited instances for admin role', async () => {
+                    const testApp = createTestApp({ id: 1, username: 'admin', email: 'admin@test.com', role: UserRole.ADMIN });
+
+                    // Mock that admin already has 100 instances - should still be allowed
+                    (db.ViperInstance.count as jest.Mock).mockResolvedValue(100);
+                    (db.ViperInstance.create as jest.Mock).mockResolvedValue(createMockViperInstance());
+
+                    const response = await request(testApp).get('/service/new-instance');
+
+                    expect(response.status).toBe(200);
+                    expect(response.body.success).toBe(true);
+                });
+
+                it('should handle database errors during limit checking', async () => {
+                    const testApp = createTestApp({ id: 2, username: 'tester', email: 'test@test.com', role: UserRole.TESTING });
+
+                    (db.ViperInstance.count as jest.Mock).mockRejectedValue(new Error('Database error'));
+
+                    const response = await request(testApp).get('/service/new-instance');
+
+                    expect(response.status).toBe(500);
+                    expect(response.body.error).toBe('Database error checking instance limits');
+                });
+            });
+        });
+
+        // Test monitoring endpoints - major untested functionality
+        describe('Monitoring Endpoints', () => {
+            describe('GET /monitoring-test/:instanceUUID', () => {
+                it('should return test information for existing instance', async () => {
+                    const testApp = createTestApp();
+                    
+                    const mockInstance = {
+                        id: 1,
+                        uuid: 'test-instance-uuid',
+                        status: 'active',
+                        lastActivity: new Date(),
+                        isUserActive: true,
+                        activityScore: 50
+                    };
+                    (db.ViperInstance.findOne as jest.Mock).mockResolvedValue(mockInstance);
+
+                    const response = await request(testApp)
+                        .get('/service/monitoring-test/test-instance-uuid');
+
+                    expect(response.status).toBe(200);
+                    expect(response.body).toEqual({
+                        success: true,
+                        instanceUUID: 'test-instance-uuid',
+                        message: 'Monitoring test endpoint - instance found',
+                        instance: {
+                            id: 1,
+                            uuid: 'test-instance-uuid',
+                            status: 'active',
+                            lastActivity: expect.any(String),
+                            isUserActive: true,
+                            activityScore: 50
+                        },
+                        endpoints: {
+                            screenshot: '/service/screenshot/test-instance-uuid',
+                            activity: '/service/activity/test-instance-uuid',
+                            test: '/service/monitoring-test/test-instance-uuid'
+                        },
+                        testCurl: {
+                            activity: expect.stringContaining('curl -X POST')
+                        }
+                    });
+                });
+
+                it('should return 404 for non-existent instance', async () => {
+                    const testApp = createTestApp();
+                    
+                    (db.ViperInstance.findOne as jest.Mock).mockResolvedValue(null);
+
+                    const response = await request(testApp)
+                        .get('/service/monitoring-test/nonexistent-uuid');
+
+                    expect(response.status).toBe(404);
+                    expect(response.body).toEqual({
+                        error: 'Instance not found',
+                        instanceUUID: 'nonexistent-uuid',
+                        message: 'No instance found with this UUID'
+                    });
+                });
+            });
+
+            describe('POST /screenshot/:instanceUUID', () => {
+                it('should reject screenshot upload with invalid statusKey', async () => {
+                    const testApp = createTestApp();
+                    
+                    const mockInstance = {
+                        id: 1,
+                        uuid: 'test-instance-uuid',
+                        statusKey: 'valid-status-key'
+                    };
+                    (db.ViperInstance.findOne as jest.Mock).mockResolvedValue(mockInstance);
+
+                    const response = await request(testApp)
+                        .post('/service/screenshot/test-instance-uuid')
+                        .send({
+                            screenshot: 'base64-data',
+                            statusKey: 'invalid-status-key'
+                        });
+
+                    expect(response.status).toBe(401);
+                    expect(response.body.error).toBe('Unauthorized');
+                    expect(response.body.message).toBe('Invalid statusKey authentication');
+                });
+
+                it('should reject screenshot upload with missing statusKey', async () => {
+                    const testApp = createTestApp();
+
+                    const response = await request(testApp)
+                        .post('/service/screenshot/test-instance-uuid')
+                        .send({
+                            screenshot: 'base64-data'
+                        });
+
+                    expect(response.status).toBe(401);
+                    expect(response.body.error).toBe('Unauthorized');
+                    expect(response.body.message).toBe('Invalid or missing statusKey');
+                });
+
+                it('should reject screenshot upload for non-existent instance', async () => {
+                    const testApp = createTestApp();
+                    
+                    (db.ViperInstance.findOne as jest.Mock).mockResolvedValue(null);
+
+                    const response = await request(testApp)
+                        .post('/service/screenshot/test-instance-uuid')
+                        .send({
+                            screenshot: 'base64-data',
+                            statusKey: 'valid-status-key'
+                        });
+
+                    expect(response.status).toBe(401);
+                    expect(response.body.error).toBe('Unauthorized');
+                    expect(response.body.message).toBe('Instance not found');
+                });
+            });
+
+            describe('POST /activity/:instanceUUID', () => {
+                it('should reject activity report with invalid statusKey', async () => {
+                    const testApp = createTestApp();
+                    
+                    const mockInstance = {
+                        id: 1,
+                        uuid: 'test-instance-uuid',
+                        statusKey: 'valid-status-key'
+                    };
+                    (db.ViperInstance.findOne as jest.Mock).mockResolvedValue(mockInstance);
+
+                    const response = await request(testApp)
+                        .post('/service/activity/test-instance-uuid')
+                        .send({
+                            mouseEvents: 5,
+                            keyboardEvents: 3,
+                            statusKey: 'invalid-key'
+                        });
+
+                    expect(response.status).toBe(401);
+                    expect(response.body.error).toBe('Unauthorized');
+                });
+
+                it('should reject activity report with missing statusKey', async () => {
+                    const testApp = createTestApp();
+
+                    const response = await request(testApp)
+                        .post('/service/activity/test-instance-uuid')
+                        .send({
+                            mouseEvents: 5,
+                            keyboardEvents: 3
+                        });
+
+                    expect(response.status).toBe(401);
+                    expect(response.body.error).toBe('Unauthorized');
+                    expect(response.body.message).toBe('Invalid or missing statusKey');
+                });
+            });
+
+            describe('GET /screenshot/:instanceUUID', () => {
+                it('should return 401 for unauthenticated request', async () => {
+                    const testApp = createTestApp(); // No user
+
+                    const response = await request(testApp)
+                        .get('/service/screenshot/test-instance-uuid');
+
+                    expect(response.status).toBe(401);
+                    expect(response.body.error).toBe('Authentication required');
+                });
+
+                it('should return 403 for unauthorized user', async () => {
+                    const testApp = createTestApp({ id: 2, username: 'member', email: 'member@test.com', role: UserRole.MEMBER });
+                    
+                    const mockInstance = {
+                        id: 1,
+                        uuid: 'test-instance-uuid',
+                        owner: 99 // Different owner
+                    };
+                    (db.ViperInstance.findOne as jest.Mock).mockResolvedValue(mockInstance);
+
+                    const response = await request(testApp)
+                        .get('/service/screenshot/test-instance-uuid');
+
+                    expect(response.status).toBe(403);
+                    expect(response.body.error).toBe('Unauthorized - can only view own instances');
+                });
+
+                it('should return 404 for non-existent instance', async () => {
+                    const testApp = createTestApp({ id: 2, username: 'member', email: 'member@test.com', role: UserRole.MEMBER });
+                    
+                    (db.ViperInstance.findOne as jest.Mock).mockResolvedValue(null);
+
+                    const response = await request(testApp)
+                        .get('/service/screenshot/nonexistent-uuid');
+
+                    expect(response.status).toBe(404);
+                    expect(response.body.error).toBe('Instance not found');
+                });
             });
         });
     });

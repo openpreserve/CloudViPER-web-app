@@ -85,21 +85,29 @@ export const logSQL = (sql: string) => {
 
 // Session logging function with enhanced metadata
 export const logSession = (eventType: string, req: any, additionalData: any = {}) => {
+  // Handle null/undefined request objects
+  if (!req) {
+    req = {};
+  }
+  
+  // Safely access headers
+  const headers = req.headers || {};
+  
   const sessionData = {
     eventType,
     sessionId: req.sessionID || req.session?.id || 'unknown',
     userId: req.user?.id || null,
-    userAgent: req.headers['user-agent'] || null,
-    ipAddress: req.headers['x-forwarded-for'] || 
-               req.headers['x-real-ip'] || 
+    userAgent: headers['user-agent'] || null,
+    ipAddress: headers['x-forwarded-for'] || 
+               headers['x-real-ip'] || 
                req.connection?.remoteAddress || 
                req.socket?.remoteAddress || 
                req.ip || 
                null,
-    referer: req.headers['referer'] || req.headers['referrer'] || null,
-    acceptLanguage: req.headers['accept-language'] || null,
-    acceptEncoding: req.headers['accept-encoding'] || null,
-    host: req.headers['host'] || null,
+    referer: headers['referer'] || headers['referrer'] || null,
+    acceptLanguage: headers['accept-language'] || null,
+    acceptEncoding: headers['accept-encoding'] || null,
+    host: headers['host'] || null,
     protocol: req.protocol || null,
     method: req.method || null,
     url: req.originalUrl || req.url || null,
