@@ -1873,7 +1873,22 @@ router.post('/activity/:instanceUUID', async (req: Request, res: Response): Prom
 
         // Calculate activity score (mouse + keyboard events)
         const activityScore = mouseEvents + keyboardEvents;
-        const isActive = activityScore > 0 || windowActive;
+        
+        // 10-minute timeout logic: user is active if they have interacted in the last 10 minutes
+        const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000); // 10 minutes ago
+        const hasRecentInteraction = activityScore > 0;
+        
+        let isActive = false;
+        let lastInteractionTime = instance.lastActivity || new Date(0); // Default to epoch if null
+        
+        if (hasRecentInteraction) {
+            // User just interacted - they are active and update last interaction time
+            isActive = true;
+            lastInteractionTime = new Date();
+        } else {
+            // No current interaction - check if last interaction was within 10 minutes
+            isActive = lastInteractionTime > tenMinutesAgo;
+        }
 
         // Store activity in dedicated Activity table
         await db.Activity.create({
@@ -1905,7 +1920,7 @@ router.post('/activity/:instanceUUID', async (req: Request, res: Response): Prom
 
         // Update instance activity summary
         await instance.update({
-            lastActivity: isActive ? new Date() : instance.lastActivity,
+            lastActivity: hasRecentInteraction ? lastInteractionTime : instance.lastActivity, // Only update if user just interacted
             activityScore: activityScore,
             isUserActive: isActive,
             updatedAt: new Date()
@@ -1919,7 +1934,10 @@ router.post('/activity/:instanceUUID', async (req: Request, res: Response): Prom
             keyboardEvents,
             windowActive,
             activityScore,
+            hasRecentInteraction,
             isActive,
+            lastInteractionTime: lastInteractionTime.toISOString(),
+            tenMinuteTimeoutActive: !hasRecentInteraction && isActive,
             timestamp: new Date().toISOString()
         });
 
