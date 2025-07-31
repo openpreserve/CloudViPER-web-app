@@ -1661,6 +1661,11 @@ router.post('/screenshot/:instanceUUID', async (req: Request, res: Response): Pr
             receivedAt: new Date().toISOString()
         };
 
+        // Debug logging for screenshot data
+        console.log('DEBUG: Screenshot data keys:', Object.keys(screenshotData));
+        console.log('DEBUG: Screenshot field type:', typeof screenshotData.screenshot);
+        console.log('DEBUG: Screenshot field length:', screenshotData.screenshot ? screenshotData.screenshot.length : 'null/undefined');
+
         // Update instance with latest screenshot and activity
         await instance.update({
             lastScreenshot: screenshotData,

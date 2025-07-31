@@ -27,7 +27,7 @@ appLogger.info('Application starting', {
 
 // Begin server setup
 app.use( bodyParser.urlencoded({ extended: true}) );
-app.use( bodyParser.json() ); // Add JSON body parser
+app.use( bodyParser.json({ limit: '10mb' }) ); // Add JSON body parser with 10MB limit for screenshots
 let path = require('path');
 app.disable('x-powered-by');
 app.set('trust proxy', 1);

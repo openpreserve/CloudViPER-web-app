@@ -19,54 +19,73 @@ DEBUG=1
 # Function to log debug messages
 debug_log() {
     if [ "$DEBUG" -eq 1 ]; then
-        echo "$(date): [DEBUG] $1" >> /tmp/viper-monitor.log
+        echo "$(date '+%Y-%m-%d %H:%M:%S') - [DEBUG] $1" >> /tmp/viper-monitor.log
     fi
+}
+
+# Function to log regular messages
+log() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | tee -a /tmp/viper-monitor.log
 }
 
 # Function to capture and send screenshot
 capture_screenshot() {
-    debug_log "Starting screenshot capture"
-    
     if command -v scrot &> /dev/null && [ -n "$DISPLAY" ]; then
         debug_log "scrot and DISPLAY available, capturing screenshot"
-        scrot -z /tmp/screenshot.png 2>/dev/null
+        local temp_file="/tmp/screenshot_$(date +%s).png"
+        local temp_json="/tmp/screenshot_data_$(date +%s).json"
         
-        if [ -f /tmp/screenshot.png ]; then
-            # Check screenshot size (limit to ~500KB to avoid curl issues)
-            SCREENSHOT_SIZE=$(wc -c < /tmp/screenshot.png)
-            debug_log "Screenshot size: $SCREENSHOT_SIZE bytes"
+        # Capture screenshot with compression
+        scrot -z -q 30 "$temp_file" 2>/dev/null
+        
+        if [ -f "$temp_file" ]; then
+            local screenshot_size=$(stat -c%s "$temp_file")
+            debug_log "Screenshot size: $screenshot_size bytes"
             
-            if [ "$SCREENSHOT_SIZE" -gt 500000 ]; then
-                debug_log "Screenshot too large ($SCREENSHOT_SIZE bytes), resizing..."
-                # Resize screenshot to reduce size
-                if command -v convert &> /dev/null; then
-                    convert /tmp/screenshot.png -resize 800x600 -quality 70 /tmp/screenshot_small.png 2>/dev/null
-                    if [ -f /tmp/screenshot_small.png ]; then
-                        mv /tmp/screenshot_small.png /tmp/screenshot.png
-                        SCREENSHOT_SIZE=$(wc -c < /tmp/screenshot.png)
-                        debug_log "Resized screenshot size: $SCREENSHOT_SIZE bytes"
-                    fi
-                fi
-            fi
-            
-            if [ "$SCREENSHOT_SIZE" -le 1000000 ]; then  # Max 1MB
+            # Accept screenshots up to 5MB (server now supports 10MB)
+            if [ "$screenshot_size" -le 5000000 ]; then
                 debug_log "Screenshot captured, encoding to base64"
-                SCREENSHOT_B64=$(base64 -w 0 /tmp/screenshot.png)
-                TIMESTAMP=$(date -Iseconds)
+                local screenshot_base64=$(base64 -w 0 "$temp_file")
+                local base64_length=${#screenshot_base64}
+                debug_log "Base64 encoded: $base64_length characters"
+                
+                local timestamp=$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)
+                
+                # Create JSON using echo to avoid heredoc variable expansion issues
+                echo "{\"screenshot\":\"$screenshot_base64\",\"timestamp\":\"$timestamp\"}" > "$temp_json"
+                local json_size=$(stat -c%s "$temp_json")
+                debug_log "JSON created: $json_size bytes"
                 
                 debug_log "Sending screenshot to $SCREENSHOT_URL"
-                curl -X POST "$SCREENSHOT_URL" \
+                local response=$(curl -s -w "\nHTTP_CODE:%{http_code}" \
+                    -X POST \
                     -H "Content-Type: application/json" \
-                    -d "{\"screenshot\":\"$SCREENSHOT_B64\",\"timestamp\":\"$TIMESTAMP\"}" \
-                    --max-time 30 --silent &
+                    -d @"$temp_json" \
+                    --max-time 60 \
+                    "$SCREENSHOT_URL" 2>&1)
                 
-                echo "$(date): Screenshot sent"
-                debug_log "Screenshot sent successfully"
+                local http_code=$(echo "$response" | grep "HTTP_CODE:" | cut -d: -f2)
+                local response_body=$(echo "$response" | grep -v "HTTP_CODE:")
+                
+                debug_log "HTTP Response Code: $http_code"
+                debug_log "Response Body: $response_body"
+                
+                if [ "$http_code" = "200" ]; then
+                    log "Screenshot sent successfully"
+                    debug_log "Screenshot sent successfully"
+                else
+                    log "Screenshot send failed with HTTP $http_code"
+                    debug_log "Screenshot send failed: HTTP $http_code - $response_body"
+                fi
+                
+                # Clean up temp files
+                rm -f "$temp_json"
             else
-                debug_log "Screenshot still too large after resize ($SCREENSHOT_SIZE bytes), skipping"
+                debug_log "Screenshot too large ($screenshot_size bytes), skipping"
+                log "Screenshot too large ($screenshot_size bytes), skipped"
             fi
             
-            rm -f /tmp/screenshot.png
+            rm -f "$temp_file"
         else
             debug_log "Failed to capture screenshot - file not created"
         fi
@@ -115,59 +134,83 @@ send_activity() {
         debug_log "xdotool not available or DISPLAY not set"
     fi
     
-    TIMESTAMP=$(date -Iseconds)
+    local timestamp=$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)
+    
+    # Create JSON for activity data using echo method to avoid variable expansion issues
+    local activity_json="{
+        \"mouseEvents\": $MOUSE_EVENTS,
+        \"keyboardEvents\": $KEYBOARD_EVENTS,
+        \"windowActive\": $WINDOW_ACTIVE,
+        \"cpuUsage\": ${CPU_USAGE:-0},
+        \"memoryUsage\": ${MEMORY_USAGE:-0},
+        \"timestamp\": \"$timestamp\"
+    }"
     
     # Send activity report
     debug_log "Sending activity report to $ACTIVITY_URL"
     debug_log "Activity data: Mouse=$MOUSE_EVENTS, Keyboard=$KEYBOARD_EVENTS, WindowActive=$WINDOW_ACTIVE, CPU=${CPU_USAGE:-0}%, Memory=${MEMORY_USAGE:-0}%"
-    curl -X POST "$ACTIVITY_URL" \
+    
+    local response=$(curl -s -w "\nHTTP_CODE:%{http_code}" \
+        -X POST \
         -H "Content-Type: application/json" \
-        -d "{
-            \"mouseEvents\": $MOUSE_EVENTS,
-            \"keyboardEvents\": $KEYBOARD_EVENTS,
-            \"windowActive\": $WINDOW_ACTIVE,
-            \"cpuUsage\": ${CPU_USAGE:-0},
-            \"memoryUsage\": ${MEMORY_USAGE:-0},
-            \"timestamp\": \"$TIMESTAMP\"
-        }" \
-        --max-time 15 --silent &
+        -d "$activity_json" \
+        --max-time 15 \
+        "$ACTIVITY_URL" 2>&1)
+    
+    local http_code=$(echo "$response" | grep "HTTP_CODE:" | cut -d: -f2)
+    local response_body=$(echo "$response" | grep -v "HTTP_CODE:")
+    
+    debug_log "Activity HTTP Response Code: $http_code"
+    debug_log "Activity Response Body: $response_body"
+    
+    if [ "$http_code" = "200" ]; then
+        log "Activity report sent (CPU: ${CPU_USAGE:-0}%, Memory: ${MEMORY_USAGE:-0}%, Mouse: $MOUSE_EVENTS)"
+        debug_log "Activity report sent successfully"
+    else
+        log "Activity report failed with HTTP $http_code"
+        debug_log "Activity report failed: HTTP $http_code - $response_body"
+    fi
     
     # Reset keyboard counter (mouse events already reset by removing the file)
     KEYBOARD_EVENTS=0
-    
-    echo "$(date): Activity report sent (CPU: ${CPU_USAGE:-0}%, Memory: ${MEMORY_USAGE:-0}%)"
-    debug_log "Activity report sent successfully"
 }
 
 # Function to monitor mouse activity
 monitor_mouse() {
     debug_log "Starting mouse monitoring"
-    PREV_POS=""
+    local prev_pos=""
     while true; do
         if command -v xdotool &> /dev/null && [ -n "$DISPLAY" ]; then
-            CURRENT_POS=$(xdotool getmouselocation 2>/dev/null)
-            if [ -n "$CURRENT_POS" ] && [ "$CURRENT_POS" != "$PREV_POS" ]; then
+            local current_pos=$(xdotool getmouselocation 2>/dev/null)
+            if [ -n "$current_pos" ] && [ "$current_pos" != "$prev_pos" ]; then
                 # Write mouse event to a file that the main process can read
                 echo "1" >> /tmp/mouse_events.tmp
-                PREV_POS="$CURRENT_POS"
-                debug_log "Mouse movement detected: $CURRENT_POS"
+                prev_pos="$current_pos"
+                debug_log "Mouse movement detected: $current_pos"
             fi
         fi
-        sleep 2
+        sleep 3  # Check every 3 seconds to reduce CPU usage
     done
 }
 
 # Function to handle shutdown
 cleanup() {
-    echo "$(date): ViPER monitoring stopped"
+    log "ViPER monitoring stopped"
     debug_log "Monitoring cleanup initiated"
+    # Kill mouse monitoring background process
+    if [ -n "$MOUSE_PID" ]; then
+        kill $MOUSE_PID 2>/dev/null
+        debug_log "Mouse monitoring process terminated"
+    fi
+    # Clean up temp files
+    rm -f /tmp/mouse_events.tmp /tmp/screenshot_*.png /tmp/screenshot_data_*.json
     exit 0
 }
 
 # Set up signal handlers
 trap cleanup SIGTERM SIGINT
 
-echo "$(date): Starting ViPER monitoring for instance $INSTANCE_UUID"
+log "Starting ViPER monitoring for instance $INSTANCE_UUID"
 debug_log "ViPER monitoring started with instance UUID: $INSTANCE_UUID"
 debug_log "Service URL: $SERVICE_URL"
 debug_log "Screenshot URL: $SCREENSHOT_URL"
@@ -192,14 +235,14 @@ ACTIVITY_COUNTER=0
 
 debug_log "Starting main monitoring loop"
 while true; do
-    # Send screenshot every 60 seconds
-    if [ $SCREENSHOT_COUNTER -ge 60 ]; then
+    # Send screenshot every 30 seconds (every 30 iterations with 1-second sleep)
+    if [ $SCREENSHOT_COUNTER -ge 30 ]; then
         capture_screenshot
         SCREENSHOT_COUNTER=0
     fi
     
-    # Send activity report every 30 seconds
-    if [ $ACTIVITY_COUNTER -ge 30 ]; then
+    # Send activity report every 10 seconds (every 10 iterations with 1-second sleep)
+    if [ $ACTIVITY_COUNTER -ge 10 ]; then
         send_activity
         ACTIVITY_COUNTER=0
     fi
