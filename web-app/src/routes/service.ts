@@ -88,6 +88,47 @@ function getInstanceLimit(role: UserRole): number {
     }
 }
 
+// Helper function to authenticate monitoring endpoints using statusKey
+async function authenticateMonitoringRequest(instanceUUID: string, providedStatusKey: string): Promise<{
+    authorized: boolean;
+    instance?: any;
+    reason?: string;
+}> {
+    if (!providedStatusKey || typeof providedStatusKey !== 'string' || providedStatusKey.length < 8) {
+        return { authorized: false, reason: 'Invalid or missing statusKey' };
+    }
+
+    try {
+        const instance = await db.ViperInstance.findOne({
+            where: { uuid: instanceUUID }
+        });
+
+        if (!instance) {
+            return { authorized: false, reason: 'Instance not found' };
+        }
+
+        if (instance.statusKey !== providedStatusKey) {
+            appLogger.warn('Invalid statusKey used for monitoring endpoint', {
+                eventType: 'Invalid StatusKey Authentication',
+                instanceUUID,
+                providedStatusKey: providedStatusKey.substring(0, 4) + '****', // Log only first 4 chars for security
+                timestamp: new Date().toISOString()
+            });
+            return { authorized: false, reason: 'Invalid statusKey authentication' };
+        }
+
+        return { authorized: true, instance };
+    } catch (error) {
+        appLogger.error('Error during monitoring authentication', {
+            eventType: 'Monitoring Authentication Error',
+            instanceUUID,
+            error: (error as Error).message,
+            timestamp: new Date().toISOString()
+        });
+        return { authorized: false, reason: 'Authentication system error' };
+    }
+}
+
 /* GET home page. */
 router.get('/', (req: Request, res: Response) => {
     const user = req.user as ServiceUser | undefined;
@@ -500,7 +541,8 @@ router.get('/new-instance', async (req: Request, res: Response): Promise<void> =
                     SERVICE_URL: process.env.SERVICE_URL || (process.env.NODE_ENV === 'production' ? 
                         `http://cloud-viper-gui-app:3000` : 
                         `http://localhost:3000`),
-                    DOMAIN_NAME: DOMAIN_NAME
+                    DOMAIN_NAME: DOMAIN_NAME,
+                    STATUS_KEY: statusKey
                 });
 
                 // Create hidden config directory and monitoring script file for abc user
@@ -568,7 +610,8 @@ router.get('/new-instance', async (req: Request, res: Response): Promise<void> =
                    SERVICE_URL: process.env.SERVICE_URL || (process.env.NODE_ENV === 'production' ? 
                         `http://cloud-viper-gui-app:3000` : 
                         `http://localhost:3000`),
-                    DOMAIN_NAME: DOMAIN_NAME
+                    DOMAIN_NAME: DOMAIN_NAME,
+                    STATUS_KEY: statusKey
                 });
 
                 // Create systemd user directory in /config for abc user
@@ -637,7 +680,8 @@ router.get('/new-instance', async (req: Request, res: Response): Promise<void> =
                    SERVICE_URL: process.env.SERVICE_URL || (process.env.NODE_ENV === 'production' ? 
                         `http://cloud-viper-gui-app:3000` : 
                         `http://localhost:3000`),
-                    DOMAIN_NAME: DOMAIN_NAME
+                    DOMAIN_NAME: DOMAIN_NAME,
+                    STATUS_KEY: statusKey
                 });
 
                 // Create autostart directory in /config for abc user
@@ -1686,27 +1730,41 @@ router.get('/statistics', async (req: Request, res: Response): Promise<void> => 
     }
 });
 
-// Screenshot upload endpoint - containers can send screenshots
+// Screenshot upload endpoint - containers can send screenshots (requires statusKey authentication)
 router.post('/screenshot/:instanceUUID', async (req: Request, res: Response): Promise<void> => {
     const { instanceUUID } = req.params;
-    const { screenshot, timestamp } = req.body;
+    const { screenshot, timestamp, statusKey } = req.body;
 
-    // Validate instance exists
-    try {
-        const instance = await db.ViperInstance.findOne({
-            where: { uuid: instanceUUID }
+    // Authenticate using statusKey
+    const authResult = await authenticateMonitoringRequest(instanceUUID, statusKey);
+    if (!authResult.authorized) {
+        appLogger.warn('Unauthorized screenshot upload attempt', {
+            eventType: 'Unauthorized Screenshot Upload',
+            instanceUUID,
+            reason: authResult.reason,
+            ipAddress: req.ip,
+            userAgent: req.get('User-Agent'),
+            timestamp: new Date().toISOString()
         });
+        res.status(401).json({ error: 'Unauthorized', message: authResult.reason });
+        return;
+    }
 
-        if (!instance) {
-            appLogger.warn('Screenshot upload for unknown instance', {
-                eventType: 'Unknown Instance Screenshot',
-                instanceUUID,
-                timestamp: new Date().toISOString()
-            });
-            res.status(404).json({ error: 'Instance not found' });
-            return;
-        }
+    const instance = authResult.instance!;
 
+    // Validate screenshot data
+    if (!screenshot || typeof screenshot !== 'string') {
+        appLogger.warn('Invalid screenshot data provided', {
+            eventType: 'Invalid Screenshot Data',
+            instanceUUID,
+            screenshotType: typeof screenshot,
+            timestamp: new Date().toISOString()
+        });
+        res.status(400).json({ error: 'Invalid screenshot data' });
+        return;
+    }
+
+    try {
         // Store screenshot in dedicated Screenshot table
         await db.Screenshot.create({
             instanceId: instance.id!,
@@ -1736,7 +1794,7 @@ router.post('/screenshot/:instanceUUID', async (req: Request, res: Response): Pr
             updatedAt: new Date()
         });
 
-        appLogger.info('Screenshot received and stored', {
+        appLogger.info('Authenticated screenshot received and stored', {
             eventType: 'Screenshot Received',
             instanceUUID,
             instanceId: instance.id,
@@ -1765,7 +1823,7 @@ router.post('/screenshot/:instanceUUID', async (req: Request, res: Response): Pr
     }
 });
 
-// Activity report endpoint - containers can report user activity
+// Activity report endpoint - containers can report user activity (requires statusKey authentication)
 router.post('/activity/:instanceUUID', async (req: Request, res: Response): Promise<void> => {
     const { instanceUUID } = req.params;
     const { 
@@ -1774,8 +1832,26 @@ router.post('/activity/:instanceUUID', async (req: Request, res: Response): Prom
         timestamp,
         windowActive = false,
         cpuUsage: rawCpuUsage = 0,
-        memoryUsage: rawMemoryUsage = 0 
+        memoryUsage: rawMemoryUsage = 0,
+        statusKey
     } = req.body;
+
+    // Authenticate using statusKey
+    const authResult = await authenticateMonitoringRequest(instanceUUID, statusKey);
+    if (!authResult.authorized) {
+        appLogger.warn('Unauthorized activity report attempt', {
+            eventType: 'Unauthorized Activity Report',
+            instanceUUID,
+            reason: authResult.reason,
+            ipAddress: req.ip,
+            userAgent: req.get('User-Agent'),
+            timestamp: new Date().toISOString()
+        });
+        res.status(401).json({ error: 'Unauthorized', message: authResult.reason });
+        return;
+    }
+
+    const instance = authResult.instance!;
 
     // Ensure numeric values
     const mouseEvents = Number(rawMouseEvents) || 0;
@@ -1784,20 +1860,6 @@ router.post('/activity/:instanceUUID', async (req: Request, res: Response): Prom
     const memoryUsage = Number(rawMemoryUsage) || 0;
 
     try {
-        const instance = await db.ViperInstance.findOne({
-            where: { uuid: instanceUUID }
-        });
-
-        if (!instance) {
-            appLogger.warn('Activity report for unknown instance', {
-                eventType: 'Unknown Instance Activity',
-                instanceUUID,
-                timestamp: new Date().toISOString()
-            });
-            res.status(404).json({ error: 'Instance not found' });
-            return;
-        }
-
         const activityData = {
             instanceUUID,
             mouseEvents,
@@ -1849,39 +1911,15 @@ router.post('/activity/:instanceUUID', async (req: Request, res: Response): Prom
             updatedAt: new Date()
         });
 
-        // Check for inactivity (no activity for 30 minutes)
-        const inactivityThreshold = 30 * 60 * 1000; // 30 minutes in milliseconds
-        const lastActivityTime = instance.lastActivity ? new Date(instance.lastActivity).getTime() : 0;
-        const now = new Date().getTime();
-        const inactiveTime = now - lastActivityTime;
-
-        let shouldShutdown = false;
-        if (inactiveTime > inactivityThreshold && instance.status === 'active') {
-            shouldShutdown = true;
-            
-            appLogger.warn('Instance inactive - marking for shutdown', {
-                eventType: 'Inactivity Detected',
-                instanceUUID,
-                instanceId: instance.id,
-                inactiveMinutes: Math.round(inactiveTime / (1000 * 60)),
-                lastActivity: instance.lastActivity,
-                timestamp: new Date().toISOString()
-            });
-
-            // Update status to indicate pending shutdown
-            await instance.update({
-                status: 'inactive_pending_shutdown',
-                updatedAt: new Date()
-            });
-        }
-
-        appLogger.info('Activity report received', {
-            eventType: 'Activity Report',
+        appLogger.info('Authenticated activity report received', {
+            eventType: 'Activity Report Received',
             instanceUUID,
             instanceId: instance.id,
+            mouseEvents,
+            keyboardEvents,
+            windowActive,
             activityScore,
             isActive,
-            inactiveMinutes: Math.round(inactiveTime / (1000 * 60)),
             timestamp: new Date().toISOString()
         });
 
@@ -1890,13 +1928,11 @@ router.post('/activity/:instanceUUID', async (req: Request, res: Response): Prom
             message: 'Activity report received',
             instanceUUID,
             activityScore,
-            isActive,
-            shouldShutdown,
-            inactiveMinutes: Math.round(inactiveTime / (1000 * 60))
+            isActive
         });
 
     } catch (error) {
-        appLogger.error('Error storing activity', {
+        appLogger.error('Error storing activity report', {
             eventType: 'Activity Storage Error',
             instanceUUID,
             error: (error as Error).message,
@@ -1904,7 +1940,7 @@ router.post('/activity/:instanceUUID', async (req: Request, res: Response): Prom
         });
 
         res.status(500).json({
-            error: 'Error storing activity',
+            error: 'Error storing activity report',
             message: 'Failed to process activity data'
         });
     }

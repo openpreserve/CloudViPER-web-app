@@ -5,6 +5,7 @@ interface ScriptTemplateVariables {
     INSTANCE_UUID: string;
     SERVICE_URL: string;
     DOMAIN_NAME: string;
+    STATUS_KEY: string;
 }
 
 /**

@@ -6,6 +6,7 @@
 # Variables will be substituted when the script is deployed
 INSTANCE_UUID="{{INSTANCE_UUID}}"
 SERVICE_URL="{{SERVICE_URL}}"
+STATUS_KEY="{{STATUS_KEY}}"
 SCREENSHOT_URL="${SERVICE_URL}/service/screenshot/${INSTANCE_UUID}"
 ACTIVITY_URL="${SERVICE_URL}/service/activity/${INSTANCE_UUID}"
 
@@ -52,7 +53,7 @@ capture_screenshot() {
                 local timestamp=$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)
                 
                 # Create JSON using echo to avoid heredoc variable expansion issues
-                echo "{\"screenshot\":\"$screenshot_base64\",\"timestamp\":\"$timestamp\"}" > "$temp_json"
+                echo "{\"screenshot\":\"$screenshot_base64\",\"timestamp\":\"$timestamp\",\"statusKey\":\"$STATUS_KEY\"}" > "$temp_json"
                 local json_size=$(stat -c%s "$temp_json")
                 debug_log "JSON created: $json_size bytes"
                 
@@ -143,7 +144,8 @@ send_activity() {
         \"windowActive\": $WINDOW_ACTIVE,
         \"cpuUsage\": ${CPU_USAGE:-0},
         \"memoryUsage\": ${MEMORY_USAGE:-0},
-        \"timestamp\": \"$timestamp\"
+        \"timestamp\": \"$timestamp\",
+        \"statusKey\": \"$STATUS_KEY\"
     }"
     
     # Send activity report
@@ -215,6 +217,7 @@ debug_log "ViPER monitoring started with instance UUID: $INSTANCE_UUID"
 debug_log "Service URL: $SERVICE_URL"
 debug_log "Screenshot URL: $SCREENSHOT_URL"
 debug_log "Activity URL: $ACTIVITY_URL"
+debug_log "Status Key authentication: enabled (${#STATUS_KEY} chars)"
 
 # Verify required tools are available
 debug_log "Checking required tools..."
