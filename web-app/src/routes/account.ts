@@ -339,6 +339,115 @@ router.get('/sessions', (req: Request, res: Response) => {
     }
 });
 
+// Delete individual session (admin only)
+router.delete('/sessions/:sessionId', (req: Request, res: Response): void => {
+    if (req.user && (req.user as AccountUser).role == UserRole.ADMIN) {
+        const sessionId = req.params.sessionId;
+        
+        if (!sessionId || typeof sessionId !== 'string') {
+            res.status(400).json({ 
+                success: false, 
+                message: 'Invalid session ID provided' 
+            });
+            return;
+        }
+
+        const connection = mysql.createConnection(configAuth.mysqlSessionAuth);
+        const query = 'DELETE FROM sessions WHERE session_id = ?';
+
+        connection.query(query, [sessionId], (error, results: mysql.OkPacket) => {
+            if (error) {
+                console.error('Error deleting session:', error);
+                res.status(500).json({ 
+                    success: false, 
+                    message: 'Error deleting session', 
+                    error: error.message 
+                });
+                return;
+            }
+
+            if (results.affectedRows === 0) {
+                res.status(404).json({ 
+                    success: false, 
+                    message: 'Session not found' 
+                });
+                return;
+            }
+
+            res.json({ 
+                success: true, 
+                message: 'Session deleted successfully',
+                sessionId: sessionId,
+                affectedRows: results.affectedRows
+            });
+        });
+    } else {
+        res.status(403).json({ 
+            success: false, 
+            message: 'Admin access required' 
+        });
+    }
+});
+
+// Revoke all sessions (admin only)
+router.delete('/sessions', (req: Request, res: Response): void => {
+    if (req.user && (req.user as AccountUser).role == UserRole.ADMIN) {
+        const connection = mysql.createConnection(configAuth.mysqlSessionAuth);
+        
+        // First get count of sessions to be deleted
+        const countQuery = 'SELECT COUNT(*) as count FROM sessions';
+        
+        connection.query(countQuery, (countError, countResults: mysql.RowDataPacket[]) => {
+            if (countError) {
+                console.error('Error counting sessions:', countError);
+                res.status(500).json({ 
+                    success: false, 
+                    message: 'Error counting sessions', 
+                    error: countError.message 
+                });
+                return;
+            }
+
+            const sessionCount = countResults[0].count;
+            
+            if (sessionCount === 0) {
+                res.json({ 
+                    success: true, 
+                    message: 'No sessions to revoke',
+                    deletedCount: 0
+                });
+                return;
+            }
+
+            // Delete all sessions
+            const deleteQuery = 'DELETE FROM sessions';
+            
+            connection.query(deleteQuery, (deleteError, deleteResults: mysql.OkPacket) => {
+                if (deleteError) {
+                    console.error('Error revoking all sessions:', deleteError);
+                    res.status(500).json({ 
+                        success: false, 
+                        message: 'Error revoking all sessions', 
+                        error: deleteError.message 
+                    });
+                    return;
+                }
+
+                res.json({ 
+                    success: true, 
+                    message: `Successfully revoked ${deleteResults.affectedRows} session(s)`,
+                    deletedCount: deleteResults.affectedRows
+                });
+            });
+        });
+    } else {
+        res.status(403).json({ 
+            success: false, 
+            message: 'Admin access required' 
+        });
+    }
+});
+
 // Removed the routes for register and register post
 // These routes are disabled during the Testing Phase of the app development
 
