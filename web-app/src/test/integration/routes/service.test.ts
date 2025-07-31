@@ -38,7 +38,8 @@ jest.mock('../../../models', () => ({
         findAll: jest.fn(),
         findOne: jest.fn(),
         count: jest.fn(),
-        destroy: jest.fn()
+        destroy: jest.fn(),
+        update: jest.fn()
     },
     Log: {
         create: jest.fn()
@@ -47,6 +48,18 @@ jest.mock('../../../models', () => ({
         findByPk: jest.fn(),
         findOne: jest.fn(),
         findAll: jest.fn()
+    },
+    Screenshot: {
+        create: jest.fn(),
+        findAll: jest.fn(),
+        findOne: jest.fn(),
+        destroy: jest.fn()
+    },
+    Activity: {
+        create: jest.fn(),
+        findAll: jest.fn(),
+        findOne: jest.fn(),
+        destroy: jest.fn()
     },
     sequelize: {
         sync: jest.fn().mockResolvedValue(undefined),
@@ -164,12 +177,24 @@ describe('Service Routes', () => {
         (db.ViperInstance.findOne as jest.Mock).mockResolvedValue(null);
         (db.ViperInstance.count as jest.Mock).mockResolvedValue(0);
         (db.ViperInstance.destroy as jest.Mock).mockResolvedValue(1);
+        (db.ViperInstance.update as jest.Mock).mockResolvedValue([1]); // Sequelize update returns [affectedCount]
 
         (db.Log.create as jest.Mock).mockResolvedValue({});
 
         (db.User.findByPk as jest.Mock).mockResolvedValue(null);
         (db.User.findOne as jest.Mock).mockResolvedValue(null);
         (db.User.findAll as jest.Mock).mockResolvedValue([]);
+
+        // Mock new models
+        (db.Screenshot.create as jest.Mock).mockResolvedValue({});
+        (db.Screenshot.findAll as jest.Mock).mockResolvedValue([]);
+        (db.Screenshot.findOne as jest.Mock).mockResolvedValue(null);
+        (db.Screenshot.destroy as jest.Mock).mockResolvedValue(1);
+
+        (db.Activity.create as jest.Mock).mockResolvedValue({});
+        (db.Activity.findAll as jest.Mock).mockResolvedValue([]);
+        (db.Activity.findOne as jest.Mock).mockResolvedValue(null);
+        (db.Activity.destroy as jest.Mock).mockResolvedValue(1);
     };
 
     // Helper functions for common test patterns
@@ -467,10 +492,27 @@ describe('Service Routes', () => {
             expect(response.body.instances[0]).toHaveProperty('operationalHours');
             expect(response.body.instances[0]).toHaveProperty('canTerminate');
             expect(db.ViperInstance.findAll).toHaveBeenCalledWith({
+                attributes: {
+                    exclude: ['lastScreenshot', 'activityHistory']
+                },
                 include: [{
                     model: db.User,
                     as: 'ownerUser',
                     attributes: ['id', 'username', 'email', 'firstName', 'lastName']
+                }, {
+                    model: db.Screenshot,
+                    as: 'screenshots',
+                    attributes: ['id', 'capturedAt', 'receivedAt'],
+                    limit: 1,
+                    order: [['createdAt', 'DESC']],
+                    required: false
+                }, {
+                    model: db.Activity,
+                    as: 'activities',
+                    attributes: ['id', 'activityScore', 'reportedAt', 'receivedAt'],
+                    limit: 1,
+                    order: [['createdAt', 'DESC']],
+                    required: false
                 }],
                 order: [['createdAt', 'DESC']]
             });
@@ -506,10 +548,27 @@ describe('Service Routes', () => {
             expect(response.body.instances[0]).toHaveProperty('canTerminate');
             expect(db.ViperInstance.findAll).toHaveBeenCalledWith({
                 where: { owner: 2 },
+                attributes: {
+                    exclude: ['lastScreenshot', 'activityHistory']
+                },
                 include: [{
                     model: db.User,
                     as: 'ownerUser',
                     attributes: ['id', 'username', 'email', 'firstName', 'lastName']
+                }, {
+                    model: db.Screenshot,
+                    as: 'screenshots',
+                    attributes: ['id', 'capturedAt', 'receivedAt'],
+                    limit: 1,
+                    order: [['createdAt', 'DESC']],
+                    required: false
+                }, {
+                    model: db.Activity,
+                    as: 'activities',
+                    attributes: ['id', 'activityScore', 'reportedAt', 'receivedAt'],
+                    limit: 1,
+                    order: [['createdAt', 'DESC']],
+                    required: false
                 }],
                 order: [['createdAt', 'DESC']]
             });
