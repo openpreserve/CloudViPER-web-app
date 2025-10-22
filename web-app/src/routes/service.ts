@@ -309,11 +309,12 @@ router.get('/new-instance', async (req: Request, res: Response): Promise<void> =
         const availablePort = process.env.NODE_ENV === 'dev' ? await getAvailablePort(3010) : 3000;
 
         const containerOptions: any = {
-            Image: 'darrendignam/opf-viper-cloud:v0.0.11',
+            // Image: 'darrendignam/opf-viper-cloud:v0.0.11',
+            Image: 'darrenopf/opf-cloud-viper:docker-0.0.17',
             name: containerName,
             HostConfig: {
                 ShmSize: 1024 * 1024 * 1024,
-                Binds: ['/var/viper-docker-project/volumes/test-corpus/test-root/corpora:/config/Desktop/test-corpus:ro'],
+                Binds: ['/var/viper-docker-project/volumes/test-corpus/test-root/corpora:/config/test-corpus:ro'],
                 ...(process.env.NODE_ENV === 'dev' && { PortBindings: { 
                     '3000/tcp': [{ HostPort: `${availablePort}` }],
                     '3001/tcp': [] // Empty binding to prevent null value
@@ -795,6 +796,76 @@ router.get('/new-instance', async (req: Request, res: Response): Promise<void> =
                     instanceUUID,
                     containerId: container.id,
                     error: (execErr as Error).message,
+                    timestamp: new Date().toISOString()
+                });
+            }
+
+            // Create desktop shortcut for test-corpus
+            try {
+                // Ensure Desktop directory exists and is owned by abc user
+                const execMkdirDesktop = await container.exec({
+                    AttachStdout: true, 
+                    AttachStderr: true,
+                    Cmd: ['mkdir', '-p', '/config/Desktop']
+                });
+                const streamMkdirDesktop = await execMkdirDesktop.start({ hijack: true, stdin: true });
+                streamMkdirDesktop.on('data', (data: any) => console.log(data.toString()));
+                await new Promise((resolve) => streamMkdirDesktop.on('end', resolve));
+
+                // Create .desktop file for the test corpus
+                const desktopShortcut = `[Desktop Entry]
+Version=1.0
+Type=Link
+Name=Test Corpus
+Comment=Digital preservation test files
+Icon=folder
+URL=file:///config/test-corpus
+`;
+
+                const execCreateShortcut = await container.exec({
+                    AttachStdout: true, 
+                    AttachStderr: true,
+                    Cmd: ['bash', '-c', 'cat > /config/Desktop/test-corpus.desktop'],
+                    AttachStdin: true
+                });
+                const streamCreateShortcut = await execCreateShortcut.start({ hijack: true, stdin: true });
+                streamCreateShortcut.write(desktopShortcut);
+                streamCreateShortcut.end();
+                await new Promise((resolve) => streamCreateShortcut.on('end', resolve));
+
+                // Set ownership to abc user
+                const execChownDesktop = await container.exec({
+                    AttachStdout: true, 
+                    AttachStderr: true,
+                    Cmd: ['chown', '-R', 'abc:abc', '/config/Desktop']
+                });
+                const streamChownDesktop = await execChownDesktop.start({ hijack: true, stdin: true });
+                streamChownDesktop.on('data', (data: any) => console.log(data.toString()));
+                await new Promise((resolve) => streamChownDesktop.on('end', resolve));
+
+                // Make the shortcut executable
+                const execChmodShortcut = await container.exec({
+                    AttachStdout: true, 
+                    AttachStderr: true,
+                    Cmd: ['chmod', '755', '/config/Desktop/test-corpus.desktop']
+                });
+                const streamChmodShortcut = await execChmodShortcut.start({ hijack: true, stdin: true });
+                streamChmodShortcut.on('data', (data: any) => console.log(data.toString()));
+                await new Promise((resolve) => streamChmodShortcut.on('end', resolve));
+
+                appLogger.info('Desktop shortcut for test-corpus created', {
+                    eventType: 'Desktop Shortcut Setup',
+                    instanceUUID,
+                    containerId: container.id,
+                    action: 'shortcut_created',
+                    timestamp: new Date().toISOString()
+                });
+            } catch (shortcutErr) { 
+                appLogger.warn('Failed to create desktop shortcut for test-corpus', {
+                    eventType: 'Desktop Shortcut Warning',
+                    instanceUUID,
+                    containerId: container.id,
+                    error: (shortcutErr as Error).message,
                     timestamp: new Date().toISOString()
                 });
             }
