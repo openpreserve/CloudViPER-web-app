@@ -34,6 +34,9 @@ export interface IContainerService {
 
   // Utility method to get container
   getContainer(containerId: string): any;
+
+  // Docker ping
+  ping(): Promise<void>;
 }
 
 /**
@@ -45,6 +48,18 @@ export class DockerContainerService implements IContainerService {
   constructor() {
     // Docker initialization with socket path
     this.docker = new Docker({ socketPath: '/var/run/docker.sock' });
+  }
+  async ping(): Promise<void> {
+    try {
+      await this.docker.ping();
+    } catch (error) {
+      appLogger.error('Error pinging Docker daemon', {
+        eventType: 'Docker Ping Error',
+        error: (error as Error).message,
+        timestamp: new Date().toISOString()
+      });
+      throw error;
+    }
   }
 
   async createContainer(options: any): Promise<any> {
