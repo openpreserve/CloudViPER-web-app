@@ -42,6 +42,8 @@ interface UserAttributes {
     firstName?: string;
     lastName?: string;
     role: UserRole; // Use enum type for TypeScript
+    team?: string; // Team name, default is 'none'
+    invitedById?: number; // ID of the user who invited this user
     oauthID?: string;
     oauthProvider?: string;
     salt?: string;
@@ -62,6 +64,8 @@ export default (sequelize: Sequelize) => {
         public firstName?: string;
         public lastName?: string;
         public role!: UserRole;
+        public team?: string;
+        public invitedById?: number;
         public oauthID?: string;
         public oauthProvider?: string;
         public salt?: string;
@@ -155,12 +159,134 @@ export default (sequelize: Sequelize) => {
                 return false;
             }
         }
+        
+        // Team-related helper methods
+        public isTeamAdmin(): boolean {
+            return this.role === UserRole.TEAM_ADMIN;
+        }
+
+        public isTeamLeader(): boolean {
+            return this.role === UserRole.TEAM_LEADER;
+        }
+
+        public isInTeam(): boolean {
+            return !!this.team && this.team !== 'none';
+        }
+
+        public async getTeamMembers(): Promise<User[]> {
+            if (!this.isInTeam()) {
+                return [];
+            }
+            
+            return User.findAll({
+                where: {
+                    team: this.team
+                }
+            });
+        }
+
+        public async getInvitationChain(): Promise<User[]> {
+            const chain: User[] = [];
+            let currentUser: User | null = this;
+            
+            while (currentUser && currentUser.invitedById) {
+                const inviter = await User.findByPk(currentUser.invitedById) as User | null;
+                if (inviter) {
+                    chain.push(inviter);
+                    currentUser = inviter;
+                } else {
+                    break;
+                }
+            }
+            
+            return chain;
+        }
+
+        // Team management methods
+        public static async setTeamAdmin(userId: number, teamName: string): Promise<User | null> {
+            const user = await User.findByPk(userId);
+            
+            if (!user) {
+                return null;
+            }
+            
+            // Check if team already has an admin
+            const existingAdmin = await User.findOne({
+                where: {
+                    team: teamName,
+                    role: UserRole.TEAM_ADMIN
+                }
+            });
+            
+            if (existingAdmin) {
+                throw new Error(`Team ${teamName} already has an admin`);
+            }
+            
+            user.team = teamName;
+            user.role = UserRole.TEAM_ADMIN;
+            await user.save();
+            
+            return user;
+        }
+
+        public async inviteUser(email: string, role: UserRole = UserRole.MEMBER): Promise<User | null> {
+            // Check if user has permission to invite
+            if (!(this.role === UserRole.ADMIN || 
+                  this.role === UserRole.TEAM_ADMIN || 
+                 (this.role === UserRole.TEAM_LEADER && role === UserRole.MEMBER))) {
+                throw new Error("You don't have permission to invite users");
+            }
+            
+            // For team leaders and team admins, can only invite to their own team
+            if ((this.role === UserRole.TEAM_LEADER || this.role === UserRole.TEAM_ADMIN) 
+                && (!this.isInTeam() || role === UserRole.ADMIN)) {
+                throw new Error("You can only invite users to your team");
+            }
+            
+            // Create or update the user
+            let user = await User.findOne({ where: { email } });
+            
+            if (!user) {
+                // Create a new user
+                const randomPassword = Math.random().toString(36).slice(-8);
+                user = await User.register({
+                    email,
+                    username: email.split('@')[0],
+                    role,
+                    invitedById: this.id,
+                    team: this.role === UserRole.ADMIN ? 'none' : this.team
+                }, randomPassword);
+            } else {
+                // Update existing user
+                if (this.role === UserRole.ADMIN) {
+                    user.role = role;
+                } else {
+                    user.team = this.team;
+                    user.role = role;
+                }
+                
+                user.invitedById = this.id;
+                await user.save();
+            }
+            
+            return user;
+        }
 
         static associate(models: any) {
             // define association here
             User.hasMany(models.ViperInstance, {
                 foreignKey: 'owner',
                 as: 'viperInstances'
+            });
+            
+            // Self-referencing association for invitation tracking
+            User.belongsTo(User, { 
+                foreignKey: 'invitedById',
+                as: 'invitedBy'
+            });
+            User.hasMany(User, { 
+                foreignKey: 'invitedById',
+                as: 'invitedUsers' 
             });
         }
     }
@@ -184,6 +310,19 @@ export default (sequelize: Sequelize) => {
                     }
                 },
                 defaultValue: UserRole.USER
+            },
+            team: { 
+                type: DataTypes.STRING, 
+                allowNull: true,
+                defaultValue: 'none' 
+            },
+            invitedById: { 
+                type: DataTypes.INTEGER, 
+                allowNull: true,
+                references: {
+                    model: 'Users',
+                    key: 'id'
+                }
             },
             oauthID: { type: DataTypes.STRING },
             oauthProvider: { type: DataTypes.STRING },
