@@ -47,6 +47,8 @@ interface AccountUser {
     username: string;
     email: string;
     role: UserRole;
+    team?: string;
+    invitedById?: number;
 }
 
 interface SafeUser {
@@ -54,7 +56,8 @@ interface SafeUser {
     username: string;
     email: string;
     role: UserRole;
-    // Add other properties as needed
+    team?: string;
+    invitedById?: number;
 }
 
 router.get('/', (req: Request, res: Response) => {
@@ -67,11 +70,20 @@ router.get('/', (req: Request, res: Response) => {
             case UserRole.ADMIN:
                 res.redirect('/service/admin');
                 break;
+            case UserRole.TEAM_ADMIN:
+                res.redirect('/service/team-admin');
+                break;
+            case UserRole.TEAM_LEADER:
+                res.redirect('/service/team-leader');
+                break;
             case UserRole.TESTING:
                 res.redirect('/service/testing');
                 break;
             case UserRole.MEMBER:
                 res.redirect('/service/member');
+                break;
+            case UserRole.SUBSCRIBER:
+                res.redirect('/service/member'); // Subscribers use the member view for now
                 break;
 
             default:
@@ -151,155 +163,324 @@ router.post('/update', (req: Request, res: Response) => {
     }
 });
 
-router.get('/users', (req: Request, res: Response) => {
+router.get('/users', async (req: Request, res: Response) => {
     const user = req.user as AccountUser | undefined;
 
-    if (user && user.role == UserRole.ADMIN) {
-        db.User.findAll().then((users: any[]) => {
-            // // Remove 'salt' and 'hash' from each user
-            // const safeUsers: SafeUser[] = users.map(user => {
-            //     const { salt, hash, ...safeUser } = userAsJSON(user) as any; // Use toJSON() to get a plain object
-            //     return safeUser as SafeUser;
-            // });
+    if (!user) {
+        res.status(403).send({ message: "Unauthorized" });
+        return;
+    }
 
-            // res.json(safeUsers);
+    try {
+        let users: any[];
+        
+        if (user.role === UserRole.ADMIN) {
+            // Admins see all users with inviter information
+            users = await db.User.findAll({
+                include: [{
+                    model: db.User,
+                    as: 'invitedBy',
+                    attributes: ['id', 'username', 'email']
+                }]
+            });
+        } else if (user.role === UserRole.TEAM_ADMIN || user.role === UserRole.TEAM_LEADER) {
+            // Team admins and leaders see only their team members
+            if (!user.team || user.team === 'none') {
+                res.status(403).send({ message: "You must be in a team" });
+                return;
+            }
+            users = await db.User.findAll({
+                where: { team: user.team },
+                include: [{
+                    model: db.User,
+                    as: 'invitedBy',
+                    attributes: ['id', 'username', 'email']
+                }]
+            });
+        } else {
+            res.status(403).send({ message: "Insufficient permissions" });
+            return;
+        }
 
-            res.json(users);
-        }).catch((error: Error) => {
-            res.status(500).json({ error: error.message });
+        res.json(users);
+    } catch (error) {
+        res.status(500).json({ error: (error as Error).message });
+    }
+});
+
+// Get all unique teams in the system (admin only)
+router.get('/teams', async (req: Request, res: Response) => {
+    const user = req.user as AccountUser | undefined;
+
+    if (!user || user.role !== UserRole.ADMIN) {
+        res.status(403).send({ message: "Unauthorized" });
+        return;
+    }
+
+    try {
+        const teams = await db.User.findAll({
+            attributes: [[db.sequelize.fn('DISTINCT', db.sequelize.col('team')), 'team']],
+            where: {
+                team: {
+                    [Op.ne]: 'none'
+                }
+            },
+            raw: true
         });
-    } else {
-        res.status(403).send({ message: "Error 3" });
+
+        const teamNames = teams.map((t: any) => t.team).filter((team: string) => team && team !== 'none');
+        res.json(teamNames);
+    } catch (error) {
+        res.status(500).json({ error: (error as Error).message });
+    }
+});
+
+// Update user's team (admin only)
+router.put('/users/:id/team', async (req: Request, res: Response): Promise<void> => {
+    const currentUser = req.user as AccountUser;
+    
+    if (!currentUser || currentUser.role !== UserRole.ADMIN) {
+        res.status(403).send({ message: "Unauthorized" });
+        return;
+    }
+
+    const userId = req.params.id;
+    const newTeam = req.body.team || 'none';
+
+    try {
+        const user = await db.User.findByPk(userId);
+        
+        if (!user) {
+            res.status(404).send({ message: 'User not found' });
+            return;
+        }
+
+        const oldTeam = user.team;
+        user.team = newTeam;
+        await user.save();
+
+        appLogger.info('User team updated', {
+            eventType: 'User Team Update',
+            userId: user.id,
+            userEmail: user.email,
+            oldTeam,
+            newTeam,
+            updatedBy: currentUser.id,
+            updatedByUsername: currentUser.username,
+            timestamp: new Date().toISOString()
+        });
+
+        res.json({ message: 'Team updated successfully', user });
+    } catch (error) {
+        appLogger.error('Failed to update user team', {
+            eventType: 'User Team Update Error',
+            userId,
+            error: (error as Error).message,
+            timestamp: new Date().toISOString()
+        });
+        res.status(500).send({ message: 'Error updating team', error: (error as Error).message });
     }
 });
 
 router.put('/users/:id/role', async (req: Request, res: Response): Promise<void> => {
     const currentUser = req.user as AccountUser;
-    if (currentUser && currentUser.role == UserRole.ADMIN) {
-        const userId = req.params.id;
-        const newRole = req.body.role;
+    
+    // Check permissions based on role
+    const canUpdateRole = currentUser && (
+        currentUser.role === UserRole.ADMIN ||
+        currentUser.role === UserRole.TEAM_ADMIN
+    );
+    
+    if (!canUpdateRole) {
+        res.status(403).send({ message: "Unauthorized" });
+        return;
+    }
 
-        // Validate the new role
-        if (!isValidRole(newRole)) {
-            res.status(400).send({ 
-                message: 'Invalid role', 
-                validRoles: Object.values(UserRole) 
-            });
+    const userId = req.params.id;
+    const newRole = req.body.role;
+
+    // Validate the new role
+    if (!isValidRole(newRole)) {
+        res.status(400).send({ 
+            message: 'Invalid role', 
+            validRoles: Object.values(UserRole) 
+        });
+        return;
+    }
+
+    try {
+        // Get the target user's current role for logging
+        const targetUser = await db.User.findByPk(userId);
+        
+        if (!targetUser) {
+            res.status(404).send({ message: 'User not found' });
             return;
         }
+        
+        const oldRole = targetUser.role;
 
-        try {
-            // Get the target user's current role for logging
-            const targetUser = await db.User.findByPk(userId);
-            const oldRole = targetUser?.role;
-
-            console.error(req.body);
-            console.error(`${userId} - ${newRole}`);
-
-            await db.User.update({ role: newRole }, { where: { id: userId } });
+        // Team admin restrictions
+        if (currentUser.role === UserRole.TEAM_ADMIN) {
+            // Ensure target user is in their team
+            if (targetUser.team !== currentUser.team) {
+                res.status(403).send({ message: 'Can only update roles within your team' });
+                return;
+            }
             
-            // Log the role change
-            appLogger.info('User role changed', {
-                eventType: 'Role Change',
-                targetUserId: parseInt(userId),
-                targetUserEmail: targetUser?.email,
-                targetUsername: targetUser?.username,
-                oldRole,
-                newRole,
-                adminUserId: currentUser.id,
-                adminUsername: currentUser.username,
-                timestamp: new Date().toISOString()
-            });
-
-            res.status(200).send({ message: 'Role updated successfully' });
-        } catch (error) {
-            appLogger.error('Role change failed', {
-                eventType: 'Role Change Error',
-                targetUserId: parseInt(userId),
-                newRole,
-                adminUserId: currentUser.id,
-                error: (error as Error).message,
-                timestamp: new Date().toISOString()
-            });
-            res.status(500).send({ message: 'Error updating role', error });
+            // Team admins can only assign USER, MEMBER, or TEAM_LEADER roles
+            const allowedRoles = [UserRole.USER, UserRole.MEMBER, UserRole.TEAM_LEADER];
+            if (!allowedRoles.includes(newRole as UserRole)) {
+                res.status(403).send({ message: 'Team admins can only assign USER, MEMBER, or TEAM_LEADER roles' });
+                return;
+            }
         }
-    } else {
-        res.status(403).send({ message: 'Error updating role' });
+
+        console.error(req.body);
+        console.error(`${userId} - ${newRole}`);
+
+        await db.User.update({ role: newRole }, { where: { id: userId } });
+        
+        // Log the role change
+        appLogger.info('User role changed', {
+            eventType: 'Role Change',
+            targetUserId: parseInt(userId),
+            targetUserEmail: targetUser.email,
+            targetUsername: targetUser.username,
+            oldRole,
+            newRole,
+            changedByUserId: currentUser.id,
+            changedByUsername: currentUser.username,
+            changedByRole: currentUser.role,
+            timestamp: new Date().toISOString()
+        });
+
+        res.status(200).send({ message: 'Role updated successfully' });
+    } catch (error) {
+        appLogger.error('Role change failed', {
+            eventType: 'Role Change Error',
+            targetUserId: parseInt(userId),
+            newRole,
+            changedByUserId: currentUser.id,
+            error: (error as Error).message,
+            timestamp: new Date().toISOString()
+        });
+        res.status(500).send({ message: 'Error updating role', error });
     }
 });
 
 router.post('/users/invite', async (req: Request, res: Response): Promise<void> => {
     const currentUser = req.user as AccountUser;
-    if (currentUser && currentUser.role == UserRole.ADMIN) {   
-        // Validate the role before processing
-        const assignedRole = toUserRole(req.body.role);
+    
+    // Check if user has permission to invite based on their role
+    const canInvite = currentUser && (
+        currentUser.role === UserRole.ADMIN ||
+        currentUser.role === UserRole.TEAM_ADMIN ||
+        currentUser.role === UserRole.TEAM_LEADER
+    );
+    
+    if (!canInvite) {
+        res.status(403).send({ message: 'Unauthorized' });
+        return;
+    }
+    
+    // Validate the role before processing
+    const assignedRole = toUserRole(req.body.role);
+    const teamName = req.body.team || currentUser.team || 'none';
+    
+    // Role-based permission checks
+    if (currentUser.role === UserRole.TEAM_LEADER) {
+        // Team leaders can only invite members to their team
+        if (assignedRole !== UserRole.MEMBER) {
+            res.status(403).send({ message: 'Team leaders can only invite members' });
+            return;
+        }
+        if (!currentUser.team || currentUser.team === 'none') {
+            res.status(403).send({ message: 'You must be in a team to invite users' });
+            return;
+        }
+    }
+    
+    if (currentUser.role === UserRole.TEAM_ADMIN) {
+        // Team admins can invite members and team leaders to their team
+        if (![UserRole.MEMBER, UserRole.TEAM_LEADER].includes(assignedRole)) {
+            res.status(403).send({ message: 'Team admins can only invite members and team leaders' });
+            return;
+        }
+        if (!currentUser.team || currentUser.team === 'none') {
+            res.status(403).send({ message: 'You must be in a team to invite users' });
+            return;
+        }
+    }
+    
+    try {
+        const newUsername = helperFunctions.generateUsername(req.body.email);
+        
+        const userData: any = {
+            username: newUsername,
+            role: assignedRole,
+            email: req.body.email,
+            oauthProvider: "vipercloud",
+            invitedById: currentUser.id,
+            team: teamName
+        };
+        
+        const user = await db.User.register(userData, helperFunctions.generateRandomString(25)/*password*/);
+        
+        // Log successful user invitation
+        appLogger.info('User invited successfully', {
+            eventType: 'User Invitation',
+            newUserId: user.id,
+            newUserEmail: req.body.email,
+            newUsername,
+            assignedRole: assignedRole,
+            team: teamName,
+            invitedByUserId: currentUser.id,
+            invitedByUsername: currentUser.username,
+            invitedByRole: currentUser.role,
+            timestamp: new Date().toISOString()
+        });
         
         try {
-            const newUsername = helperFunctions.generateUsername(req.body.email);
+            await emailRelay.sendInvitedEmail(req.body.email, newUsername, currentUser.username);
             
-            const user = await db.User.register({
-                username: newUsername,
-                role: assignedRole,
-                email: req.body.email,
-                oauthProvider: "vipercloud",
-                // created: Date.now()
-            }, helperFunctions.generateRandomString(25)/*password*/);
-            
-            // Log successful user invitation
-            appLogger.info('User invited successfully', {
-                eventType: 'User Invitation',
-                newUserId: user.id,
-                newUserEmail: req.body.email,
-                newUsername,
-                assignedRole: assignedRole,
-                invitedByUserId: currentUser.id,
+            // Log successful email sending
+            appLogger.info('Invitation email sent', {
+                eventType: 'Invitation Email',
+                recipientEmail: req.body.email,
+                recipientUsername: newUsername,
                 invitedByUsername: currentUser.username,
                 timestamp: new Date().toISOString()
             });
+        } catch (emailError) {
+            console.error('Error sending invitation email:', emailError);
             
-            try {
-                await emailRelay.sendInvitedEmail(req.body.email, newUsername, currentUser.username);
-                
-                // Log successful email sending
-                appLogger.info('Invitation email sent', {
-                    eventType: 'Invitation Email',
-                    recipientEmail: req.body.email,
-                    recipientUsername: newUsername,
-                    invitedByUsername: currentUser.username,
-                    timestamp: new Date().toISOString()
-                });
-            } catch (emailError) {
-                console.error('Error sending invitation email:', emailError);
-                
-                // Log email failure
-                appLogger.error('Invitation email failed', {
-                    eventType: 'Invitation Email Error',
-                    recipientEmail: req.body.email,
-                    recipientUsername: newUsername,
-                    invitedByUsername: currentUser.username,
-                    error: (emailError as Error).message,
-                    timestamp: new Date().toISOString()
-                });
-                // Continue execution - user was created successfully even if email failed
-            }
-            
-            res.status(200).send({ message: 'User invited successfully', user });
-        } catch (err: any) {
-            // Log invitation failure
-            appLogger.error('User invitation failed', {
-                eventType: 'User Invitation Error',
-                targetEmail: req.body.email,
-                targetRole: assignedRole,
-                invitedByUserId: currentUser.id,
+            // Log email failure
+            appLogger.error('Invitation email failed', {
+                eventType: 'Invitation Email Error',
+                recipientEmail: req.body.email,
+                recipientUsername: newUsername,
                 invitedByUsername: currentUser.username,
-                error: err.message,
+                error: (emailError as Error).message,
                 timestamp: new Date().toISOString()
             });
-            
-            res.status(500).send({ message: 'Error inviting user', err });
+            // Continue execution - user was created successfully even if email failed
         }
-    } else {
-        res.status(403).send({ message: 'Unauthorized' });
+        
+        res.status(200).send({ message: 'User invited successfully', user });
+    } catch (err: any) {
+        // Log invitation failure
+        appLogger.error('User invitation failed', {
+            eventType: 'User Invitation Error',
+            targetEmail: req.body.email,
+            targetRole: assignedRole,
+            team: teamName,
+            invitedByUserId: currentUser.id,
+            invitedByUsername: currentUser.username,
+            error: err.message,
+            timestamp: new Date().toISOString()
+        });
+        
+        res.status(500).send({ message: 'Error inviting user', err });
     }
 });
 

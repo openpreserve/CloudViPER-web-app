@@ -17,6 +17,8 @@ The following roles are now defined as an enumeration in `/web-app/src/types/Use
 | `MEMBER` | `'member'` | Can run one ViPER instance as a community member | Single ViPER instance as member |
 | `SUBSCRIBER` | `'subscriber'` | Pays for use - extended access to ViPER instances | Extended ViPER instance access |
 | `ADMIN` | `'admin'` | Full ViPER and user management access | Full system administration |
+| `TEAM_LEADER` | `'team_leader'` | Team leader - can invite people to their team and manage team resources | Can invite users to their team, limited team management |
+| `TEAM_ADMIN` | `'team_admin'` | Team administrator - full management of their team | Full management of their team, can invite users, assign roles |
 
 ## Implementation Details
 
@@ -83,8 +85,10 @@ const RoleHierarchy: Record<UserRole, number> = {
     [UserRole.USER]: 0,        // Lowest permissions
     [UserRole.TESTING]: 1,     // Can test ViPER
     [UserRole.MEMBER]: 1,      // Can use ViPER as member
+    [UserRole.TEAM_LEADER]: 2, // Can invite/manage team members
+    [UserRole.TEAM_ADMIN]: 3,  // Full team management
     [UserRole.SUBSCRIBER]: 2,  // Enhanced access
-    [UserRole.ADMIN]: 3        // Full access
+    [UserRole.ADMIN]: 4        // Full access
 };
 ```
 
@@ -110,7 +114,7 @@ user.role = toUserRole('invalid'); // ✅ Falls back to 'user'
 ## Verification Results
 
 The verification script confirms:
-- ✅ All 5 role values are properly defined
+- ✅ All 8 role values are properly defined
 - ✅ Validation functions work correctly
 - ✅ Database connection and validation functional
 - ✅ Current database contains only valid roles (12 'user' roles found)
@@ -150,6 +154,14 @@ if (isValidRole(requestedRole)) {
     user.role = requestedRole as UserRole;
 } else {
     throw new Error('Invalid role specified');
+}
+
+// New team roles usage
+if (user.role === UserRole.TEAM_ADMIN) {
+    // Allow team admin actions
+}
+if (user.role === UserRole.TEAM_LEADER) {
+    // Allow team leader actions
 }
 ```
 

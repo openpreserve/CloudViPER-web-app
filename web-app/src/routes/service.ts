@@ -33,14 +33,23 @@ interface ServiceUser {
     username: string;
     email: string;
     role: UserRole;
+    team?: string;
+    invitedById?: number;
 }
 
-function userToJson(_user: ServiceUser) {
+function userToJson(_user: any) {
     return {
         id: _user.id,
         username: _user.username,
         email: _user.email,
         role: _user.role,
+        team: _user.team || 'none',
+        invitedById: _user.invitedById,
+        invitedBy: _user.invitedBy ? {
+            id: _user.invitedBy.id,
+            username: _user.invitedBy.username,
+            email: _user.invitedBy.email
+        } : undefined
     };
 }
 
@@ -79,6 +88,10 @@ function getInstanceLimit(role: UserRole): number {
         case UserRole.TESTING:
         case UserRole.MEMBER:
             return 1;
+        case UserRole.TEAM_LEADER:
+            return 5; // Team leaders can have more instances
+        case UserRole.TEAM_ADMIN:
+            return 10; // Team admins can have more instances
         case UserRole.SUBSCRIBER:
             return 10; // or unlimited, depending on business rules
         case UserRole.ADMIN:
@@ -137,6 +150,15 @@ router.get('/', (req: Request, res: Response) => {
             case UserRole.ADMIN:
                 res.redirect('/service/admin');
                 break;
+            case UserRole.TEAM_ADMIN:
+                res.redirect('/service/team-admin');
+                break;
+            case UserRole.TEAM_LEADER:
+                res.redirect('/service/team-leader');
+                break;
+            case UserRole.SUBSCRIBER:
+                res.redirect('/service/member'); // Subscribers use member view for now
+                break;
             case UserRole.TESTING:
                 res.redirect('/service/testing');
                 break;
@@ -194,7 +216,7 @@ router.get('/testing', (req: Request, res: Response) => {
     res.render('service_testing', { user: userToJson(user!) });
 });
 
-router.get('/member', (req: Request, res: Response) => {
+router.get('/member', async (req: Request, res: Response) => {
     const user = req.user as ServiceUser | undefined;
     const permissionCheck = checkUserPermission(user, UserRole.MEMBER);
     
@@ -212,7 +234,91 @@ router.get('/member', (req: Request, res: Response) => {
         return;
     }
     
-    res.render('service_member', { user: userToJson(user!) });
+    // Fetch full user data with inviter information
+    try {
+        const fullUser = await db.User.findByPk(user!.id, {
+            include: [{
+                model: db.User,
+                as: 'invitedBy',
+                attributes: ['id', 'username', 'email']
+            }]
+        });
+        
+        res.render('service_member', { user: userToJson(fullUser || user!) });
+    } catch (error) {
+        console.error('Error fetching full user data:', error);
+        res.render('service_member', { user: userToJson(user!) });
+    }
+});
+
+router.get('/team-admin', async (req: Request, res: Response) => {
+    const user = req.user as ServiceUser | undefined;
+    const permissionCheck = checkUserPermission(user, UserRole.TEAM_ADMIN);
+    
+    if (!permissionCheck.authorized) {
+        appLogger.warn('Unauthorized team admin access attempt', {
+            eventType: 'Unauthorized Access',
+            userId: user?.id || 'unknown',
+            userRole: user?.role || 'unknown',
+            endpoint: '/service/team-admin',
+            reason: permissionCheck.reason,
+            ipAddress: req.ip,
+            timestamp: new Date().toISOString()
+        });
+        res.redirect('/service');
+        return;
+    }
+    
+    // Fetch full user data with inviter information
+    try {
+        const fullUser = await db.User.findByPk(user!.id, {
+            include: [{
+                model: db.User,
+                as: 'invitedBy',
+                attributes: ['id', 'username', 'email']
+            }]
+        });
+        
+        res.render('service_team_admin', { user: userToJson(fullUser || user!) });
+    } catch (error) {
+        console.error('Error fetching full user data:', error);
+        res.render('service_team_admin', { user: userToJson(user!) });
+    }
+});
+
+router.get('/team-leader', async (req: Request, res: Response) => {
+    const user = req.user as ServiceUser | undefined;
+    const permissionCheck = checkUserPermission(user, UserRole.TEAM_LEADER);
+    
+    if (!permissionCheck.authorized) {
+        appLogger.warn('Unauthorized team leader access attempt', {
+            eventType: 'Unauthorized Access',
+            userId: user?.id || 'unknown',
+            userRole: user?.role || 'unknown',
+            endpoint: '/service/team-leader',
+            reason: permissionCheck.reason,
+            ipAddress: req.ip,
+            timestamp: new Date().toISOString()
+        });
+        res.redirect('/service');
+        return;
+    }
+    
+    // Fetch full user data with inviter information
+    try {
+        const fullUser = await db.User.findByPk(user!.id, {
+            include: [{
+                model: db.User,
+                as: 'invitedBy',
+                attributes: ['id', 'username', 'email']
+            }]
+        });
+        
+        res.render('service_team_leader', { user: userToJson(fullUser || user!) });
+    } catch (error) {
+        console.error('Error fetching full user data:', error);
+        res.render('service_team_leader', { user: userToJson(user!) });
+    }
 });
 
 router.get('/new-instance', async (req: Request, res: Response): Promise<void> => {
@@ -1001,10 +1107,35 @@ router.get('/viperinstances', async (req: Request, res: Response): Promise<void>
                 order: [['createdAt', 'DESC']] // Most recent first
             });
             
-            appLogger.info('Admin accessed all instances', {
-                eventType: 'Instance List Access',
+            // appLogger.info('Admin accessed all instances', {
+            //     eventType: 'Instance List Access',
+            //     userId: user.id,
+            //     userRole: user.role,
+            //     instanceCount: instances.length,
+            //     timestamp: new Date().toISOString()
+            // });
+        } else if (user.role === UserRole.TEAM_ADMIN || user.role === UserRole.TEAM_LEADER) {
+            // Team admins and leaders see all instances for their team
+            const teamUsers = await db.User.findAll({
+                where: { team: user.team },
+                attributes: ['id']
+            });
+            const teamUserIds = teamUsers.map(u => u.id);
+            instances = await db.ViperInstance.findAll({
+                where: { owner: teamUserIds },
+                attributes: { exclude: ['lastScreenshot', 'activityHistory'] },
+                include: [
+                    { model: db.User, as: 'ownerUser', attributes: ['id', 'username', 'email', 'firstName', 'lastName'] },
+                    { model: db.Screenshot, as: 'screenshots', attributes: ['id', 'capturedAt', 'receivedAt'], limit: 1, order: [['createdAt', 'DESC']], required: false },
+                    { model: db.Activity, as: 'activities', attributes: ['id', 'activityScore', 'reportedAt', 'receivedAt'], limit: 1, order: [['createdAt', 'DESC']], required: false }
+                ],
+                order: [['createdAt', 'DESC']]
+            });
+            appLogger.info('Team admin/leader accessed team instances', {
+                eventType: 'Team Instance List Access',
                 userId: user.id,
                 userRole: user.role,
+                team: user.team,
                 instanceCount: instances.length,
                 timestamp: new Date().toISOString()
             });

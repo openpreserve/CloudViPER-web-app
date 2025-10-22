@@ -15,6 +15,9 @@ const hbs = create({
                 return options.fn(this);
             }
             return options.inverse(this);
+        },
+        eq: (value1: any, value2: any) => {
+            return value1 === value2;
         }
     }
 });

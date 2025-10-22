@@ -7,9 +7,33 @@
       </div>
       <h1 class="login-title">ViPER Member Dashboard</h1>
       <p class="login-subtitle">Welcome to your member dashboard, {{{user.email}}}</p>
+      {{#if user.team}}
+        {{#unless (eq user.team "none")}}
+          <p class="login-subtitle" style="margin-top: 0.5rem;">Team: <strong>{{{user.team}}}</strong></p>
+        {{/unless}}
+      {{/if}}
     </div>
 
     <div class="info-section">
+      {{#if user.team}}
+        {{#unless (eq user.team "none")}}
+          <div class="info-card" style="background: linear-gradient(135deg, #17a2b8 0%, #138496 100%); color: white;">
+            <div class="info-icon" style="color: white;">
+              <i class="fas fa-users"></i>
+            </div>
+            <div class="info-content">
+              <h3 style="color: white;">Team Member</h3>
+              <p style="opacity: 0.95;">You are a member of team: <strong>{{{user.team}}}</strong></p>
+              {{#if user.invitedBy}}
+                <p style="opacity: 0.9; margin-top: 0.5rem;">
+                  <i class="fas fa-user-shield"></i> Invited by: <strong>{{user.invitedBy.username}}</strong>
+                </p>
+              {{/if}}
+            </div>
+          </div>
+        {{/unless}}
+      {{/if}}
+      
       <div class="info-card">
         <div class="info-icon">
           <i class="fas fa-star"></i>
