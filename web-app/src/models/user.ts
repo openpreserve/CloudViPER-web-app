@@ -144,7 +144,9 @@ export default (sequelize: Sequelize) => {
                         resolve(false);
                     }
                 });
-            });
+            });66
+ 
+
         }
 
         static async authenticateUser(email: string, password: string): Promise<User | boolean> {

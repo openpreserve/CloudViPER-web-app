@@ -122,7 +122,9 @@ send_activity() {
     # Check if window is active
     WINDOW_ACTIVE=false
     if [ -n "$DISPLAY" ] && command -v xdotool &> /dev/null; then
-        if xdotool getactivewindow &>/dev/null; then
+        if xdotool getactivewindow &>/dev/null; then66
+ 
+
             WINDOW_ACTIVE=true
             debug_log "Window is active"
         else

@@ -252,6 +252,8 @@ router.get('/member', async (req: Request, res: Response) => {
         console.error('Error fetching full user data:', error);
         res.render('service_member', { user: userToJson(user!) });
     }
+    
+    res.render('service_member', { user: userToJson(user!) });
 });
 
 router.get('/team-admin', async (req: Request, res: Response) => {
