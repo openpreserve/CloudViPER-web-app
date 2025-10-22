@@ -17,7 +17,7 @@ dotenv.config();
 
 const router = express.Router();
 // Using containerService instead of direct Docker instance
-const docker = new Docker({ socketPath: '/var/run/docker.sock' }); // Keep for compatibility with existing code
+// const docker = new Docker({ socketPath: '/var/run/docker.sock' }); // Keep for compatibility with existing code
 const DOMAIN_NAME = process.env.DOMAIN_NAME || 'cloudviper.org';
 
 /*
@@ -1026,9 +1026,9 @@ router.get('/health', async (req: Request, res: Response): Promise<void> => {
             healthData.status = 'degraded';
         }
 
-        // Docker connectivity check
+        // Docker connectivity check (via containerService)
         try {
-            await docker.ping();
+            await containerService.ping();
             healthData.docker = { status: 'connected' };
         } catch (dockerError) {
             healthData.docker = { status: 'error', message: (dockerError as Error).message };
