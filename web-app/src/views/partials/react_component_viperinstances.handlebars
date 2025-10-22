@@ -3,7 +3,7 @@
       .activity-chart-container {
         text-align: center;
         padding: 10px;
-        background: #f8f9fa;
+        background: #eaf6fb;
         border-radius: 8px;
         margin: 5px;
       }
@@ -603,7 +603,7 @@ Current Activity Score: ${data.summary.currentScore || 0}`);
           setTimeout(() => this.initializeScreenshotCarousel(instance.uuid), 100);
           return React.createElement('div', { className: 'screenshot-container loading' },
             React.createElement('img', { 
-              src: '/images/apple-icon-180x180.png',
+              src: '/images/CloudViPER-Logo.png',
               className: 'card-img-custom',
               alt: 'Loading...',
               style: { opacity: 0.7 }
@@ -616,7 +616,7 @@ Current Activity Score: ${data.summary.currentScore || 0}`);
         if (!carousel.hasScreenshots) {
           return React.createElement('div', { className: 'screenshot-container' },
             React.createElement('img', { 
-              src: '/images/apple-icon-180x180.png',
+              src: '/images/CloudViPER-Logo.png',
               className: 'card-img-custom',
               alt: 'ViPER Instance',
               title: 'No screenshots available'
@@ -642,7 +642,7 @@ Current Activity Score: ${data.summary.currentScore || 0}`);
               },
               onError: (e) => {
                 // Fallback to logo on error
-                e.target.src = '/images/apple-icon-180x180.png';
+                e.target.src = '/images/CloudViPER-Logo.png';
                 e.target.title = 'Screenshot failed to load';
               }
             }),
@@ -1044,7 +1044,7 @@ Current Activity Score: ${data.summary.currentScore || 0}`);
                       className="screenshot-modal-image"
                       alt="Screenshot"
                       onError={(e) => {
-                        e.target.src = '/images/apple-icon-180x180.png';
+                        e.target.src = '/images/CloudViPER-Logo.png';
                       }}
                     />
                   </div>

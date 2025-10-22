@@ -1,0 +1,236 @@
+<!-- Cloud GUI Styling for Team Leader Account -->
+<div class="login-cloud">
+  <div class="login-content">
+    <div class="login-header">
+      <div class="login-icon">
+        <i class="fas fa-user-tie"></i>
+      </div>
+      <h1 class="login-title">Team Leader Dashboard</h1>
+      <p class="login-subtitle">Welcome, {{{user.email}}} - Team: <strong>{{{user.team}}}</strong></p>
+    </div>
+
+    {{!-- <div class="info-section">
+      <div class="info-card">
+        <div class="info-icon">
+          <i class="fas fa-hands-helping"></i>
+        </div>
+        <div class="info-content">
+          <h3>Team Leader Privileges</h3>
+          <p>As a Team Leader, you help manage and grow your team.</p>
+          <ul>
+            <li><i class="fas fa-check text-success"></i> Create up to 5 ViPER container instances</li>
+            <li><i class="fas fa-check text-success"></i> Invite new team members</li>
+            <li><i class="fas fa-check text-success"></i> View team instances and activity</li>
+            <li><i class="fas fa-check text-success"></i> Collaborate with team members</li>
+            <li><i class="fas fa-check text-success"></i> Priority support for team issues</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="team-info-prompt">
+        <div class="team-info-content">
+          <h4><i class="fas fa-users"></i> Your Team: {{{user.team}}}</h4>
+          <p>You are a leader in this team. Use the tabs below to invite members and monitor team instances.</p>
+          {{#if user.invitedBy}}
+          <p style="margin-top: 0.5rem;"><small><i class="fas fa-info-circle"></i> Invited by: {{user.invitedBy.username}}</small></p>
+          {{/if}}
+        </div>
+      </div>
+    </div> --}}
+  </div>
+</div>
+
+<div id="react-root" class="bg-white"></div>
+
+<!-- Add React, ReactDOM, and Babel scripts -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.development.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.development.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/6.25.0/babel.min.js"></script>
+
+<style>
+/* Team Leader specific styling */
+.team-leader-dashboard {
+  padding: 2rem;
+}
+
+.leader-tabs {
+  display: flex;
+  gap: 0.5rem;
+  border-bottom: 2px solid #dee2e6;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.leader-tab {
+  padding: 1rem 1.5rem;
+  background: transparent;
+  border: none;
+  color: #6c757d;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  border-bottom: 3px solid transparent;
+}
+
+.leader-tab:hover {
+  color: #495057;
+  background: #f8f9fa;
+}
+
+.leader-tab.active {
+  color: #17a2b8;
+  border-bottom-color: #17a2b8;
+  background: #f8f9fa;
+}
+
+.leader-tab-icon {
+  margin-right: 0.5rem;
+  font-size: 1.1rem;
+  vertical-align: middle;
+  display: inline-block;
+  width: 20px;
+  text-align: center;
+}
+
+.team-info-prompt {
+  background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-top: 1rem;
+  box-shadow: 0 4px 15px rgba(23, 162, 184, 0.3);
+}
+
+.team-info-content {
+  color: white;
+}
+
+.team-info-content h4 {
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+}
+
+.team-info-content p {
+  margin: 0;
+  opacity: 0.9;
+}
+
+.panel-header {
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid #dee2e6;
+}
+
+.panel-title {
+  font-size: 1.5rem;
+  color: #333;
+  margin-bottom: 0.5rem;
+}
+
+.panel-subtitle {
+  color: #6c757d;
+  margin: 0;
+}
+</style>
+
+<script type="text/babel">
+  {{> react_component_users }}
+  {{> react_component_viperinstances }}
+
+  class TeamLeaderDashboard extends React.Component {
+    constructor(props) {
+      super(props);
+      
+      this.availableTabs = ['users', 'instances'];
+      
+      this.state = {
+        activeTab: this.getInitialTab()
+      };
+    }
+
+    componentDidMount() {
+      window.addEventListener('hashchange', this.handleHashChange);
+    }
+
+    componentWillUnmount() {
+      window.removeEventListener('hashchange', this.handleHashChange);
+    }
+
+    getInitialTab = () => {
+      const hash = window.location.hash.substring(1);
+      return this.availableTabs.includes(hash) ? hash : 'users';
+    }
+
+    handleHashChange = () => {
+      const newTab = this.getInitialTab();
+      if (newTab !== this.state.activeTab) {
+        this.setState({ activeTab: newTab });
+      }
+    }
+
+    switchTab = (tabName) => {
+      this.setState({ activeTab: tabName });
+      window.location.hash = tabName;
+    }
+
+    render() {
+      const { activeTab } = this.state;
+      const userEmail = '{{{user.email}}}';
+      const userRole = '{{{user.role}}}';
+      const userTeam = '{{{user.team}}}' || 'none';
+
+      const tabs = [
+        {
+          id: 'users',
+          label: 'Team Members',
+          icon: 'fas fa-user-plus',
+          component: <UserList userRole={userRole} userTeam={userTeam} currentUserId={'{{{user.id}}}'} />,
+          description: 'Invite new members to your team'
+        },
+        {
+          id: 'instances',
+          label: 'Team Instances',
+          icon: 'fas fa-server',
+          component: <ViPERInstanceList userRole={userRole} userEmail={userEmail} />,
+          description: 'View all ViPER instances for your team'
+        }
+      ];
+
+      return (
+        <div className="team-leader-dashboard">
+          <div className="leader-tabs">
+            {tabs.map(tab => (
+              <button
+                key={tab.id}
+                className={`leader-tab ${activeTab === tab.id ? 'active' : ''}`}
+                onClick={() => this.switchTab(tab.id)}
+              >
+                <i className={`leader-tab-icon ${tab.icon}`}></i>
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="leader-tab-content">
+            {tabs.map(tab => (
+              <div
+                key={tab.id}
+                className={`leader-panel ${activeTab === tab.id ? 'active' : ''}`}
+                style=\{{ display: activeTab === tab.id ? 'block' : 'none' }}
+              >
+                <div className="panel-header">
+                  <h2 className="panel-title">
+                    <i className={tab.icon}></i> {tab.label}
+                  </h2>
+                  <p className="panel-subtitle">{tab.description}</p>
+                </div>
+                {tab.component}
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+  }
+
+  ReactDOM.render(<TeamLeaderDashboard />, document.getElementById('react-root'));
+</script>

@@ -17,7 +17,9 @@ export default (passport: PassportStatic) => {
     //passport.use(db.User.createStrategy());
  
     passport.use(new LocalStrategy({ usernameField: options.usernameField }, (username, password, done) => {
-        console.log('LocalStrategy:' + username + ' ' + password);
+        if (process.env.NODE_ENV === 'dev' || process.env.NODE_ENV === 'development') {
+            console.log('LocalStrategy:' + username + ' ' + password);
+        }
         db.User.findOne({ 
             where: { [options.usernameField]: username } ,
             attributes: { include: ['hash', 'salt'] } // Include hash and salt fields

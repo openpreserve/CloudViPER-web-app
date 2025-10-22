@@ -519,6 +519,8 @@ tr:hover {
 .card-img-custom {
     object-fit: cover;
     border-radius: 6px;
+    max-height: 400px;
+    padding:5px;
 }
 
 /* Clean form styling */

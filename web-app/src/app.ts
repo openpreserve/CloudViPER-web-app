@@ -39,7 +39,27 @@ const DOMAIN_WITHOUT_WWW = DOMAIN_NAME.replace('www.', '');
 // Prod specific 
 if (process.env.NODE_ENV === 'production') {
     app.use((req, res, next)=>{
-        //force https
+        // Allow internal Docker network requests to bypass HTTPS redirect
+        const isInternalRequest = 
+            req.ip?.startsWith('172.') || // Docker internal network
+            req.ip?.startsWith('10.') ||  // Docker internal network
+            req.hostname === 'cloud-viper-gui-app' ||
+            req.hostname === 'localhost';
+        
+        const isServiceEndpoint = req.path.startsWith('/service/');
+        
+        // Skip HTTPS redirect for internal service requests
+        if (isInternalRequest && isServiceEndpoint) {
+            console.log('Bypassing HTTPS redirect for internal request:', {
+                ip: req.ip,
+                hostname: req.hostname,
+                path: req.path,
+                timestamp: new Date().toISOString()
+            });
+            return next();
+        }
+        
+        //force https for external requests
         if (req.headers['x-forwarded-proto'] !== 'https') {
             return res.redirect(302, [`https://${DOMAIN_NAME}`, req.url].join('')); 
         }
@@ -76,6 +96,12 @@ configurePassport(passport);
 app.set('views', path.join(__dirname, 'views'));
 app.engine('handlebars', exphbs.engine);
 app.set('view engine', 'handlebars');
+
+// Disable view caching in development for live reloading
+if (process.env.NODE_ENV === 'dev' || process.env.NODE_ENV === 'development') {
+    app.set('view cache', false);
+}
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Add routes

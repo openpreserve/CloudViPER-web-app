@@ -10,11 +10,14 @@ import { getAvailablePort } from '../utility/portManager';
 import { appLogger } from '../config/logger';
 import { UserRole } from '../types/UserRole';
 import { readAndProcessScript, validateRequiredScripts } from '../utility/scriptManager';
+import containerService from '../services/ContainerService';
+import viperInstanceService from '../services/ViperInstanceService';
 
 dotenv.config();
 
 const router = express.Router();
-const docker = new Docker({ socketPath: '/var/run/docker.sock' });
+// Using containerService instead of direct Docker instance
+const docker = new Docker({ socketPath: '/var/run/docker.sock' }); // Keep for compatibility with existing code
 const DOMAIN_NAME = process.env.DOMAIN_NAME || 'cloudviper.org';
 
 /*
@@ -33,14 +36,23 @@ interface ServiceUser {
     username: string;
     email: string;
     role: UserRole;
+    team?: string;
+    invitedById?: number;
 }
 
-function userToJson(_user: ServiceUser) {
+function userToJson(_user: any) {
     return {
         id: _user.id,
         username: _user.username,
         email: _user.email,
         role: _user.role,
+        team: _user.team || 'none',
+        invitedById: _user.invitedById,
+        invitedBy: _user.invitedBy ? {
+            id: _user.invitedBy.id,
+            username: _user.invitedBy.username,
+            email: _user.invitedBy.email
+        } : undefined
     };
 }
 
@@ -79,6 +91,10 @@ function getInstanceLimit(role: UserRole): number {
         case UserRole.TESTING:
         case UserRole.MEMBER:
             return 1;
+        case UserRole.TEAM_LEADER:
+            return 5; // Team leaders can have more instances
+        case UserRole.TEAM_ADMIN:
+            return 10; // Team admins can have more instances
         case UserRole.SUBSCRIBER:
             return 10; // or unlimited, depending on business rules
         case UserRole.ADMIN:
@@ -137,6 +153,15 @@ router.get('/', (req: Request, res: Response) => {
             case UserRole.ADMIN:
                 res.redirect('/service/admin');
                 break;
+            case UserRole.TEAM_ADMIN:
+                res.redirect('/service/team-admin');
+                break;
+            case UserRole.TEAM_LEADER:
+                res.redirect('/service/team-leader');
+                break;
+            case UserRole.SUBSCRIBER:
+                res.redirect('/service/member'); // Subscribers use member view for now
+                break;
             case UserRole.TESTING:
                 res.redirect('/service/testing');
                 break;
@@ -194,7 +219,7 @@ router.get('/testing', (req: Request, res: Response) => {
     res.render('service_testing', { user: userToJson(user!) });
 });
 
-router.get('/member', (req: Request, res: Response) => {
+router.get('/member', async (req: Request, res: Response) => {
     const user = req.user as ServiceUser | undefined;
     const permissionCheck = checkUserPermission(user, UserRole.MEMBER);
     
@@ -212,7 +237,93 @@ router.get('/member', (req: Request, res: Response) => {
         return;
     }
     
+    // Fetch full user data with inviter information
+    try {
+        const fullUser = await db.User.findByPk(user!.id, {
+            include: [{
+                model: db.User,
+                as: 'invitedBy',
+                attributes: ['id', 'username', 'email']
+            }]
+        });
+        
+        res.render('service_member', { user: userToJson(fullUser || user!) });
+    } catch (error) {
+        console.error('Error fetching full user data:', error);
+        res.render('service_member', { user: userToJson(user!) });
+    }
+    
     res.render('service_member', { user: userToJson(user!) });
+});
+
+router.get('/team-admin', async (req: Request, res: Response) => {
+    const user = req.user as ServiceUser | undefined;
+    const permissionCheck = checkUserPermission(user, UserRole.TEAM_ADMIN);
+    
+    if (!permissionCheck.authorized) {
+        appLogger.warn('Unauthorized team admin access attempt', {
+            eventType: 'Unauthorized Access',
+            userId: user?.id || 'unknown',
+            userRole: user?.role || 'unknown',
+            endpoint: '/service/team-admin',
+            reason: permissionCheck.reason,
+            ipAddress: req.ip,
+            timestamp: new Date().toISOString()
+        });
+        res.redirect('/service');
+        return;
+    }
+    
+    // Fetch full user data with inviter information
+    try {
+        const fullUser = await db.User.findByPk(user!.id, {
+            include: [{
+                model: db.User,
+                as: 'invitedBy',
+                attributes: ['id', 'username', 'email']
+            }]
+        });
+        
+        res.render('service_team_admin', { user: userToJson(fullUser || user!) });
+    } catch (error) {
+        console.error('Error fetching full user data:', error);
+        res.render('service_team_admin', { user: userToJson(user!) });
+    }
+});
+
+router.get('/team-leader', async (req: Request, res: Response) => {
+    const user = req.user as ServiceUser | undefined;
+    const permissionCheck = checkUserPermission(user, UserRole.TEAM_LEADER);
+    
+    if (!permissionCheck.authorized) {
+        appLogger.warn('Unauthorized team leader access attempt', {
+            eventType: 'Unauthorized Access',
+            userId: user?.id || 'unknown',
+            userRole: user?.role || 'unknown',
+            endpoint: '/service/team-leader',
+            reason: permissionCheck.reason,
+            ipAddress: req.ip,
+            timestamp: new Date().toISOString()
+        });
+        res.redirect('/service');
+        return;
+    }
+    
+    // Fetch full user data with inviter information
+    try {
+        const fullUser = await db.User.findByPk(user!.id, {
+            include: [{
+                model: db.User,
+                as: 'invitedBy',
+                attributes: ['id', 'username', 'email']
+            }]
+        });
+        
+        res.render('service_team_leader', { user: userToJson(fullUser || user!) });
+    } catch (error) {
+        console.error('Error fetching full user data:', error);
+        res.render('service_team_leader', { user: userToJson(user!) });
+    }
 });
 
 router.get('/new-instance', async (req: Request, res: Response): Promise<void> => {
@@ -270,588 +381,10 @@ router.get('/new-instance', async (req: Request, res: Response): Promise<void> =
         }
     }
 
-    const ownerId = user!.id;
-    const instanceUUID = helperFunctions.generateRandomString(12);
-    const kasmvncPassword = helperFunctions.generateRandomString(12);
-    const statusKey = helperFunctions.generateRandomString(12);
-    const instanceURL = `${instanceUUID}.${process.env.APP_HOST}`;
-    const containerName = `viper-cloud-${instanceUUID}`;
-    
-    appLogger.info('Starting instance creation', {
-        eventType: 'Instance Creation Started',
-        userId: user!.id,
-        userEmail: user!.email,
-        userRole: user!.role,
-        instanceUUID,
-        containerName,
-        timestamp: new Date().toISOString()
-    });
-
-    const envVars = [
-        "VIRTUAL_PORT=3000",
-        "VIRTUAL_HOST=" + instanceURL,
-        "LETSENCRYPT_HOST=" + instanceURL,
-        "LETSENCRYPT_EMAIL=sysadmin@openpreservation.org",
-        "PASSWORD=" + kasmvncPassword,
-        "PUID=1000",
-        "PGID=1000",
-        "ACME_PRE_HOOK=curl " + (process.env.SERVICE_URL || (process.env.NODE_ENV === 'production' ? 
-            `http://cloud-viper-gui-app:3000` : 
-            `http://localhost:3000`)) + "/service/set-status-instance/"+statusKey+"/begin_cert",
-        "ACME_POST_HOOK=curl " + (process.env.SERVICE_URL || (process.env.NODE_ENV === 'production' ? 
-            `http://cloud-viper-gui-app:3000` : 
-            `http://localhost:3000`)) + "/service/set-status-instance/"+statusKey+"/active",
-    ];
-    console.log('Container Environment Variables:', envVars);
-
     try {
-        // Find an available port for development, production uses reverse proxy
-        const availablePort = process.env.NODE_ENV === 'dev' ? await getAvailablePort(3010) : 3000;
-
-        const containerOptions: any = {
-            Image: 'darrendignam/opf-viper-cloud:v0.0.11',
-            name: containerName,
-            HostConfig: {
-                ShmSize: 1024 * 1024 * 1024,
-                Binds: ['/var/viper-docker-project/volumes/test-corpus/test-root/corpora:/config/Desktop/test-corpus:ro'],
-                ...(process.env.NODE_ENV === 'dev' && { PortBindings: { 
-                    '3000/tcp': [{ HostPort: `${availablePort}` }],
-                    '3001/tcp': [] // Empty binding to prevent null value
-                } })
-            },
-            ExposedPorts: { '3000/tcp': {} },
-            NetworkingConfig: {
-                EndpointsConfig: {
-                    'cloud-viper-net': {},
-                    ...(process.env.NODE_ENV === 'prod' && { 'ingress-proxy': {} }),
-                    ...(process.env.NODE_ENV === 'production' && { 'ingress-proxy': {} })
-                }
-            },
-            Env: envVars,
-        };
-
-        const container = await docker.createContainer(containerOptions);
-        await container.start();
-
-        appLogger.info('Container created and started successfully', {
-            eventType: 'Container Created',
-            instanceUUID,
-            containerName,
-            containerId: container.id,
-            userId: user!.id,
-            userEmail: user!.email,
-            userRole: user!.role,
-            instanceURL,
-            timestamp: new Date().toISOString()
-        });
-
-        // Create database entry immediately after container starts successfully
-        const newViperInstance = await db.ViperInstance.create({
-            uuid: instanceUUID,
-            dockerid: container.id,
-            name: containerName,
-            url: instanceURL,
-            kasmvncPassword: kasmvncPassword,
-            statusKey: statusKey,
-            owner: ownerId,
-            status: 'created',
-            logs: [{ timestamp: new Date(), message: "Created" }],
-        });
-
-        appLogger.info('ViPER instance database entry created', {
-            eventType: 'Database Entry Created',
-            instanceId: newViperInstance.id,
-            instanceUUID,
-            containerId: container.id,
-            userId: user!.id,
-            userEmail: user!.email,
-            userRole: user!.role,
-            timestamp: new Date().toISOString()
-        });
-
-        // In development mode, simulate ACME hook completion since SSL certs won't be issued
-        if (process.env.NODE_ENV === 'dev') {
-            setTimeout(async () => {
-                try {
-                    // Simulate the begin_cert status first
-                    await db.ViperInstance.update(
-                        { 
-                            status: 'begin_cert',
-                            logs: [...(newViperInstance.logs || []), { 
-                                timestamp: new Date(), 
-                                message: "Certificate process started (simulated)" 
-                            }]
-                        },
-                        { where: { uuid: instanceUUID } }
-                    );
-
-                    appLogger.info('Dev mode: Certificate process started (simulated)', {
-                        eventType: 'Dev Status Update',
-                        instanceUUID,
-                        status: 'begin_cert',
-                        timestamp: new Date().toISOString()
-                    });
-
-                    // Wait a bit more then set to active
-                    setTimeout(async () => {
-                        try {
-                            const updatedInstance = await db.ViperInstance.findOne({ where: { uuid: instanceUUID } });
-                            if (updatedInstance) {
-                                await updatedInstance.update({
-                                    status: 'active',
-                                    logs: [...(updatedInstance.logs || []), { 
-                                        timestamp: new Date(), 
-                                        message: "Instance activated (simulated ACME completion)" 
-                                    }]
-                                });
-
-                                appLogger.info('Dev mode: Instance activated (simulated)', {
-                                    eventType: 'Dev Status Update',
-                                    instanceUUID,
-                                    status: 'active',
-                                    timestamp: new Date().toISOString()
-                                });
-                            }
-                        } catch (activateError) {
-                            appLogger.warn('Failed to activate instance in dev mode', {
-                                eventType: 'Dev Status Update Error',
-                                instanceUUID,
-                                error: (activateError as Error).message,
-                                timestamp: new Date().toISOString()
-                            });
-                        }
-                    }, 10000); // Wait 10 seconds then activate
-
-                } catch (certError) {
-                    appLogger.warn('Failed to start cert process in dev mode', {
-                        eventType: 'Dev Status Update Error',
-                        instanceUUID,
-                        error: (certError as Error).message,
-                        timestamp: new Date().toISOString()
-                    });
-                }
-            }, 5000); // Wait 5 seconds then start cert process
-        }
-
-        // Setup monitoring and security (non-critical - don't fail instance creation if these fail)
-        try {
-            // Validate required scripts exist
-            const scriptValidation = validateRequiredScripts();
-            if (!scriptValidation.valid) {
-                throw new Error(`Missing required scripts: ${scriptValidation.missing.join(', ')}`);
-            }
-
-            // Remove sudo access (security hardening) with better error handling
-            try {
-                const exec1 = await container.exec({
-                    AttachStdout: true, 
-                    AttachStderr: true,
-                    Cmd: ['rm', '-f', '/etc/sudoers.d/abc']
-                });
-                const stream1 = await exec1.start({ hijack: true, stdin: true });
-                stream1.on('data', (data: any) => console.log(data.toString()));
-                await new Promise((resolve) => stream1.on('end', resolve));
-                
-                appLogger.info('Sudoers file removed successfully', {
-                    eventType: 'Security Hardening',
-                    instanceUUID,
-                    containerId: container.id,
-                    action: 'sudoers_removal',
-                    timestamp: new Date().toISOString()
-                });
-            } catch (execErr) { 
-                appLogger.warn('Failed to remove sudoers file', {
-                    eventType: 'Security Hardening Warning',
-                    instanceUUID,
-                    containerId: container.id,
-                    error: (execErr as Error).message,
-                    timestamp: new Date().toISOString()
-                });
-            }
-
-            try {
-                const exec2 = await container.exec({
-                    AttachStdout: true, 
-                    AttachStderr: true,
-                    Cmd: ['gpasswd', '-d', 'abc', 'sudo']
-                });
-                const stream2 = await exec2.start({ hijack: true, stdin: true });
-                stream2.on('data', (data: any) => console.log(data.toString()));
-                await new Promise((resolve) => stream2.on('end', resolve));
-                
-                appLogger.info('User removed from sudo group successfully', {
-                    eventType: 'Security Hardening',
-                    instanceUUID,
-                    containerId: container.id,
-                    action: 'sudo_group_removal',
-                    timestamp: new Date().toISOString()
-                });
-            } catch (execErr) { 
-                appLogger.warn('Failed to remove user from sudo group', {
-                    eventType: 'Security Hardening Warning',
-                    instanceUUID,
-                    containerId: container.id,
-                    error: (execErr as Error).message,
-                    timestamp: new Date().toISOString()
-                });
-            }
-
-            // Install monitoring dependencies and create monitoring script
-            try {
-                // Install required packages for monitoring (split into individual commands)
-                const execUpdate = await container.exec({
-                    AttachStdout: true, 
-                    AttachStderr: true,
-                    Cmd: ['apt-get', 'update']
-                });
-                const streamUpdate = await execUpdate.start({ hijack: true, stdin: true });
-                streamUpdate.on('data', (data: any) => console.log(data.toString()));
-                await new Promise((resolve) => streamUpdate.on('end', resolve));
-
-                const execInstall = await container.exec({
-                    AttachStdout: true, 
-                    AttachStderr: true,
-                    Cmd: ['apt-get', 'install', '-y', 'scrot', 'xdotool', 'curl', 'bc', 'xinput']
-                });
-                const streamInstall = await execInstall.start({ hijack: true, stdin: true });
-                streamInstall.on('data', (data: any) => console.log(data.toString()));
-                await new Promise((resolve) => streamInstall.on('end', resolve)); 
-                
-                appLogger.info('Monitoring dependencies installed', {
-                    eventType: 'Monitoring Setup',
-                    instanceUUID,
-                    containerId: container.id,
-                    action: 'dependencies_installed',
-                    timestamp: new Date().toISOString()
-                });
-            } catch (execErr) { 
-                appLogger.warn('Failed to install monitoring dependencies', {
-                    eventType: 'Monitoring Setup Warning',
-                    instanceUUID,
-                    containerId: container.id,
-                    error: (execErr as Error).message,
-                    timestamp: new Date().toISOString()
-                });
-            }
-
-            // Create the monitoring script inside the container using external script file
-            try {
-                const monitoringScript = readAndProcessScript('viper-monitor.sh', {
-                    INSTANCE_UUID: instanceUUID,
-                    SERVICE_URL: process.env.SERVICE_URL || (process.env.NODE_ENV === 'production' ? 
-                        `http://cloud-viper-gui-app:3000` : 
-                        `http://localhost:3000`),
-                    DOMAIN_NAME: DOMAIN_NAME,
-                    STATUS_KEY: statusKey
-                });
-
-                // Create hidden config directory and monitoring script file for abc user
-                const execMkdirConfig = await container.exec({
-                    AttachStdout: true, 
-                    AttachStderr: true,
-                    Cmd: ['mkdir', '-p', '/config/.config']
-                });
-                const streamMkdirConfig = await execMkdirConfig.start({ hijack: true, stdin: true });
-                streamMkdirConfig.on('data', (data: any) => console.log(data.toString()));
-                await new Promise((resolve) => streamMkdirConfig.on('end', resolve));
-
-                const execCreateScript = await container.exec({
-                    AttachStdout: true, 
-                    AttachStderr: true,
-                    Cmd: ['bash', '-c', 'cat > /config/.config/viper-monitor.sh'],
-                    AttachStdin: true
-                });
-                const streamCreateScript = await execCreateScript.start({ hijack: true, stdin: true });
-                streamCreateScript.write(monitoringScript);
-                streamCreateScript.end();
-                await new Promise((resolve) => streamCreateScript.on('end', resolve));
-                
-                // Make the script executable and read-only, set ownership to abc user
-                const execChmod = await container.exec({
-                    AttachStdout: true, 
-                    AttachStderr: true,
-                    Cmd: ['chmod', '544', '/config/.config/viper-monitor.sh']
-                });
-                const streamChmod = await execChmod.start({ hijack: true, stdin: true });
-                streamChmod.on('data', (data: any) => console.log(data.toString()));
-                await new Promise((resolve) => streamChmod.on('end', resolve));
-
-                // Set ownership to abc user
-                const execChownScript = await container.exec({
-                    AttachStdout: true, 
-                    AttachStderr: true,
-                    Cmd: ['chown', 'abc:abc', '/config/.config/viper-monitor.sh']
-                });
-                const streamChownScript = await execChownScript.start({ hijack: true, stdin: true });
-                streamChownScript.on('data', (data: any) => console.log(data.toString()));
-                await new Promise((resolve) => streamChownScript.on('end', resolve));
-                
-                appLogger.info('Monitoring script created and made executable', {
-                    eventType: 'Monitoring Setup',
-                    instanceUUID,
-                    containerId: container.id,
-                    action: 'script_created',
-                    timestamp: new Date().toISOString()
-                });
-            } catch (execErr) { 
-                appLogger.warn('Failed to create monitoring script', {
-                    eventType: 'Monitoring Setup Warning',
-                    instanceUUID,
-                    containerId: container.id,
-                    error: (execErr as Error).message,
-                    timestamp: new Date().toISOString()
-                });
-            }
-
-            // Create systemd user service to auto-start monitoring (for XFCE environment)
-            try {
-                const systemdService = readAndProcessScript('viper-monitor.service', {
-                    INSTANCE_UUID: instanceUUID,
-                   SERVICE_URL: process.env.SERVICE_URL || (process.env.NODE_ENV === 'production' ? 
-                        `http://cloud-viper-gui-app:3000` : 
-                        `http://localhost:3000`),
-                    DOMAIN_NAME: DOMAIN_NAME,
-                    STATUS_KEY: statusKey
-                });
-
-                // Create systemd user directory in /config for abc user
-                const execMkdir = await container.exec({
-                    AttachStdout: true, 
-                    AttachStderr: true,
-                    Cmd: ['mkdir', '-p', '/config/.config/systemd/user']
-                });
-                const streamMkdir = await execMkdir.start({ hijack: true, stdin: true });
-                streamMkdir.on('data', (data: any) => console.log(data.toString()));
-                await new Promise((resolve) => streamMkdir.on('end', resolve));
-
-                // Create the systemd service file using bash -c
-                const execCreateService = await container.exec({
-                    AttachStdout: true, 
-                    AttachStderr: true,
-                    Cmd: ['bash', '-c', 'cat > /config/.config/systemd/user/viper-monitor.service'],
-                    AttachStdin: true
-                });
-                const streamCreateService = await execCreateService.start({ hijack: true, stdin: true });
-                streamCreateService.write(systemdService);
-                streamCreateService.end();
-                await new Promise((resolve) => streamCreateService.on('end', resolve));
-
-                // Set ownership of the service file to abc user (read-only for security)
-                const execChown = await container.exec({
-                    AttachStdout: true, 
-                    AttachStderr: true,
-                    Cmd: ['chown', '-R', 'abc:abc', '/config/.config']
-                });
-                const streamChown = await execChown.start({ hijack: true, stdin: true });
-                streamChown.on('data', (data: any) => console.log(data.toString()));
-                await new Promise((resolve) => streamChown.on('end', resolve));
-
-                // Make systemd service file read-only
-                const execChmodService = await container.exec({
-                    AttachStdout: true, 
-                    AttachStderr: true,
-                    Cmd: ['chmod', '444', '/config/.config/systemd/user/viper-monitor.service']
-                });
-                const streamChmodService = await execChmodService.start({ hijack: true, stdin: true });
-                streamChmodService.on('data', (data: any) => console.log(data.toString()));
-                await new Promise((resolve) => streamChmodService.on('end', resolve));
-                
-                appLogger.info('Monitoring systemd service created', {
-                    eventType: 'Monitoring Setup',
-                    instanceUUID,
-                    containerId: container.id,
-                    action: 'systemd_service_created',
-                    timestamp: new Date().toISOString()
-                });
-            } catch (execErr) { 
-                appLogger.warn('Failed to create monitoring systemd service', {
-                    eventType: 'Monitoring Setup Warning',
-                    instanceUUID,
-                    containerId: container.id,
-                    error: (execErr as Error).message,
-                    timestamp: new Date().toISOString()
-                });
-            }
-
-            // Add autostart entry for XFCE (simplified approach)
-            try {
-                const autostartEntry = readAndProcessScript('viper-monitor.desktop', {
-                    INSTANCE_UUID: instanceUUID,
-                   SERVICE_URL: process.env.SERVICE_URL || (process.env.NODE_ENV === 'production' ? 
-                        `http://cloud-viper-gui-app:3000` : 
-                        `http://localhost:3000`),
-                    DOMAIN_NAME: DOMAIN_NAME,
-                    STATUS_KEY: statusKey
-                });
-
-                // Create autostart directory in /config for abc user
-                const execMkdirAutostart = await container.exec({
-                    AttachStdout: true, 
-                    AttachStderr: true,
-                    Cmd: ['mkdir', '-p', '/config/.config/autostart']
-                });
-                const streamMkdirAutostart = await execMkdirAutostart.start({ hijack: true, stdin: true });
-                streamMkdirAutostart.on('data', (data: any) => console.log(data.toString()));
-                await new Promise((resolve) => streamMkdirAutostart.on('end', resolve));
-
-                // Create the autostart entry using bash -c
-                const execCreateAutostart = await container.exec({
-                    AttachStdout: true, 
-                    AttachStderr: true,
-                    Cmd: ['bash', '-c', 'cat > /config/.config/autostart/viper-monitor.desktop'],
-                    AttachStdin: true
-                });
-                const streamCreateAutostart = await execCreateAutostart.start({ hijack: true, stdin: true });
-                streamCreateAutostart.write(autostartEntry);
-                streamCreateAutostart.end();
-                await new Promise((resolve) => streamCreateAutostart.on('end', resolve));
-
-                // Set ownership and permissions for abc user (read-only for security)
-                const execChownAutostart = await container.exec({
-                    AttachStdout: true, 
-                    AttachStderr: true,
-                    Cmd: ['chown', '-R', 'abc:abc', '/config/.config']
-                });
-                const streamChownAutostart = await execChownAutostart.start({ hijack: true, stdin: true });
-                streamChownAutostart.on('data', (data: any) => console.log(data.toString()));
-                await new Promise((resolve) => streamChownAutostart.on('end', resolve));
-
-                const execChmodAutostart = await container.exec({
-                    AttachStdout: true, 
-                    AttachStderr: true,
-                    Cmd: ['chmod', '444', '/config/.config/autostart/viper-monitor.desktop']
-                });
-                const streamChmodAutostart = await execChmodAutostart.start({ hijack: true, stdin: true });
-                streamChmodAutostart.on('data', (data: any) => console.log(data.toString()));
-                await new Promise((resolve) => streamChmodAutostart.on('end', resolve));
-                
-                appLogger.info('XFCE autostart entry created for monitoring', {
-                    eventType: 'Monitoring Setup',
-                    instanceUUID,
-                    containerId: container.id,
-                    action: 'autostart_created',
-                    timestamp: new Date().toISOString()
-                });
-
-                // Start the monitoring script directly
-                try {
-                    const execDirectStart = await container.exec({
-                        AttachStdout: true, 
-                        AttachStderr: true,
-                        Cmd: ['su', 'abc', '-c', 'cd /config/.config && nohup ./viper-monitor.sh > /tmp/viper-monitor.log 2>&1 &']
-                    });
-                    const streamDirectStart = await execDirectStart.start({ hijack: true, stdin: true });
-                    streamDirectStart.on('data', (data: any) => console.log(data.toString()));
-                    await new Promise((resolve) => streamDirectStart.on('end', resolve));
-
-                    // Give it a moment to start
-                    await new Promise(resolve => setTimeout(resolve, 2000));
-
-                    // Verify the service is running
-                    const execCheckProcess = await container.exec({
-                        AttachStdout: true, 
-                        AttachStderr: true,
-                        Cmd: ['ps', 'aux']
-                    });
-                    const streamCheckProcess = await execCheckProcess.start({ hijack: true, stdin: true });
-                    let processOutput = '';
-                    streamCheckProcess.on('data', (data: any) => {
-                        processOutput += data.toString();
-                    });
-                    await new Promise((resolve) => streamCheckProcess.on('end', resolve));
-
-                    const viperProcesses = processOutput.split('\n').filter(line => line.includes('viper-monitor'));
-                    if (viperProcesses.length > 0) {
-                        appLogger.info('Monitoring script started successfully', {
-                            eventType: 'Monitoring Setup',
-                            instanceUUID,
-                            containerId: container.id,
-                            action: 'script_started_successfully',
-                            processCount: viperProcesses.length,
-                            timestamp: new Date().toISOString()
-                        });
-                    } else {
-                        appLogger.warn('Monitoring script may not have started properly', {
-                            eventType: 'Monitoring Setup Warning',
-                            instanceUUID,
-                            containerId: container.id,
-                            action: 'script_start_uncertain',
-                            timestamp: new Date().toISOString()
-                        });
-                    }
-
-                } catch (directStartError) {
-                    appLogger.warn('Failed to start monitoring script', {
-                        eventType: 'Monitoring Setup Warning',
-                        instanceUUID,
-                        containerId: container.id,
-                        error: (directStartError as Error).message,
-                        timestamp: new Date().toISOString()
-                    });
-                }
-            } catch (execErr) { 
-                appLogger.warn('Failed to create XFCE autostart entry', {
-                    eventType: 'Monitoring Setup Warning',
-                    instanceUUID,
-                    containerId: container.id,
-                    error: (execErr as Error).message,
-                    timestamp: new Date().toISOString()
-                });
-            }
-
-        } catch (monitoringError) {
-            // Log monitoring setup failure but don't fail the instance creation
-            appLogger.warn('Monitoring setup failed - instance created but monitoring may not work', {
-                eventType: 'Monitoring Setup Failed',
-                instanceUUID,
-                containerId: container.id,
-                error: (monitoringError as Error).message,
-                userId: user!.id,
-                timestamp: new Date().toISOString()
-            });
-            
-            // Update database status to indicate monitoring issues
-            try {
-                await db.ViperInstance.update(
-                    { 
-                        status: 'active_no_monitoring',
-                        logs: [...(newViperInstance.logs || []), { 
-                            timestamp: new Date(), 
-                            message: "Warning: Monitoring setup failed" 
-                        }]
-                    },
-                    { where: { uuid: instanceUUID } }
-                );
-            } catch (dbUpdateError) {
-                appLogger.error('Failed to update instance status after monitoring failure', {
-                    instanceUUID,
-                    error: (dbUpdateError as Error).message,
-                    timestamp: new Date().toISOString()
-                });
-            }
-        }
-
-        appLogger.info('ViPER instance created successfully', {
-            eventType: 'Instance Creation Complete',
-            instanceId: newViperInstance.id,
-            instanceUUID,
-            containerId: container.id,
-            userId: user!.id,
-            userEmail: user!.email,
-            userRole: user!.role,
-            timestamp: new Date().toISOString()
-        });
-
-        res.json({
-            success: true,
-            container: {
-                id: container.id,
-                uuid: instanceUUID,
-                url: instanceURL,
-                status: 'created'
-            },
-            message: 'ViPER instance created successfully'
-        });
+        // Use the ViperInstanceService to create the instance
+        const result = await viperInstanceService.createInstance(user!);
+        res.json(result);
     } catch (err) {
         const error = err as Error;
         
@@ -862,7 +395,6 @@ router.get('/new-instance', async (req: Request, res: Response): Promise<void> =
             userId: user!.id,
             userEmail: user!.email,
             userRole: user!.role,
-            instanceUUID,
             timestamp: new Date().toISOString()
         });
         
@@ -930,10 +462,35 @@ router.get('/viperinstances', async (req: Request, res: Response): Promise<void>
                 order: [['createdAt', 'DESC']] // Most recent first
             });
             
-            appLogger.info('Admin accessed all instances', {
-                eventType: 'Instance List Access',
+            // appLogger.info('Admin accessed all instances', {
+            //     eventType: 'Instance List Access',
+            //     userId: user.id,
+            //     userRole: user.role,
+            //     instanceCount: instances.length,
+            //     timestamp: new Date().toISOString()
+            // });
+        } else if (user.role === UserRole.TEAM_ADMIN || user.role === UserRole.TEAM_LEADER) {
+            // Team admins and leaders see all instances for their team
+            const teamUsers = await db.User.findAll({
+                where: { team: user.team },
+                attributes: ['id']
+            });
+            const teamUserIds = teamUsers.map(u => u.id);
+            instances = await db.ViperInstance.findAll({
+                where: { owner: teamUserIds },
+                attributes: { exclude: ['lastScreenshot', 'activityHistory'] },
+                include: [
+                    { model: db.User, as: 'ownerUser', attributes: ['id', 'username', 'email', 'firstName', 'lastName'] },
+                    { model: db.Screenshot, as: 'screenshots', attributes: ['id', 'capturedAt', 'receivedAt'], limit: 1, order: [['createdAt', 'DESC']], required: false },
+                    { model: db.Activity, as: 'activities', attributes: ['id', 'activityScore', 'reportedAt', 'receivedAt'], limit: 1, order: [['createdAt', 'DESC']], required: false }
+                ],
+                order: [['createdAt', 'DESC']]
+            });
+            appLogger.info('Team admin/leader accessed team instances', {
+                eventType: 'Team Instance List Access',
                 userId: user.id,
                 userRole: user.role,
+                team: user.team,
                 instanceCount: instances.length,
                 timestamp: new Date().toISOString()
             });
@@ -1072,151 +629,37 @@ router.get('/terminate-instance/:containerId', async (req: Request, res: Respons
     });
 
     try {
-        // Check if user owns this instance or is admin
-        const instance = await db.ViperInstance.findOne({
-            where: { dockerid: containerID }
+        // Use ViperInstanceService to terminate the instance
+        const result = await viperInstanceService.terminateInstance(containerID, user);
+        
+        res.json({
+            success: true,
+            message: 'Instance terminated successfully'
         });
-
-        if (!instance) {
-            appLogger.warn('Attempt to terminate non-existent instance', {
-                eventType: 'Instance Not Found',
-                containerId: containerID,
-                userId: user.id,
-                timestamp: new Date().toISOString()
-            });
-            res.status(404).json({ error: 'Instance not found' });
-            return;
-        }
-
-        // Authorization check - only owner or admin can terminate
-        if (instance.owner !== user.id && user.role !== UserRole.ADMIN) {
-            appLogger.warn('Unauthorized termination attempt', {
-                eventType: 'Unauthorized Termination',
-                containerId: containerID,
-                instanceOwner: instance.owner,
-                userId: user.id,
-                userRole: user.role,
-                timestamp: new Date().toISOString()
-            });
-            res.status(403).json({ error: 'Unauthorized - you can only terminate your own instances' });
-            return;
-        }
-
-        const container = docker.getContainer(containerID);
-        const response: { [key: string]: any } = {};
-
-        try {
-            // Stop the container
-            await new Promise<void>((resolve, reject) => {
-                container.stop((err: Error | null, data: any) => {
-                    if (err) {
-                        response["STOP-ERROR"] = { error: err.message };
-                        appLogger.warn('Error stopping container', {
-                            eventType: 'Container Stop Error',
-                            containerId: containerID,
-                            error: err.message,
-                            timestamp: new Date().toISOString()
-                        });
-                    } else {
-                        response["STOP"] = { message: 'Container stopped successfully' };
-                        appLogger.info('Container stopped successfully', {
-                            eventType: 'Container Stopped',
-                            containerId: containerID,
-                            timestamp: new Date().toISOString()
-                        });
-                    }
-                    resolve();
-                });
-            });
-
-            // Remove the container
-            await new Promise<void>((resolve, reject) => {
-                container.remove((err: Error | null, data: any) => {
-                    if (err) {
-                        response["REMOVE-ERROR"] = { error: err.message };
-                        appLogger.error('Error removing container', {
-                            eventType: 'Container Remove Error',
-                            containerId: containerID,
-                            error: err.message,
-                            timestamp: new Date().toISOString()
-                        });
-                    } else {
-                        response["REMOVE"] = { message: 'Container removed successfully' };
-                        appLogger.info('Container removed successfully', {
-                            eventType: 'Container Removed',
-                            containerId: containerID,
-                            timestamp: new Date().toISOString()
-                        });
-                    }
-                    resolve();
-                });
-            });
-
-            // Remove from database
-            await db.ViperInstance.destroy({
-                where: { dockerid: containerID }
-            });
-
-            response["DATABASE"] = { message: 'Database entry removed successfully' };
-            
-            appLogger.info('Instance terminated successfully', {
-                eventType: 'Instance Termination Complete',
-                containerId: containerID,
-                instanceId: instance.id,
-                userId: user.id,
-                userEmail: user.email,
-                timestamp: new Date().toISOString()
-            });
-
-            res.json({
-                success: true,
-                message: 'Instance terminated successfully',
-                details: response
-            });
-
-        } catch (dockerError) {
-            const error = dockerError as Error;
-            response["DOCKER-ERROR"] = { error: error.message };
-            
-            appLogger.error('Docker operation failed during termination', {
-                eventType: 'Docker Operation Error',
-                containerId: containerID,
-                error: error.message,
-                stack: error.stack,
-                timestamp: new Date().toISOString()
-            });
-
-            // Still try to clean up database even if Docker operations failed
-            try {
-                await db.ViperInstance.destroy({
-                    where: { dockerid: containerID }
-                });
-                response["DATABASE"] = { message: 'Database entry removed (container may still exist)' };
-            } catch (dbError) {
-                response["DATABASE-ERROR"] = { error: (dbError as Error).message };
-            }
-
-            res.status(500).json({
-                success: false,
-                message: 'Partial termination - some operations failed',
-                details: response
-            });
-        }
-
-    } catch (dbError) {
-        const error = dbError as Error;
-        appLogger.error('Database error during termination', {
-            eventType: 'Database Error',
+    } catch (error) {
+        appLogger.error('Error during termination', {
+            eventType: 'Termination Error',
             containerId: containerID,
-            error: error.message,
+            error: (error as Error).message,
             userId: user.id,
             timestamp: new Date().toISOString()
         });
 
-        res.status(500).json({
-            error: 'Database error during termination',
-            message: 'Failed to process termination request'
-        });
+        // Check if it's a permission error
+        if ((error as Error).message.includes('Unauthorized')) {
+            res.status(403).json({ error: (error as Error).message });
+        } 
+        // Check if it's a not found error
+        else if ((error as Error).message.includes('not found')) {
+            res.status(404).json({ error: (error as Error).message });
+        }
+        // Otherwise it's a server error
+        else {
+            res.status(500).json({
+                error: 'Error during termination',
+                message: 'Failed to terminate instance'
+            });
+        }
     }
 });
 
@@ -1345,51 +788,27 @@ router.get('/viperinstance/:dockerid/inspect', async (req: Request, res: Respons
 
     try {
         const { dockerid } = req.params;
-        const instance = await db.ViperInstance.findOne({
-            where: { dockerid },
-            include: [{
-                model: db.User,
-                as: 'ownerUser',
-                attributes: ['id', 'username', 'email', 'firstName', 'lastName']
-            }]
-        });
-
-        if (!instance) {
-            res.status(404).send({ message: 'Instance not found' });
-            return;
-        }
-
-        // Use the already imported and configured docker instance
-        try {
-            const container = docker.getContainer(dockerid);
-            const inspectData = await container.inspect();
-            
-            // Calculate operational hours - fix the date creation logic
-            const createdDate = instance.createdAt ? new Date(instance.createdAt) : new Date();
-            const now = new Date();
-            const operationalHours = ((now.getTime() - createdDate.getTime()) / (1000 * 60 * 60)).toFixed(2);
-            
-            res.json({
-                instance: instance,
-                operationalHours: operationalHours,
-                dockerInspect: inspectData
-            });
-        } catch (dockerError: any) {
-            console.error('Docker inspect error:', dockerError);
-            // If Docker inspect fails, still return instance data
-            const createdDate = instance.createdAt ? new Date(instance.createdAt) : new Date();
-            const now = new Date();
-            const operationalHours = ((now.getTime() - createdDate.getTime()) / (1000 * 60 * 60)).toFixed(2);
-            
-            res.json({
-                instance: instance,
-                operationalHours: operationalHours,
-                dockerInspect: { error: 'Unable to retrieve Docker inspect data', message: dockerError?.message || 'Unknown error' }
-            });
-        }
+        
+        // Use ViperInstanceService to get instance details
+        const result = await viperInstanceService.inspectInstance(dockerid);
+        res.json(result);
     } catch (error) {
-        console.error('Error retrieving instance details:', error);
-        res.status(500).send({ message: 'Error retrieving instance details', error });
+        appLogger.error('Error retrieving instance details', {
+            eventType: 'Instance Inspect Error',
+            dockerId: req.params.dockerid,
+            error: (error as Error).message,
+            timestamp: new Date().toISOString()
+        });
+        
+        // Check if it's a not found error
+        if ((error as Error).message.includes('not found')) {
+            res.status(404).send({ message: 'Instance not found' });
+        } else {
+            res.status(500).send({ 
+                message: 'Error retrieving instance details', 
+                error: (error as Error).message 
+            });
+        }
     }
 });
 
@@ -2034,9 +1453,18 @@ router.get('/screenshot/:instanceUUID', async (req: Request, res: Response): Pro
             return;
         }
 
-        // Check if user owns instance or is admin
-        if (instance.owner !== user.id && user.role !== UserRole.ADMIN) {
-            res.status(403).json({ error: 'Unauthorized - can only view own instances' });
+        // Check if user owns instance, is admin, or is team_admin/team_leader for the owner
+        let canView = false;
+        if (instance.owner === user.id || user.role === UserRole.ADMIN) {
+            canView = true;
+        } else if (user.role === UserRole.TEAM_ADMIN || user.role === UserRole.TEAM_LEADER) {
+            const ownerUser = await db.User.findOne({ where: { id: instance.owner } });
+            if (ownerUser && ownerUser.team === user.team) {
+                canView = true;
+            }
+        }
+        if (!canView) {
+            res.status(403).json({ error: 'Unauthorized - can only view own or team instances' });
             return;
         }
 
@@ -2101,9 +1529,18 @@ router.get('/screenshot-image/:instanceUUID', async (req: Request, res: Response
             return;
         }
 
-        // Check if user owns instance or is admin
-        if (instance.owner !== user.id && user.role !== UserRole.ADMIN) {
-            res.status(403).json({ error: 'Unauthorized - can only view own instances' });
+        // Check if user owns instance, is admin, or is team_admin/team_leader for the owner
+        let canView = false;
+        if (instance.owner === user.id || user.role === UserRole.ADMIN) {
+            canView = true;
+        } else if (user.role === UserRole.TEAM_ADMIN || user.role === UserRole.TEAM_LEADER) {
+            const ownerUser = await db.User.findOne({ where: { id: instance.owner } });
+            if (ownerUser && ownerUser.team === user.team) {
+                canView = true;
+            }
+        }
+        if (!canView) {
+            res.status(403).json({ error: 'Unauthorized - can only view own or team instances' });
             return;
         }
 
@@ -2175,9 +1612,18 @@ router.get('/screenshots/:instanceUUID', async (req: Request, res: Response): Pr
             return;
         }
 
-        // Check if user owns instance or is admin
-        if (instance.owner !== user.id && user.role !== UserRole.ADMIN) {
-            res.status(403).json({ error: 'Unauthorized - can only view own instances' });
+        // Check if user owns instance, is admin, or is team_admin/team_leader for the owner
+        let canView = false;
+        if (instance.owner === user.id || user.role === UserRole.ADMIN) {
+            canView = true;
+        } else if (user.role === UserRole.TEAM_ADMIN || user.role === UserRole.TEAM_LEADER) {
+            const ownerUser = await db.User.findOne({ where: { id: instance.owner } });
+            if (ownerUser && ownerUser.team === user.team) {
+                canView = true;
+            }
+        }
+        if (!canView) {
+            res.status(403).json({ error: 'Unauthorized - can only view own or team instances' });
             return;
         }
 
@@ -2278,11 +1724,20 @@ router.get('/activity/:instanceUUID', async (req: Request, res: Response): Promi
             return;
         }
 
-        // Check permissions
-        if (instance.owner !== user.id && user.role !== UserRole.ADMIN) {
-            res.status(403).json({ error: 'Unauthorized - can only view own instances' });
-            return;
-        }
+            // Check permissions
+            let canView = false;
+            if (instance.owner === user.id || user.role === UserRole.ADMIN) {
+                canView = true;
+            } else if (user.role === UserRole.TEAM_ADMIN || user.role === UserRole.TEAM_LEADER) {
+                const ownerUser = await db.User.findOne({ where: { id: instance.owner } });
+                if (ownerUser && ownerUser.team === user.team) {
+                    canView = true;
+                }
+            }
+            if (!canView) {
+                res.status(403).json({ error: 'Unauthorized - can only view own or team instances' });
+                return;
+            }
 
         // Get activity history from Activity table
         const limitNum = parseInt(limit as string);
@@ -2378,11 +1833,11 @@ router.post('/cleanup-inactive', async (req: Request, res: Response): Promise<vo
 
         for (const instance of inactiveInstances) {
             try {
-                const container = docker.getContainer(instance.dockerid);
+                const container = containerService.getContainer(instance.dockerid);
                 
                 // Stop and remove container
-                await container.stop();
-                await container.remove();
+                await containerService.stopContainer(instance.dockerid);
+                await containerService.removeContainer(instance.dockerid);
                 
                 // Update database
                 await instance.update({

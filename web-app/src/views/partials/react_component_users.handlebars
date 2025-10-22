@@ -3,19 +3,29 @@ class UserList extends React.Component {
     super(props);
     this.state = {
       users: [],
+      teams: [],
       isLoading: true,
       error: null,
       newUserEmail: '',
-      newUserRole: 'user',
+      newUserRole: 'member',
+      newUserTeam: props.userTeam || 'none',
+      isCreatingTeamAdmin: false,
     };
   }
 
   componentDidMount() {
-    fetch('/account/users')
-      .then((response) => response.json())
-      .then((data) => this.setState({ users: data, isLoading: false }))
-      .catch((error) => this.setState({ error, isLoading: false }));
+    this.fetchUsers();
+    if (this.props.userRole === 'admin') {
+      this.fetchTeams();
+    }
   }
+
+  fetchTeams = () => {
+    fetch('/account/teams')
+      .then((response) => response.json())
+      .then((teams) => this.setState({ teams }))
+      .catch((error) => console.error('Error fetching teams:', error));
+  };
 
   handleRoleChange = (userId, newRole) => {
     fetch(`/account/users/${userId}/role`, {
@@ -27,12 +37,31 @@ class UserList extends React.Component {
     })
       .then((response) => response.json())
       .then((data) => {
-        console.log('Invite user response:', data);
-        this.setState({ newUserEmail: '', newUserRole: 'user' });
+        console.log('Role update response:', data);
         this.fetchUsers();
       })
       .catch((error) => {
         console.error('Error updating role:', error);
+        alert('Error updating role: ' + error.message);
+      });
+  };
+
+  handleTeamChange = (userId, newTeam) => {
+    fetch(`/account/users/${userId}/team`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ team: newTeam }),
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        console.log('Team update response:', data);
+        this.fetchUsers();
+      })
+      .catch((error) => {
+        console.error('Error updating team:', error);
+        alert('Error updating team: ' + error.message);
       });
   };
 
@@ -46,29 +75,119 @@ class UserList extends React.Component {
   };
   
   handleInviteUser = () => {
-    const { newUserEmail, newUserRole } = this.state;
+    const { newUserEmail, newUserRole, newUserTeam } = this.state;
+    const { userRole } = this.props;
+    
+    const requestBody = { 
+      email: newUserEmail, 
+      role: newUserRole 
+    };
+    
+    // Only include team if admin is explicitly setting it
+    if (userRole === 'admin' && newUserTeam && newUserTeam !== 'none') {
+      requestBody.team = newUserTeam;
+    }
+    
     fetch('/account/users/invite', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ email: newUserEmail, role: newUserRole }),
+      body: JSON.stringify(requestBody),
     })
       .then((response) => response.json())
       .then((data) => {
-        this.setState((prevState) => ({
+        if (data.message) {
+          alert(data.message);
+        }
+        this.setState({
           newUserEmail: '',
-          newUserRole: 'user',
-        }));
+          newUserRole: 'member',
+          newUserTeam: this.props.userTeam || 'none',
+          isCreatingTeamAdmin: false,
+        });
         this.fetchUsers();
+        // Refresh teams list in case a new team was created
+        if (this.props.userRole === 'admin') {
+          this.fetchTeams();
+        }
       })
       .catch((error) => {
         console.error('Error inviting user:', error);
+        alert('Error inviting user: ' + error.message);
       });
   };
 
+  getAllRoles = () => {
+    return [
+      { value: 'user', label: 'User' },
+      { value: 'testing', label: 'Testing' },
+      { value: 'member', label: 'Member' },
+      { value: 'team_leader', label: 'Team Leader' },
+      { value: 'team_admin', label: 'Team Admin' },
+      { value: 'subscriber', label: 'Subscriber' },
+      { value: 'admin', label: 'Admin' },
+    ];
+  };
+
+  getAvailableRolesForInvite = () => {
+    const { userRole } = this.props;
+    
+    if (userRole === 'admin') {
+      return this.getAllRoles();
+    } else if (userRole === 'team_admin') {
+      return [
+        { value: 'user', label: 'User' },
+        { value: 'member', label: 'Member' },
+        { value: 'team_leader', label: 'Team Leader' },
+      ];
+    } else if (userRole === 'team_leader') {
+      return [
+        { value: 'member', label: 'Member' },
+      ];
+    }
+    return [];
+  };
+
+  getAvailableRolesForEdit = (user) => {
+    const { userRole } = this.props;
+    
+    if (userRole === 'admin') {
+      return this.getAllRoles();
+    } else if (userRole === 'team_admin') {
+      return [
+        { value: 'user', label: 'User' },
+        { value: 'member', label: 'Member' },
+        { value: 'team_leader', label: 'Team Leader' },
+      ];
+    } else if (userRole === 'team_leader') {
+      return [
+        { value: 'member', label: 'Member' },
+      ];
+    }
+    return [];
+  };
+
+  canEditUser = (user) => {
+    const { userRole, userTeam, currentUserId } = this.props;
+    if (userRole === 'admin') {
+      return true;
+    }
+    if (userRole === 'team_admin') {
+      // Team admin cannot edit their own role
+      return user.team === userTeam && user.id !== currentUserId;
+    }
+    if (userRole === 'team_leader') {
+      // Team leaders can only manage members, not other team leaders or team admins
+      return user.team === userTeam && user.role === 'member';
+    }
+    return false;
+  };
+
   render() {
-    const { users, isLoading, error, newUserEmail, newUserRole } = this.state;
+    const { users, teams, isLoading, error, newUserEmail, newUserRole, newUserTeam, isCreatingTeamAdmin } = this.state;
+    const { userRole, userTeam } = this.props;
+    const availableInviteRoles = this.getAvailableRolesForInvite();
 
     if (isLoading) {
       return <p>Loading users...</p>;
@@ -80,46 +199,85 @@ class UserList extends React.Component {
 
     return (
       <div>
-        <h2>User List</h2>
-        <table className="table table-striped">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Username</th>
-              <th>Email</th>
-              <th>Role</th>
-              <th>OAuth Provider</th>
-              <th>Created At</th>
-              <th>Updated At</th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((user) => (
-              <tr key={user.id}>
-                <td>{user.id}</td>
-                <td>{user.username}</td>
-                <td>{user.email}</td>
-                <td>
-                  <select
-                    className="form-control"
-                    value={user.role}
-                    onChange={(e) => this.handleRoleChange(user.id, e.target.value)}
-                  >
-                    <option value="user">User</option>
-                    <option value="testing">Testing</option>
-                    <option value="member">Member</option>
-                    <option value="admin">Admin</option>
-                  </select>
-                </td>
-                <td>{user.oauthProvider}</td>
-                <td>{new Date(user.createdAt).toLocaleString()}</td>
-                <td>{new Date(user.updatedAt).toLocaleString()}</td>
+        <h2>User Management</h2>
+        <div className="table-responsive">
+          <table className="table table-striped">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Username</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Team</th>
+                {(userRole === 'admin' || userRole === 'team_admin' || userRole === 'team_leader') && <th>Invited By</th>}
+                <th>OAuth Provider</th>
+                <th>Created At</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {users.map((user) => {
+                const canEdit = this.canEditUser(user);
+                const editableRoles = this.getAvailableRolesForEdit(user);
+                return (
+                  <tr key={user.id}>
+                    <td>{user.id}</td>
+                    <td>{user.username}</td>
+                    <td>{user.email}</td>
+                    <td>
+                      {((userRole === 'team_admin' || userRole === 'team_leader') && String(user.id) == String(this.props.currentUserId)) ? (
+                        <span className="badge badge-info">{user.role.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</span>
+                      ) : canEdit ? (
+                        <select
+                          className="form-control form-control-sm"
+                          value={user.role}
+                          onChange={(e) => this.handleRoleChange(user.id, e.target.value)}
+                        >
+                          {editableRoles.map(role => (
+                            <option key={role.value} value={role.value}>{role.label}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span className="badge badge-info">{user.role.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</span>
+                      )}
+                    </td>
 
-        <h2>Invite User</h2>
+                    {userRole === 'admin' ? (
+                      <td>
+                        <select
+                          className="form-control form-control-sm"
+                          value={user.team || 'none'}
+                          onChange={(e) => this.handleTeamChange(user.id, e.target.value)}
+                        >
+                          <option value="none">None</option>
+                          {teams.map(team => (
+                            <option key={team} value={team}>{team}</option>
+                          ))}
+                        </select>
+                      </td>
+                    ) : (
+                      <td><span className="badge badge-secondary">{user.team || 'none'}</span></td>
+                    )}
+                    {(userRole === 'admin' || userRole === 'team_admin' || userRole === 'team_leader') && (
+                      <td>
+                        {user.invitedBy ? (
+                          <small>{user.invitedBy.username}</small>
+                        ) : (
+                          <small className="text-muted">N/A</small>
+                        )}
+                      </td>
+                    )}
+                    <td>{user.oauthProvider}</td>
+                    <td><small>{new Date(user.createdAt).toLocaleDateString()}</small></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        <hr/>
+
+        <h3>Invite New User</h3>
         <form
           className="form-inviteuser"
           onSubmit={(e) => {
@@ -127,31 +285,87 @@ class UserList extends React.Component {
             this.handleInviteUser();
           }}
         >
-          <div className="form-group">
-            <label>Email:</label>
-            <input
-              type="email"
-              className="form-control"
-              value={newUserEmail}
-              onChange={(e) => this.setState({ newUserEmail: e.target.value })}
-              required
-            />
+          <div className="form-row">
+            <div className="form-group col-md-6">
+              <label>Email:</label>
+              <input
+                type="email"
+                className="form-control"
+                value={newUserEmail}
+                onChange={(e) => this.setState({ newUserEmail: e.target.value })}
+                required
+              />
+            </div>
+            <div className="form-group col-md-3">
+              <label>Role:</label>
+              <select
+                className="form-control"
+                value={newUserRole}
+                onChange={(e) => {
+                  const role = e.target.value;
+                  this.setState({ 
+                    newUserRole: role,
+                    isCreatingTeamAdmin: role === 'team_admin',
+                    newUserTeam: (role === 'team_admin') ? '' : 'none'
+                  });
+                }}
+                required
+              >
+                {availableInviteRoles.map(role => (
+                  <option key={role.value} value={role.value}>{role.label}</option>
+                ))}
+              </select>
+            </div>
+            
+            {userRole === 'admin' && newUserRole === 'team_admin' && (
+              <div className="form-group col-md-3">
+                <label>New Team Name:</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  value={newUserTeam}
+                  onChange={(e) => this.setState({ newUserTeam: e.target.value })}
+                  placeholder="Enter new team name"
+                  required
+                />
+              </div>
+            )}
+            
+            {userRole === 'admin' && (newUserRole === 'team_leader' || newUserRole === 'member' || newUserRole === 'testing') && (
+              <div className="form-group col-md-3">
+                <label>Team:</label>
+                <select
+                  className="form-control"
+                  value={newUserTeam}
+                  onChange={(e) => this.setState({ newUserTeam: e.target.value })}
+                >
+                  <option value="none">None</option>
+                  {teams.map(team => (
+                    <option key={team} value={team}>{team}</option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
-          <div className="form-group">
-            <label>Role:</label>
-            <select
-              className="form-control"
-              value={newUserRole}
-              onChange={(e) => this.setState({ newUserRole: e.target.value })}
-              required
-            >
-              <option value="user">User</option>
-              <option value="testing">Testing</option>
-              <option value="member">Member</option>
-              <option value="admin">Admin</option>
-            </select>
-          </div>
-          <button type="submit" className="btn btn-primary">Invite</button>
+          
+          <button type="submit" className="btn btn-primary">
+            Invite User
+          </button>
+          
+          {userRole === 'admin' && newUserRole === 'team_admin' && (
+            <p className="text-info mt-2">
+              <small>
+                <i className="fas fa-info-circle"></i> Creating a Team Admin will create a new team. 
+                There can only be one Team Admin per team.
+              </small>
+            </p>
+          )}
+          
+          {userRole === 'team_admin' && (
+            <p className="text-muted mt-2">
+              <small>New users will be added to your team: <strong>{userTeam}</strong></small>
+            </p>
+          )}
         </form>
       </div>
     );
