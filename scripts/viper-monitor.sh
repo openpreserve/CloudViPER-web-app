@@ -21,42 +21,44 @@ DEBUG=1
 debug_log() {
     if [ "$DEBUG" -eq 1 ]; then
         echo "$(date '+%Y-%m-%d %H:%M:%S') - [DEBUG] $1" >> /tmp/viper-monitor.log
+        # Rotate log: keep last 1000 lines
+        if [ $(wc -l < /tmp/viper-monitor.log) -gt 1000 ]; then
+            tail -n 1000 /tmp/viper-monitor.log > /tmp/viper-monitor.log.tmp && mv /tmp/viper-monitor.log.tmp /tmp/viper-monitor.log
+        fi
     fi
 }
 
 # Function to log regular messages
 log() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | tee -a /tmp/viper-monitor.log
+    # Rotate log: keep last 1000 lines
+    if [ $(wc -l < /tmp/viper-monitor.log) -gt 1000 ]; then
+        tail -n 1000 /tmp/viper-monitor.log > /tmp/viper-monitor.log.tmp && mv /tmp/viper-monitor.log.tmp /tmp/viper-monitor.log
+    fi
 }
 
 # Function to capture and send screenshot
 capture_screenshot() {
     if command -v scrot &> /dev/null && [ -n "$DISPLAY" ]; then
         debug_log "scrot and DISPLAY available, capturing screenshot"
-        local temp_file="/tmp/screenshot_$(date +%s).png"
-        local temp_json="/tmp/screenshot_data_$(date +%s).json"
-        
-        # Capture screenshot with compression
+        local temp_file="/tmp/screenshot_${INSTANCE_UUID}.png"
+        local temp_json="/tmp/screenshot_data_${INSTANCE_UUID}.json"
+        # Capture screenshot with compression (overwrites previous)
         scrot -z -q 30 "$temp_file" 2>/dev/null
-        
         if [ -f "$temp_file" ]; then
             local screenshot_size=$(stat -c%s "$temp_file")
             debug_log "Screenshot size: $screenshot_size bytes"
-            
             # Accept screenshots up to 5MB (server now supports 10MB)
             if [ "$screenshot_size" -le 5000000 ]; then
                 debug_log "Screenshot captured, encoding to base64"
                 local screenshot_base64=$(base64 -w 0 "$temp_file")
                 local base64_length=${#screenshot_base64}
                 debug_log "Base64 encoded: $base64_length characters"
-                
                 local timestamp=$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)
-                
                 # Create JSON using echo to avoid heredoc variable expansion issues
                 echo "{\"screenshot\":\"$screenshot_base64\",\"timestamp\":\"$timestamp\",\"statusKey\":\"$STATUS_KEY\"}" > "$temp_json"
                 local json_size=$(stat -c%s "$temp_json")
                 debug_log "JSON created: $json_size bytes"
-                
                 debug_log "Sending screenshot to $SCREENSHOT_URL"
                 local response=$(curl -s -w "\nHTTP_CODE:%{http_code}" \
                     -X POST \
@@ -64,13 +66,10 @@ capture_screenshot() {
                     -d @"$temp_json" \
                     --max-time 60 \
                     "$SCREENSHOT_URL" 2>&1)
-                
                 local http_code=$(echo "$response" | grep "HTTP_CODE:" | cut -d: -f2)
                 local response_body=$(echo "$response" | grep -v "HTTP_CODE:")
-                
                 debug_log "HTTP Response Code: $http_code"
                 debug_log "Response Body: $response_body"
-                
                 if [ "$http_code" = "200" ]; then
                     log "Screenshot sent successfully"
                     debug_log "Screenshot sent successfully"
@@ -78,15 +77,13 @@ capture_screenshot() {
                     log "Screenshot send failed with HTTP $http_code"
                     debug_log "Screenshot send failed: HTTP $http_code - $response_body"
                 fi
-                
                 # Clean up temp files
                 rm -f "$temp_json"
             else
                 debug_log "Screenshot too large ($screenshot_size bytes), skipping"
                 log "Screenshot too large ($screenshot_size bytes), skipped"
             fi
-            
-            rm -f "$temp_file"
+            # Do NOT remove $temp_file, so it always contains the latest screenshot
         else
             debug_log "Failed to capture screenshot - file not created"
         fi
