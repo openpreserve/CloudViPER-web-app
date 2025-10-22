@@ -96,6 +96,12 @@ configurePassport(passport);
 app.set('views', path.join(__dirname, 'views'));
 app.engine('handlebars', exphbs.engine);
 app.set('view engine', 'handlebars');
+
+// Disable view caching in development for live reloading
+if (process.env.NODE_ENV === 'dev' || process.env.NODE_ENV === 'development') {
+    app.set('view cache', false);
+}
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Add routes
