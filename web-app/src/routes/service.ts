@@ -2236,9 +2236,18 @@ router.get('/screenshot/:instanceUUID', async (req: Request, res: Response): Pro
             return;
         }
 
-        // Check if user owns instance or is admin
-        if (instance.owner !== user.id && user.role !== UserRole.ADMIN) {
-            res.status(403).json({ error: 'Unauthorized - can only view own instances' });
+        // Check if user owns instance, is admin, or is team_admin/team_leader for the owner
+        let canView = false;
+        if (instance.owner === user.id || user.role === UserRole.ADMIN) {
+            canView = true;
+        } else if (user.role === UserRole.TEAM_ADMIN || user.role === UserRole.TEAM_LEADER) {
+            const ownerUser = await db.User.findOne({ where: { id: instance.owner } });
+            if (ownerUser && ownerUser.team === user.team) {
+                canView = true;
+            }
+        }
+        if (!canView) {
+            res.status(403).json({ error: 'Unauthorized - can only view own or team instances' });
             return;
         }
 
@@ -2303,9 +2312,18 @@ router.get('/screenshot-image/:instanceUUID', async (req: Request, res: Response
             return;
         }
 
-        // Check if user owns instance or is admin
-        if (instance.owner !== user.id && user.role !== UserRole.ADMIN) {
-            res.status(403).json({ error: 'Unauthorized - can only view own instances' });
+        // Check if user owns instance, is admin, or is team_admin/team_leader for the owner
+        let canView = false;
+        if (instance.owner === user.id || user.role === UserRole.ADMIN) {
+            canView = true;
+        } else if (user.role === UserRole.TEAM_ADMIN || user.role === UserRole.TEAM_LEADER) {
+            const ownerUser = await db.User.findOne({ where: { id: instance.owner } });
+            if (ownerUser && ownerUser.team === user.team) {
+                canView = true;
+            }
+        }
+        if (!canView) {
+            res.status(403).json({ error: 'Unauthorized - can only view own or team instances' });
             return;
         }
 
@@ -2377,9 +2395,18 @@ router.get('/screenshots/:instanceUUID', async (req: Request, res: Response): Pr
             return;
         }
 
-        // Check if user owns instance or is admin
-        if (instance.owner !== user.id && user.role !== UserRole.ADMIN) {
-            res.status(403).json({ error: 'Unauthorized - can only view own instances' });
+        // Check if user owns instance, is admin, or is team_admin/team_leader for the owner
+        let canView = false;
+        if (instance.owner === user.id || user.role === UserRole.ADMIN) {
+            canView = true;
+        } else if (user.role === UserRole.TEAM_ADMIN || user.role === UserRole.TEAM_LEADER) {
+            const ownerUser = await db.User.findOne({ where: { id: instance.owner } });
+            if (ownerUser && ownerUser.team === user.team) {
+                canView = true;
+            }
+        }
+        if (!canView) {
+            res.status(403).json({ error: 'Unauthorized - can only view own or team instances' });
             return;
         }
 
@@ -2480,11 +2507,20 @@ router.get('/activity/:instanceUUID', async (req: Request, res: Response): Promi
             return;
         }
 
-        // Check permissions
-        if (instance.owner !== user.id && user.role !== UserRole.ADMIN) {
-            res.status(403).json({ error: 'Unauthorized - can only view own instances' });
-            return;
-        }
+            // Check permissions
+            let canView = false;
+            if (instance.owner === user.id || user.role === UserRole.ADMIN) {
+                canView = true;
+            } else if (user.role === UserRole.TEAM_ADMIN || user.role === UserRole.TEAM_LEADER) {
+                const ownerUser = await db.User.findOne({ where: { id: instance.owner } });
+                if (ownerUser && ownerUser.team === user.team) {
+                    canView = true;
+                }
+            }
+            if (!canView) {
+                res.status(403).json({ error: 'Unauthorized - can only view own or team instances' });
+                return;
+            }
 
         // Get activity history from Activity table
         const limitNum = parseInt(limit as string);
