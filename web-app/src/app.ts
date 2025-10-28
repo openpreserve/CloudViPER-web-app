@@ -26,6 +26,24 @@ appLogger.info('Application starting', {
 });
 
 // Begin server setup
+// Health check endpoint - must be first, before any authentication or redirects
+app.get('/healthz', async (req, res) => {
+    try {
+        // Quick database check
+        await db.sequelize.authenticate();
+        res.status(200).json({ 
+            status: 'ok',
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        res.status(503).json({ 
+            status: 'error',
+            message: 'Database connection failed',
+            timestamp: new Date().toISOString()
+        });
+    }
+});
+
 app.use( bodyParser.urlencoded({ extended: true}) );
 app.use( bodyParser.json({ limit: '10mb' }) ); // Add JSON body parser with 10MB limit for screenshots
 let path = require('path');
@@ -70,7 +88,19 @@ if (process.env.NODE_ENV === 'production') {
 // Sessions
 import session from 'express-session'
 const MySQLStore = require('express-mysql-session')(session);
-const SQLStore = new MySQLStore(configAuth.mysqlSessionAuth);
+const sessionStoreOptions = {
+    ...configAuth.mysqlSessionAuth,
+    createDatabaseTable: true, // Automatically create sessions table if it doesn't exist
+    schema: {
+        tableName: 'sessions',
+        columnNames: {
+            session_id: 'session_id',
+            expires: 'expires',
+            data: 'data'
+        }
+    }
+};
+const SQLStore = new MySQLStore(sessionStoreOptions);
 let session_config: session.SessionOptions = {
     name: "vipercloud.sid",
     cookie: { maxAge: ((4 * 24) * 60 * 60 * 1000), secure: secure_cookie }, // 4 days
@@ -211,12 +241,41 @@ app.use(function(req, res ) {
 });
 
 // Start the server
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
     console.log(`Server running on port ${PORT}`);
     appLogger.info('Server started successfully', {
         port: PORT,
         nodeEnv: process.env.NODE_ENV,
         timestamp: new Date().toISOString()
     });
+    
+    // Detect and log the public URL
+    try {
+        const { detectServiceUrl } = await import('./utility/detectServiceUrl');
+        const urlInfo = await detectServiceUrl();
+        
+        console.log('═══════════════════════════════════════════════════');
+        console.log(`✓ Server URL detected: ${urlInfo.url}`);
+        console.log(`  Source: ${urlInfo.source}`);
+        console.log(`  Hostname: ${urlInfo.hostname}`);
+        console.log(`  Protocol: ${urlInfo.protocol}`);
+        console.log('═══════════════════════════════════════════════════');
+        
+        appLogger.info('Service URL detected', {
+            url: urlInfo.url,
+            source: urlInfo.source,
+            hostname: urlInfo.hostname,
+            protocol: urlInfo.protocol,
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        appLogger.warn('Failed to detect service URL', {
+            error: error instanceof Error ? error.message : String(error),
+            timestamp: new Date().toISOString()
+        });
+    }
 });
 
+// Note: WebSocket proxying is now handled by Kubernetes Ingress (not at app level)
+
+export default app;

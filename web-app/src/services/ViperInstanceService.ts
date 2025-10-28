@@ -95,6 +95,7 @@ class ViperInstanceService {
     const ingressName = `viper-ingress-${instanceUUID}`;
 
     // Ingress spec for path-based routing with WebSocket support
+    // Using GCE ingress controller (GKE default) with BackendConfig for WebSocket timeouts
     const ingressSpec = {
       apiVersion: 'networking.k8s.io/v1',
       kind: 'Ingress',
@@ -106,24 +107,22 @@ class ViperInstanceService {
           instanceUUID
         },
         annotations: {
-          // No rewrite-target - sidecar handles path translation
-          'nginx.ingress.kubernetes.io/proxy-read-timeout': '3600',
-          'nginx.ingress.kubernetes.io/proxy-send-timeout': '3600',
-          'nginx.ingress.kubernetes.io/proxy-body-size': '10m',
-          // WebSocket support
-          'nginx.ingress.kubernetes.io/websocket-services': serviceName,
-          'nginx.ingress.kubernetes.io/proxy-http-version': '1.1'
+          // Use GCE ingress controller (GKE default)
+          'kubernetes.io/ingress.class': 'gce',
+          // WebSocket and timeout support via BackendConfig
+          'cloud.google.com/backend-config': `{"ports": {"3000":"${serviceName}-backendconfig"}}`,
+          // Optional: connection draining timeout
+          'cloud.google.com/connection-draining-timeout': '3600'
         }
       },
       spec: {
-        ingressClassName: 'nginx',
         rules: [
           {
             http: {
               paths: [
                 {
-                  path: `/viper-instances/${instanceUUID}`,
-                  pathType: 'Prefix',
+                  path: `/viper-instances/${instanceUUID}/*`,
+                  pathType: 'ImplementationSpecific',
                   backend: {
                     service: {
                       name: serviceName,
@@ -141,6 +140,99 @@ class ViperInstanceService {
     };
 
     return await k8sApi.createNamespacedIngress({ namespace, body: ingressSpec });
+  }
+
+  /**
+   * Create BackendConfig for GKE ingress WebSocket support
+   */
+  private async createBackendConfig(serviceName: string, instanceUUID: string): Promise<void> {
+    try {
+      const { KubeConfig, CustomObjectsApi } = await import('@kubernetes/client-node');
+      const kc = new KubeConfig();
+      kc.loadFromDefault();
+      const k8sApi = kc.makeApiClient(CustomObjectsApi);
+      const namespace = process.env.K8S_NAMESPACE || 'default';
+
+      const backendConfigName = `${serviceName}-backendconfig`;
+
+      const backendConfigSpec = {
+        apiVersion: 'cloud.google.com/v1',
+        kind: 'BackendConfig',
+        metadata: {
+          name: backendConfigName,
+          namespace,
+          labels: {
+            app: 'viper-instance',
+            instanceUUID
+          }
+        },
+        spec: {
+          timeoutSec: 3600,  // 1 hour timeout for long-running WebSocket connections
+          connectionDraining: {
+            drainingTimeoutSec: 60
+          },
+          sessionAffinity: {
+            affinityType: 'CLIENT_IP',
+            affinityCookieTtlSec: 3600
+          }
+        }
+      };
+
+      await k8sApi.createNamespacedCustomObject({
+        group: 'cloud.google.com',
+        version: 'v1',
+        namespace,
+        plural: 'backendconfigs',
+        body: backendConfigSpec
+      });
+
+      appLogger.info('BackendConfig created', {
+        eventType: 'BackendConfig Created',
+        backendConfigName,
+        instanceUUID,
+        namespace,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      appLogger.error('Failed to create BackendConfig', {
+        eventType: 'BackendConfig Creation Failed',
+        serviceName,
+        instanceUUID,
+        error: (error as Error).message,
+        timestamp: new Date().toISOString()
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Delete BackendConfig
+   */
+  private async deleteBackendConfig(serviceName: string): Promise<void> {
+    try {
+      const { KubeConfig, CustomObjectsApi } = await import('@kubernetes/client-node');
+      const kc = new KubeConfig();
+      kc.loadFromDefault();
+      const k8sApi = kc.makeApiClient(CustomObjectsApi);
+      const namespace = process.env.K8S_NAMESPACE || 'default';
+      const backendConfigName = `${serviceName}-backendconfig`;
+      
+      await k8sApi.deleteNamespacedCustomObject({
+        group: 'cloud.google.com',
+        version: 'v1',
+        namespace,
+        plural: 'backendconfigs',
+        name: backendConfigName
+      });
+    } catch (error) {
+      // BackendConfig might not exist, that's ok
+      appLogger.warn('BackendConfig deletion warning', {
+        eventType: 'BackendConfig Delete Warning',
+        serviceName,
+        error: (error as Error).message,
+        timestamp: new Date().toISOString()
+      });
+    }
   }
 
   /**
@@ -332,8 +424,12 @@ class ViperInstanceService {
 
       // Create the Ingress for routing
       try {
+        // First create BackendConfig for GKE WebSocket support
+        await this.createBackendConfig(serviceName, instanceUUID);
+        
+        // Then create the Ingress
         await this.createIngress(instanceUUID, serviceName);
-        appLogger.info('Kubernetes Ingress created for ViPER instance', {
+        appLogger.info('Kubernetes Ingress and BackendConfig created for ViPER instance', {
           eventType: 'Ingress Created',
           instanceUUID,
           serviceName,
@@ -341,7 +437,7 @@ class ViperInstanceService {
           timestamp: new Date().toISOString()
         });
       } catch (ingressError) {
-        appLogger.warn('Failed to create Ingress, but pod and service exist', {
+        appLogger.warn('Failed to create Ingress/BackendConfig, but pod and service exist', {
           eventType: 'Ingress Creation Warning',
           instanceUUID,
           serviceName,
@@ -873,6 +969,28 @@ URL=file:///config/test-corpus
         appLogger.warn('Error deleting service - may already be removed', {
           eventType: 'Service Delete Warning',
           error: (serviceError as Error).message,
+          instanceId: instance.id,
+          serviceName,
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      try {
+        // Delete the BackendConfig
+        await this.deleteBackendConfig(serviceName);
+        appLogger.info('BackendConfig deleted for ViPER instance', {
+          eventType: 'BackendConfig Deleted',
+          userId: user.id,
+          userRole: user.role,
+          instanceId: instance.id,
+          serviceName,
+          timestamp: new Date().toISOString()
+        });
+      } catch (backendConfigError) {
+        // Log but don't fail if BackendConfig already removed
+        appLogger.warn('Error deleting BackendConfig - may already be removed', {
+          eventType: 'BackendConfig Delete Warning',
+          error: (backendConfigError as Error).message,
           instanceId: instance.id,
           serviceName,
           timestamp: new Date().toISOString()
