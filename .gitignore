@@ -130,3 +130,15 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+# Project-specific ignores
+web-app/node_modules/
+web-app/dist/
+web-app/coverage/
+web-app/logs/
+web-app/.env*
+k8s/*.secret.yaml
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
