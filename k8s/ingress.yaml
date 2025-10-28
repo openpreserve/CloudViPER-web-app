@@ -10,7 +10,8 @@ metadata:
     app: viper-app
 spec:
   rules:
-  - http:
+  - host: vipercloud.cc
+    http:
       paths:
       - path: /*
         pathType: ImplementationSpecific
@@ -28,4 +29,4 @@ metadata:
     app: viper-app
 spec:
   domains:
-    - "*.endpoints.*.cloud.goog"  # This will be replaced by deployer with actual domain
+    - "vipercloud.cc"

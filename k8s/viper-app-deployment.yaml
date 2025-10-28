@@ -38,7 +38,7 @@ spec:
           mountPath: /init
       containers:
       - name: viper-app
-        image: localhost:5000/web-app:latest
+        image: europe-west1-docker.pkg.dev/opf-viper-cloud/opf-viper-repo/web-app:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 3000
@@ -63,7 +63,7 @@ spec:
             cpu: "500m"
         livenessProbe:
           httpGet:
-            path: /
+            path: /healthz
             port: 3000
           initialDelaySeconds: 30
           periodSeconds: 10
@@ -71,7 +71,7 @@ spec:
           failureThreshold: 3
         readinessProbe:
           httpGet:
-            path: /
+            path: /healthz
             port: 3000
           initialDelaySeconds: 10
           periodSeconds: 5
@@ -90,6 +90,7 @@ metadata:
     app: viper-app
   annotations:
     cloud.google.com/neg: '{"ingress": true}'  # Enable Network Endpoint Groups for Ingress
+    beta.cloud.google.com/backend-config: '{"ports":{"http":"viper-app-backendconfig"}}'  # Use BackendConfig for health checks
 spec:
   type: ClusterIP  # Changed from NodePort - Ingress will handle external access
   selector:
