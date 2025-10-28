@@ -1,4 +1,4 @@
-import express, { Request, Response } from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import dotenv from 'dotenv';
 import Docker from 'dockerode';
 import fs from 'fs';
@@ -10,7 +10,7 @@ import { getAvailablePort } from '../utility/portManager';
 import { appLogger } from '../config/logger';
 import { UserRole } from '../types/UserRole';
 import { readAndProcessScript, validateRequiredScripts } from '../utility/scriptManager';
-import containerService from '../services/ContainerService';
+import { containerService } from '../services/ContainerService';
 import viperInstanceService from '../services/ViperInstanceService';
 
 dotenv.config();
@@ -777,8 +777,149 @@ router.get('/set-status-instance/:statuskey/:status', async (req: Request, res: 
     }
 });
 
+// Redirect to VNC instance with full query parameters for cleaner URLs in GUI
+router.get('/launch/:instanceUUID', async (req: Request, res: Response): Promise<void> => {
+    const { instanceUUID } = req.params;
+    const user = req.user as ServiceUser | undefined;
+
+    // Basic validation
+    if (!instanceUUID || typeof instanceUUID !== 'string' || instanceUUID.length !== 12) {
+        res.status(400).json({ error: 'Invalid instance UUID' });
+        return;
+    }
+
+    // Verify the instance exists and user has access
+    if (user) {
+        try {
+            const instance = await db.ViperInstance.findOne({
+                where: { uuid: instanceUUID }
+            });
+
+            if (!instance) {
+                res.status(404).json({ error: 'Instance not found' });
+                return;
+            }
+
+            // Check if user has permission (admin or owner)
+            if (user.role !== UserRole.ADMIN && instance.owner !== user.id) {
+                res.status(403).json({ error: 'Access denied' });
+                return;
+            }
+        } catch (error) {
+            appLogger.error('Error checking instance access', {
+                eventType: 'Launch Redirect Error',
+                instanceUUID,
+                userId: user.id,
+                error: (error as Error).message,
+                timestamp: new Date().toISOString()
+            });
+            res.status(500).json({ error: 'Error validating instance access' });
+            return;
+        }
+    }
+
+    // Build the full VNC URL with all query parameters (audio/microphone disabled to prevent 404s)
+    const vncUrl = `/viper-instances/${instanceUUID}/vnc/index.html?path=/viper-instances/${instanceUUID}/websockify&autoconnect=1&resize=remote&clipboard_up=true&clipboard_down=true&clipboard_seamless=true&show_control_bar=true&show_toolbar=true&file_transfer=true`;
+
+    appLogger.info('Instance launch redirect', {
+        eventType: 'Launch Redirect',
+        instanceUUID,
+        userId: user?.id || 'anonymous',
+        timestamp: new Date().toISOString()
+    });
+
+    // HTTP 302 temporary redirect
+    res.redirect(302, vncUrl);
+});
+
+// Auth validation endpoint for nginx auth_request - validates user can access instance
+router.get('/auth/instance/:instanceUUID', async (req: Request, res: Response): Promise<void> => {
+    const { instanceUUID } = req.params;
+    const user = req.user as ServiceUser | undefined;
+
+    // Not authenticated
+    if (!user) {
+        appLogger.warn('Unauthenticated access attempt to instance', {
+            eventType: 'Auth Check Failed',
+            instanceUUID,
+            reason: 'No user session',
+            ipAddress: req.ip,
+            timestamp: new Date().toISOString()
+        });
+        res.status(401).send();
+        return;
+    }
+
+    // Validate UUID format
+    if (!instanceUUID || typeof instanceUUID !== 'string' || instanceUUID.length !== 12) {
+        res.status(400).send();
+        return;
+    }
+
+    try {
+        const instance = await db.ViperInstance.findOne({
+            where: { uuid: instanceUUID }
+        });
+
+        // Instance not found
+        if (!instance) {
+            appLogger.warn('Access attempt to non-existent instance', {
+                eventType: 'Auth Check Failed',
+                instanceUUID,
+                userId: user.id,
+                reason: 'Instance not found',
+                timestamp: new Date().toISOString()
+            });
+            res.status(404).send();
+            return;
+        }
+
+        // Check if user has permission (admin, team admin/leader for same team, or owner)
+        let hasAccess = false;
+        
+        if (user.role === UserRole.ADMIN) {
+            hasAccess = true;
+        } else if (instance.owner === user.id) {
+            hasAccess = true;
+        } else if (user.role === UserRole.TEAM_ADMIN || user.role === UserRole.TEAM_LEADER) {
+            // Team admins/leaders can access instances from their team members
+            const ownerUser = await db.User.findOne({ where: { id: instance.owner } });
+            if (ownerUser && ownerUser.team === user.team) {
+                hasAccess = true;
+            }
+        }
+
+        if (!hasAccess) {
+            appLogger.warn('Unauthorized access attempt to instance', {
+                eventType: 'Auth Check Failed',
+                instanceUUID,
+                userId: user.id,
+                userRole: user.role,
+                instanceOwner: instance.owner,
+                reason: 'User does not own instance',
+                timestamp: new Date().toISOString()
+            });
+            res.status(403).send();
+            return;
+        }
+
+        // Success - user is authorized
+        res.status(200).send();
+
+    } catch (error) {
+        appLogger.error('Error during instance auth check', {
+            eventType: 'Auth Check Error',
+            instanceUUID,
+            userId: user.id,
+            error: (error as Error).message,
+            timestamp: new Date().toISOString()
+        });
+        res.status(500).send();
+    }
+});
+
 // Get detailed Docker inspect data for an instance (admin only)
-router.get('/viperinstance/:dockerid/inspect', async (req: Request, res: Response) => {
+router.get('/viperinstance/:podName/inspect', async (req: Request, res: Response) => {
     const user = req.user as ServiceUser | undefined;
     
     if (!user || user.role !== UserRole.ADMIN) {
@@ -787,19 +928,17 @@ router.get('/viperinstance/:dockerid/inspect', async (req: Request, res: Respons
     }
 
     try {
-        const { dockerid } = req.params;
-        
+        const { podName } = req.params;
         // Use ViperInstanceService to get instance details
-        const result = await viperInstanceService.inspectInstance(dockerid);
+        const result = await viperInstanceService.inspectInstance(podName);
         res.json(result);
     } catch (error) {
         appLogger.error('Error retrieving instance details', {
             eventType: 'Instance Inspect Error',
-            dockerId: req.params.dockerid,
+            podName: req.params.podName,
             error: (error as Error).message,
             timestamp: new Date().toISOString()
         });
-        
         // Check if it's a not found error
         if ((error as Error).message.includes('not found')) {
             res.status(404).send({ message: 'Instance not found' });
@@ -1026,12 +1165,12 @@ router.get('/health', async (req: Request, res: Response): Promise<void> => {
             healthData.status = 'degraded';
         }
 
-        // Docker connectivity check (via containerService)
+        // Kubernetes API connectivity check (via containerService)
         try {
             await containerService.ping();
-            healthData.docker = { status: 'connected' };
-        } catch (dockerError) {
-            healthData.docker = { status: 'error', message: (dockerError as Error).message };
+            healthData.kubernetes = { status: 'connected' };
+        } catch (k8sError) {
+            healthData.kubernetes = { status: 'error', message: (k8sError as Error).message };
             healthData.status = 'degraded';
         }
 
@@ -1833,12 +1972,8 @@ router.post('/cleanup-inactive', async (req: Request, res: Response): Promise<vo
 
         for (const instance of inactiveInstances) {
             try {
-                const container = containerService.getContainer(instance.dockerid);
-                
-                // Stop and remove container
-                await containerService.stopContainer(instance.dockerid);
-                await containerService.removeContainer(instance.dockerid);
-                
+                // Delete the pod
+                await containerService.removeContainer(instance.podName);
                 // Update database
                 await instance.update({
                     status: 'auto_shutdown',
@@ -1847,7 +1982,7 @@ router.post('/cleanup-inactive', async (req: Request, res: Response): Promise<vo
 
                 shutdownResults.push({
                     instanceUUID: instance.uuid,
-                    containerId: instance.dockerid,
+                    podName: instance.podName,
                     success: true
                 });
 
@@ -1855,7 +1990,7 @@ router.post('/cleanup-inactive', async (req: Request, res: Response): Promise<vo
                     eventType: 'Auto Shutdown',
                     instanceUUID: instance.uuid,
                     instanceId: instance.id,
-                    containerId: instance.dockerid,
+                    podName: instance.podName,
                     reason: 'inactivity',
                     timestamp: new Date().toISOString()
                 });
@@ -1863,7 +1998,7 @@ router.post('/cleanup-inactive', async (req: Request, res: Response): Promise<vo
             } catch (shutdownError) {
                 shutdownResults.push({
                     instanceUUID: instance.uuid,
-                    containerId: instance.dockerid,
+                    podName: instance.podName,
                     success: false,
                     error: (shutdownError as Error).message
                 });
@@ -1871,6 +2006,7 @@ router.post('/cleanup-inactive', async (req: Request, res: Response): Promise<vo
                 appLogger.error('Failed to auto-shutdown instance', {
                     eventType: 'Auto Shutdown Error',
                     instanceUUID: instance.uuid,
+                    podName: instance.podName,
                     error: (shutdownError as Error).message,
                     timestamp: new Date().toISOString()
                 });
@@ -1898,5 +2034,10 @@ router.post('/cleanup-inactive', async (req: Request, res: Response): Promise<vo
         });
     }
 });
+
+// Note: Instance routing and WebSocket proxying is handled by Kubernetes Ingress
+// Each instance gets its own Ingress resource that routes /viper-instances/{uuid}/*
+// directly to the instance's Service (viper-svc-{uuid}:3000) with path rewriting and
+// WebSocket upgrade support configured via nginx annotations.
 
 export default router;
