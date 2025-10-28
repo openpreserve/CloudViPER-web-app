@@ -21,6 +21,7 @@
   "license": "Apache-2.0",
   "dependencies": {
     "@dr.pogodin/csurf": "^1.13.0",
+    "@kubernetes/client-node": "^1.4.0",
     "@types/passport-google-oauth20": "^2.0.16",
     "@types/passport-local": "^1.0.38",
     "bcrypt-nodejs": "^0.0.3",
@@ -61,6 +62,7 @@
     "@types/passport": "^1.0.17",
     "@types/supertest": "^6.0.2",
     "@types/winston": "^2.4.4",
+    "@types/ws": "^8.18.1",
     "del": "^8.0.0",
     "gulp": "^5.0.0",
     "gulp-copy": "^5.0.0",

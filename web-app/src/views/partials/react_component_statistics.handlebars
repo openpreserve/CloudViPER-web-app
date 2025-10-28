@@ -246,7 +246,7 @@ class SystemStatistics extends React.Component {
                                             </td>
                                             <td>
                                                 {instance.url ? (
-                                                    <a href={`https://${instance.url}`} target="_blank" rel="noopener noreferrer" className="text-primary">
+                                                    <a href={(instance.url && instance.url.startsWith('http')) ? instance.url : `https://${instance.url}`} target="_blank" rel="noopener noreferrer" className="text-primary">
                                                         {instance.url}
                                                     </a>
                                                 ) : (

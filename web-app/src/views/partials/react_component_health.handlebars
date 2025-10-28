@@ -185,26 +185,26 @@ class SystemHealth extends React.Component {
                         </div>
                     </div>
 
-                    {/* Docker Card */}
+                    {/* Kubernetes Card */}
                     <div className="health-card">
                         <div className="card-header">
                             <h4>
-                                <i className="fab fa-docker"></i> Docker
-                                <span className={`status-badge ${healthData.docker && healthData.docker.status === 'connected' ? 'status-active' : 'status-error'}`}>
-                                    {(healthData.docker && healthData.docker.status) || 'unknown'}
+                                <i className="fas fa-dharmachakra"></i> Kubernetes
+                                <span className={`status-badge ${healthData.kubernetes && healthData.kubernetes.status === 'connected' ? 'status-active' : 'status-error'}`}>
+                                    {(healthData.kubernetes && healthData.kubernetes.status) || 'unknown'}
                                 </span>
                             </h4>
                         </div>
                         <div className="card-body">
-                            {healthData.docker && healthData.docker.status === 'connected' ? (
+                            {healthData.kubernetes && healthData.kubernetes.status === 'connected' ? (
                                 <div className="success-message">
                                     <i className="fas fa-check-circle text-success"></i>
-                                    Docker daemon is accessible
+                                    Kubernetes API is accessible
                                 </div>
                             ) : (
                                 <div className="error-message">
                                     <i className="fas fa-times-circle text-danger"></i>
-                                    {(healthData.docker && healthData.docker.message) || 'Docker connection failed'}
+                                    {(healthData.kubernetes && healthData.kubernetes.message) || 'Kubernetes connection failed'}
                                 </div>
                             )}
                         </div>

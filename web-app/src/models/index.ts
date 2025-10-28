@@ -7,6 +7,7 @@ import dotenv from 'dotenv';
 
 import configAuth from '../config/auth';
 import { logSQL, appLogger } from '../config/logger';
+import { initializeAdminUser } from '../utility/initializeAdmin';
 import User from './user';
 import ViperInstance from './viperinstance';
 import Log from './log'; // Import the Logs model
@@ -102,13 +103,16 @@ if (env !== 'test' || process.env.FORCE_DB_SYNC === 'true') {
   db.sequelize.sync({ 
     force: env === 'test', // Force recreate tables in test environment
     alter: env !== 'test'  // Use alter in non-test environments
-  }).then(() => {
+  }).then(async () => {
     console.log(`Database synchronized with ${env === 'test' ? '{ force: true }' : '{ alter: true }'}`);
     appLogger.info('Database synchronized successfully', {
       mode: env === 'test' ? 'force' : 'alter',
       env,
       timestamp: new Date().toISOString()
     });
+    
+    // Initialize admin user after database is ready
+    await initializeAdminUser();
   }).catch((error) => {
     console.error('Database synchronization failed:', error);
     appLogger.error('Database synchronization failed', {

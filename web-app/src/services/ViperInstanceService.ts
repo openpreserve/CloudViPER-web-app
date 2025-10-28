@@ -7,7 +7,7 @@ import { getAvailablePort } from '../utility/portManager';
 import { appLogger } from '../config/logger';
 import { UserRole } from '../types/UserRole';
 import { readAndProcessScript, validateRequiredScripts } from '../utility/scriptManager';
-import containerService from './ContainerService';
+import { containerService } from './ContainerService';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -30,6 +30,143 @@ export interface ServiceUser {
 class ViperInstanceService {
   
   /**
+   * Get the base URL for the application (for constructing instance URLs)
+   */
+  private async getBaseUrl(): Promise<string> {
+    try {
+      const { getPublicUrl } = await import('../utility/detectServiceUrl');
+      return await getPublicUrl();
+    } catch (error) {
+      // Fallback for development
+      const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http';
+      const host = process.env.APP_HOST || 'localhost:30080';
+      return `${protocol}://${host}`;
+    }
+  }
+
+  /**
+   * Create a Kubernetes Service
+   */
+  private async createService(serviceSpec: any): Promise<any> {
+    const { KubeConfig, CoreV1Api } = await import('@kubernetes/client-node');
+    const kc = new KubeConfig();
+    kc.loadFromDefault();
+    const k8sApi = kc.makeApiClient(CoreV1Api);
+    const namespace = process.env.K8S_NAMESPACE || 'default';
+    
+    return await k8sApi.createNamespacedService({ 
+      namespace, 
+      body: serviceSpec 
+    });
+  }
+
+  /**
+   * Delete a Kubernetes Service
+   */
+  private async deleteService(serviceName: string): Promise<void> {
+    try {
+      const { KubeConfig, CoreV1Api } = await import('@kubernetes/client-node');
+      const kc = new KubeConfig();
+      kc.loadFromDefault();
+      const k8sApi = kc.makeApiClient(CoreV1Api);
+      const namespace = process.env.K8S_NAMESPACE || 'default';
+      
+      await k8sApi.deleteNamespacedService({ name: serviceName, namespace });
+    } catch (error) {
+      // Service might not exist, that's ok
+      appLogger.warn('Service deletion warning', {
+        eventType: 'Service Delete Warning',
+        serviceName,
+        error: (error as Error).message,
+        timestamp: new Date().toISOString()
+      });
+    }
+  }
+
+  /**
+   * Create a Kubernetes Ingress for instance routing
+   */
+  private async createIngress(instanceUUID: string, serviceName: string): Promise<any> {
+    const { KubeConfig, NetworkingV1Api } = await import('@kubernetes/client-node');
+    const kc = new KubeConfig();
+    kc.loadFromDefault();
+    const k8sApi = kc.makeApiClient(NetworkingV1Api);
+    const namespace = process.env.K8S_NAMESPACE || 'default';
+    const ingressName = `viper-ingress-${instanceUUID}`;
+
+    // Ingress spec for path-based routing with WebSocket support
+    const ingressSpec = {
+      apiVersion: 'networking.k8s.io/v1',
+      kind: 'Ingress',
+      metadata: {
+        name: ingressName,
+        namespace,
+        labels: {
+          app: 'viper-instance',
+          instanceUUID
+        },
+        annotations: {
+          // No rewrite-target - sidecar handles path translation
+          'nginx.ingress.kubernetes.io/proxy-read-timeout': '3600',
+          'nginx.ingress.kubernetes.io/proxy-send-timeout': '3600',
+          'nginx.ingress.kubernetes.io/proxy-body-size': '10m',
+          // WebSocket support
+          'nginx.ingress.kubernetes.io/websocket-services': serviceName,
+          'nginx.ingress.kubernetes.io/proxy-http-version': '1.1'
+        }
+      },
+      spec: {
+        ingressClassName: 'nginx',
+        rules: [
+          {
+            http: {
+              paths: [
+                {
+                  path: `/viper-instances/${instanceUUID}`,
+                  pathType: 'Prefix',
+                  backend: {
+                    service: {
+                      name: serviceName,
+                      port: {
+                        number: 3000
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    };
+
+    return await k8sApi.createNamespacedIngress({ namespace, body: ingressSpec });
+  }
+
+  /**
+   * Delete a Kubernetes Ingress
+   */
+  private async deleteIngress(ingressName: string): Promise<void> {
+    try {
+      const { KubeConfig, NetworkingV1Api } = await import('@kubernetes/client-node');
+      const kc = new KubeConfig();
+      kc.loadFromDefault();
+      const k8sApi = kc.makeApiClient(NetworkingV1Api);
+      const namespace = process.env.K8S_NAMESPACE || 'default';
+      
+      await k8sApi.deleteNamespacedIngress({ name: ingressName, namespace });
+    } catch (error) {
+      // Ingress might not exist, that's ok
+      appLogger.warn('Ingress deletion warning', {
+        eventType: 'Ingress Delete Warning',
+        ingressName,
+        error: (error as Error).message,
+        timestamp: new Date().toISOString()
+      });
+    }
+  }
+
+  /**
    * Creates a new Viper instance
    */
   async createInstance(user: ServiceUser): Promise<any> {
@@ -37,71 +174,135 @@ class ViperInstanceService {
     const instanceUUID = helperFunctions.generateRandomString(12);
     const kasmvncPassword = helperFunctions.generateRandomString(12);
     const statusKey = helperFunctions.generateRandomString(12);
-    const instanceURL = `${instanceUUID}.${process.env.APP_HOST}`;
-    const containerName = `viper-cloud-${instanceUUID}`;
     
-    appLogger.info('Starting instance creation', {
+    // Path-based URL format routed via Ingress
+    // Use clean redirect URL that will forward to full VNC URL with query parameters
+    const baseUrl = await this.getBaseUrl();
+    const instanceURL = `${baseUrl}/service/launch/${instanceUUID}`;
+    const podName = `viper-instance-${instanceUUID}`;
+    const serviceName = `viper-svc-${instanceUUID}`;
+
+    appLogger.info('Starting instance creation (Kubernetes)', {
       eventType: 'Instance Creation Started',
       userId: user.id,
       userEmail: user.email,
       userRole: user.role,
       instanceUUID,
-      containerName,
+      podName,
+      instanceURL,
       timestamp: new Date().toISOString()
     });
 
-    const envVars = [
-      "VIRTUAL_PORT=3000",
-      "VIRTUAL_HOST=" + instanceURL,
-      "LETSENCRYPT_HOST=" + instanceURL,
-      "LETSENCRYPT_EMAIL=sysadmin@openpreservation.org",
-      "PASSWORD=" + kasmvncPassword,
-      "PUID=1000",
-      "PGID=1000",
-      "ACME_PRE_HOOK=curl " + (process.env.SERVICE_URL || (process.env.NODE_ENV === 'production' ? 
-          `http://cloud-viper-gui-app:3000` : 
-          `http://localhost:3000`)) + "/service/set-status-instance/"+statusKey+"/begin_cert",
-      "ACME_POST_HOOK=curl " + (process.env.SERVICE_URL || (process.env.NODE_ENV === 'production' ? 
-          `http://cloud-viper-gui-app:3000` : 
-          `http://localhost:3000`)) + "/service/set-status-instance/"+statusKey+"/active",
-    ];
-    
-    console.log('Container Environment Variables:', envVars);
+    // Kubernetes Pod spec for ViPER instance
+    const podSpec = {
+      apiVersion: 'v1',
+      kind: 'Pod',
+      metadata: {
+        name: podName,
+        labels: {
+          app: 'viper-instance',
+          instanceUUID,
+          ownerId: String(ownerId),
+          'viper-instance': 'true'  // For service selector
+        }
+      },
+      spec: {
+        containers: [
+          {
+            name: 'viper',
+            // image: process.env.VIPER_IMAGE || 'gcr.io/YOUR_PROJECT/opf-cloud-viper:latest',
+            image: process.env.VIPER_IMAGE || 'darrenopf/opf-cloud-viper:docker-0.0.17',
+            env: [
+              { name: 'INSTANCE_UUID', value: instanceUUID },
+              // { name: 'PASSWORD', value: kasmvncPassword },
+              // { name: 'SUBFOLDER', value: `/viper-instances/${instanceUUID}/` }, // Don't use - nginx handles subpath routing
+              { name: 'STATUS_KEY', value: statusKey },
+              { name: 'SERVICE_URL', value: process.env.SERVICE_URL || '' },
+              { name: 'DOMAIN_NAME', value: DOMAIN_NAME },
+              // KasmVNC feature toggles - enable only file transfer (no audio/microphone)
+              // { name: 'KASM_SVC_SEND_CUT_TEXT', value: 'true' },
+              // { name: 'KASM_SVC_DOWNLOADS', value: 'true' },
+              // { name: 'KASM_SVC_UPLOADS', value: 'true' },
+              // // Explicitly disable audio features to prevent 404 errors
+              // { name: 'KASM_SVC_AUDIO_OUT', value: 'false' },
+              // { name: 'KASM_SVC_AUDIO_INPUT', value: 'false' },
+              // Add any other needed env vars here
+            ],
+            ports: [
+              { containerPort: 3000, name: 'kasmvnc' },
+              { containerPort: 6901, name: 'vnc' },
+              { containerPort: 4901, name: 'files' }
+            ],
+            resources: {
+              requests: { memory: '1Gi', cpu: '500m' },
+              limits: { memory: '2Gi', cpu: '1' }
+            }
+          },
+          {
+            name: 'nginx-proxy',
+            image: 'nginx:1.25-alpine',
+            ports: [
+              { containerPort: 8080, name: 'http' }
+            ],
+            volumeMounts: [
+              {
+                name: 'nginx-config',
+                mountPath: '/etc/nginx/nginx.conf',
+                subPath: 'nginx.conf'
+              }
+            ],
+            resources: {
+              requests: { memory: '64Mi', cpu: '100m' },
+              limits: { memory: '128Mi', cpu: '200m' }
+            }
+          }
+        ],
+          volumes: [
+            {
+              name: 'nginx-config',
+              configMap: { name: 'viper-proxy-config' }
+            }
+          ],
+        restartPolicy: 'Never'
+      }
+    };
+
+    // Kubernetes Service spec for this specific instance
+    const serviceSpec = {
+      apiVersion: 'v1',
+      kind: 'Service',
+      metadata: {
+        name: serviceName,
+        labels: {
+          app: 'viper-instance',
+          instanceUUID,
+          ownerId: String(ownerId)
+        }
+      },
+      spec: {
+        selector: {
+          instanceUUID: instanceUUID  // Match pods with this UUID
+        },
+        ports: [
+          {
+            protocol: 'TCP',
+            port: 3000,
+            targetPort: 8080  // Route to nginx sidecar, not directly to KasmVNC
+          }
+        ],
+        type: 'ClusterIP'
+      }
+    };
 
     try {
-      // Find an available port for development, production uses reverse proxy
-      const availablePort = process.env.NODE_ENV === 'dev' ? await getAvailablePort(3010) : 3000;
+      // Create the pod first
+      const pod = await containerService.createContainer(podSpec);
 
-      const containerOptions: any = {
-        Image: 'darrenopf/opf-cloud-viper:docker-0.0.17',
-        name: containerName,
-        HostConfig: {
-          ShmSize: 1024 * 1024 * 1024,
-          Binds: ['/var/viper-docker-project/volumes/test-corpus/test-root/corpora:/config/test-corpus:ro'],
-          ...(process.env.NODE_ENV === 'dev' && { PortBindings: { 
-            '3000/tcp': [{ HostPort: `${availablePort}` }],
-            '3001/tcp': [] // Empty binding to prevent null value
-          } })
-        },
-        ExposedPorts: { '3000/tcp': {} },
-        NetworkingConfig: {
-          EndpointsConfig: {
-            'cloud-viper-net': {},
-            ...(process.env.NODE_ENV === 'prod' && { 'ingress-proxy': {} }),
-            ...(process.env.NODE_ENV === 'production' && { 'ingress-proxy': {} })
-          }
-        },
-        Env: envVars,
-      };
-
-      const container = await containerService.createContainer(containerOptions);
-      await container.start();
-
-      appLogger.info('Container created and started successfully', {
-        eventType: 'Container Created',
+      appLogger.info('Kubernetes pod created for ViPER instance', {
+        eventType: 'Pod Created',
         instanceUUID,
-        containerName,
-        containerId: container.id,
+        podName,
+        podStatus: pod.status?.phase,
         userId: user.id,
         userEmail: user.email,
         userRole: user.role,
@@ -109,55 +310,64 @@ class ViperInstanceService {
         timestamp: new Date().toISOString()
       });
 
-      // Create database entry immediately after container starts successfully
+      // Create the service
+      try {
+        await this.createService(serviceSpec);
+        appLogger.info('Kubernetes service created for ViPER instance', {
+          eventType: 'Service Created',
+          instanceUUID,
+          serviceName,
+          userId: user.id,
+          timestamp: new Date().toISOString()
+        });
+      } catch (svcError) {
+        appLogger.warn('Failed to create service, but pod exists', {
+          eventType: 'Service Creation Warning',
+          instanceUUID,
+          serviceName,
+          error: (svcError as Error).message,
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      // Create the Ingress for routing
+      try {
+        await this.createIngress(instanceUUID, serviceName);
+        appLogger.info('Kubernetes Ingress created for ViPER instance', {
+          eventType: 'Ingress Created',
+          instanceUUID,
+          serviceName,
+          userId: user.id,
+          timestamp: new Date().toISOString()
+        });
+      } catch (ingressError) {
+        appLogger.warn('Failed to create Ingress, but pod and service exist', {
+          eventType: 'Ingress Creation Warning',
+          instanceUUID,
+          serviceName,
+          error: (ingressError as Error).message,
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      // Create database entry immediately after pod creation
       const newViperInstance = await db.ViperInstance.create({
         uuid: instanceUUID,
-        dockerid: container.id,
-        name: containerName,
+          podName: podName,
+        name: podName,
         url: instanceURL,
         kasmvncPassword: kasmvncPassword,
         statusKey: statusKey,
         owner: ownerId,
-        status: 'created',
-        logs: [{ timestamp: new Date(), message: "Created" }],
+        status: 'running',  // Set to running immediately - Kubernetes will manage the pod lifecycle
+        logs: [{ timestamp: new Date(), message: 'Pod created' }],
       });
 
       appLogger.info('ViPER instance database entry created', {
         eventType: 'Database Entry Created',
         instanceId: newViperInstance.id,
         instanceUUID,
-        containerId: container.id,
-        userId: user.id,
-        userEmail: user.email,
-        userRole: user.role,
-        timestamp: new Date().toISOString()
-      });
-
-      // In development mode, simulate ACME hook completion since SSL certs won't be issued
-      if (process.env.NODE_ENV === 'dev') {
-        this.simulateDevCertProcess(instanceUUID, newViperInstance);
-      }
-
-      // Setup monitoring and security (non-critical - don't fail instance creation if these fail)
-      try {
-        await this.setupContainerSecurityAndMonitoring(container, instanceUUID, statusKey);
-      } catch (monitoringError) {
-        // Log monitoring setup failure but don't fail the instance creation
-        appLogger.warn('Monitoring setup failed - instance created but monitoring may not work', {
-          eventType: 'Monitoring Setup Failed',
-          instanceUUID,
-          containerId: container.id,
-          error: (monitoringError as Error).message,
-          userId: user.id,
-          timestamp: new Date().toISOString()
-        });
-      }
-
-      appLogger.info('ViPER instance created successfully', {
-        eventType: 'Instance Creation Complete',
-        instanceId: newViperInstance.id,
-        instanceUUID,
-        containerId: container.id,
+        podName,
         userId: user.id,
         userEmail: user.email,
         userRole: user.role,
@@ -166,19 +376,18 @@ class ViperInstanceService {
 
       return {
         success: true,
-        container: {
-          id: container.id,
+        pod: {
+          name: podName,
           uuid: instanceUUID,
           url: instanceURL,
-          status: 'created'
+          status: 'running'  // Match the database status
         },
-        message: 'ViPER instance created successfully'
+        message: 'ViPER instance created successfully (Kubernetes)'
       };
     } catch (err) {
       const error = err as Error;
-      
-      appLogger.error('Container creation failed', {
-        eventType: 'Container Creation Failed',
+      appLogger.error('Pod creation failed', {
+        eventType: 'Pod Creation Failed',
         error: error.message,
         stack: error.stack,
         userId: user.id,
@@ -187,7 +396,6 @@ class ViperInstanceService {
         instanceUUID,
         timestamp: new Date().toISOString()
       });
-      
       throw error;
     }
   }
@@ -452,7 +660,7 @@ class ViperInstanceService {
         
         // Check if script is running
         const { output } = await containerService.execInContainer(container.id, ['ps', 'aux']);
-        const viperProcesses = output.split('\n').filter(line => line.includes('viper-monitor'));
+  const viperProcesses = output.split('\n').filter((line: string) => line.includes('viper-monitor'));
         
         if (viperProcesses.length > 0) {
           appLogger.info('Monitoring script started successfully', {
@@ -555,17 +763,16 @@ URL=file:///config/test-corpus
   /**
    * Gets information about a Viper instance
    */
-  async inspectInstance(dockerId: string): Promise<any> {
+  async inspectInstance(podName: string): Promise<any> {
     try {
       // Find the instance in the database
-      const instance = await db.ViperInstance.findOne({ where: { dockerid: dockerId } });
+        const instance = await db.ViperInstance.findOne({ where: { podName: podName } });
       if (!instance) {
         throw new Error('Instance not found');
       }
 
-      // Get container info from Docker
-      const container = containerService.getContainer(dockerId);
-      const dockerInspect = await container.inspect();
+      // Get pod info from Kubernetes
+      const podInspect = await containerService.inspectContainer(podName);
 
       // Calculate operational hours
       const createdAt = instance.createdAt ? new Date(instance.createdAt) : new Date();
@@ -575,12 +782,12 @@ URL=file:///config/test-corpus
       return {
         instance,
         operationalHours,
-        dockerInspect
+        podInspect
       };
     } catch (error) {
-      appLogger.error('Error inspecting container', {
-        eventType: 'Container Inspect Error',
-        dockerId,
+      appLogger.error('Error inspecting pod', {
+        eventType: 'Pod Inspect Error',
+        podName,
         error: (error as Error).message,
         timestamp: new Date().toISOString()
       });
@@ -591,10 +798,10 @@ URL=file:///config/test-corpus
   /**
    * Terminates a Viper instance
    */
-  async terminateInstance(containerId: string, user: ServiceUser): Promise<any> {
+  async terminateInstance(podName: string, user: ServiceUser): Promise<any> {
     try {
       // Get instance from database
-      const instance = await db.ViperInstance.findOne({ where: { dockerid: containerId } });
+        const instance = await db.ViperInstance.findOne({ where: { podName: podName } });
       
       if (!instance) {
         throw new Error('Instance not found');
@@ -605,12 +812,12 @@ URL=file:///config/test-corpus
         throw new Error('Unauthorized - can only terminate own instances');
       }
 
-      appLogger.info('Starting instance termination', {
+      appLogger.info('Starting instance termination (Kubernetes)', {
         eventType: 'Instance Termination Started',
         userId: user.id,
         userRole: user.role,
         instanceId: instance.id,
-        containerId,
+        podName,
         timestamp: new Date().toISOString()
       });
 
@@ -619,41 +826,87 @@ URL=file:///config/test-corpus
         status: 'deleted',
         logs: [...(instance.logs || []), { 
           timestamp: new Date(), 
-          message: "User requested termination" 
+          message: 'User requested termination' 
         }]
       });
 
+      // Extract UUID from podName (format: viper-instance-{uuid})
+      const uuid = podName.replace('viper-instance-', '');
+      const serviceName = `viper-svc-${uuid}`;
+      const ingressName = `viper-ingress-${uuid}`;
+
       try {
-        // Stop and remove container
-        const container = containerService.getContainer(containerId);
-        await container.stop({ t: 5 });
-        await container.remove({ force: true });
-        
-        appLogger.info('Container stopped and removed', {
-          eventType: 'Container Removed',
+        // Delete the Ingress first
+        await this.deleteIngress(ingressName);
+        appLogger.info('Ingress deleted for ViPER instance', {
+          eventType: 'Ingress Deleted',
           userId: user.id,
           userRole: user.role,
           instanceId: instance.id,
-          containerId,
+          ingressName,
           timestamp: new Date().toISOString()
         });
-      } catch (containerError) {
-        // Log but don't fail if container already removed
-        appLogger.warn('Error removing container - may already be removed', {
-          eventType: 'Container Remove Warning',
-          error: (containerError as Error).message,
+      } catch (ingressError) {
+        // Log but don't fail if ingress already removed
+        appLogger.warn('Error deleting ingress - may already be removed', {
+          eventType: 'Ingress Delete Warning',
+          error: (ingressError as Error).message,
           instanceId: instance.id,
-          containerId,
+          ingressName,
           timestamp: new Date().toISOString()
         });
       }
 
-      return { success: true, message: 'Instance terminated successfully' };
+      try {
+        // Delete the service
+        await this.deleteService(serviceName);
+        appLogger.info('Service deleted for ViPER instance', {
+          eventType: 'Service Deleted',
+          userId: user.id,
+          userRole: user.role,
+          instanceId: instance.id,
+          serviceName,
+          timestamp: new Date().toISOString()
+        });
+      } catch (serviceError) {
+        // Log but don't fail if service already removed
+        appLogger.warn('Error deleting service - may already be removed', {
+          eventType: 'Service Delete Warning',
+          error: (serviceError as Error).message,
+          instanceId: instance.id,
+          serviceName,
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      try {
+        // Delete the pod last
+        await containerService.removeContainer(podName);
+        appLogger.info('Pod deleted for ViPER instance', {
+          eventType: 'Pod Deleted',
+          userId: user.id,
+          userRole: user.role,
+          instanceId: instance.id,
+          podName,
+          timestamp: new Date().toISOString()
+        });
+      } catch (podError) {
+        // Log but don't fail if pod already removed
+        appLogger.warn('Error deleting pod - may already be removed', {
+          eventType: 'Pod Delete Warning',
+          error: (podError as Error).message,
+          instanceId: instance.id,
+          podName,
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      return { success: true, message: 'Instance terminated successfully (Kubernetes)' };
     } catch (error) {
       appLogger.error('Error terminating instance', {
         eventType: 'Instance Termination Error',
         error: (error as Error).message,
-        containerId,
+        podName,
         timestamp: new Date().toISOString()
       });
       throw error;

@@ -409,12 +409,12 @@
           .catch(error => console.error('Error starting new instance:', error));
       }
 
-      removeInstance = (dockerid) => {
-        fetch('/service/terminate-instance/' + dockerid, { method: 'GET' })
+      removeInstance = (podName) => {
+        fetch('/service/terminate-instance/' + podName, { method: 'GET' })
           .then(response => {
             if (response.ok) {
               this.setState(prevState => ({
-                instances: prevState.instances.filter(instance => instance.dockerid !== dockerid)
+                instances: prevState.instances.filter(instance => instance.podName !== podName)
               }));
             }
           })
@@ -445,7 +445,7 @@
         this.setState({ detailsLoading: true, selectedInstance: instance });
         
         try {
-          const response = await fetch(`/service/viperinstance/${instance.dockerid}/inspect`);
+          const response = await fetch(`/service/viperinstance/${instance.podName}/inspect`);
           if (response.ok) {
             const details = await response.json();
             this.setState({ instanceDetails: details, detailsLoading: false });
@@ -456,7 +456,7 @@
                 error: 'Failed to fetch details',
                 instance: instance,
                 operationalHours: 'Unknown',
-                dockerInspect: { error: 'API request failed', message: 'Could not fetch Docker details' }
+                podInspect: { error: 'API request failed', message: 'Could not fetch pod details' }
               }, 
               detailsLoading: false 
             });
@@ -468,7 +468,7 @@
               error: 'Error fetching details',
               instance: instance,
               operationalHours: 'Unknown',
-              dockerInspect: { error: 'Network error', message: error.message || 'Unknown error occurred' }
+              podInspect: { error: 'Network error', message: error.message || 'Unknown error occurred' }
             }, 
             detailsLoading: false 
           });
@@ -547,6 +547,11 @@
       }
 
       formatUrl = (url) => {
+        // If URL already starts with http:// or https://, return as-is
+        if (url.startsWith('http://') || url.startsWith('https://')) {
+          return url;
+        }
+        // Otherwise, add https:// prefix (for legacy subdomain URLs)
         return 'https://' + url;
       }
 
@@ -972,7 +977,7 @@ Current Activity Score: ${data.summary.currentScore || 0}`);
                               'Unknown'
                             )}
                           </div>
-                          <div><strong>Docker ID:</strong> <code>{instanceDetails.instance && instanceDetails.instance.dockerid || 'Unknown'}</code></div>
+                          <div><strong>Pod Name:</strong> <code>{instanceDetails.instance && instanceDetails.instance.podName || 'Unknown'}</code></div>
                           <div><strong>UUID:</strong> <code>{instanceDetails.instance && instanceDetails.instance.uuid || 'Unknown'}</code></div>
                           <div><strong>Created:</strong> 
                             {instanceDetails.instance && instanceDetails.instance.createdAt ? 
@@ -997,24 +1002,24 @@ Current Activity Score: ${data.summary.currentScore || 0}`);
                         </div>
                       </div>
 
-                      {/* Docker Inspect Data */}
+                      {/* Pod Inspect Data */}
                       <div className="details-section">
-                        <h4>🐳 Docker Inspect Data</h4>
-                        {instanceDetails.dockerInspect && instanceDetails.dockerInspect.error ? (
+                        <h4>☸️ Pod Inspect Data</h4>
+                        {instanceDetails.podInspect && instanceDetails.podInspect.error ? (
                           <div className="error-message">
-                            <p><strong>Error:</strong> {instanceDetails.dockerInspect.error}</p>
-                            <p>{instanceDetails.dockerInspect.message}</p>
+                            <p><strong>Error:</strong> {instanceDetails.podInspect.error}</p>
+                            <p>{instanceDetails.podInspect.message}</p>
                           </div>
-                        ) : instanceDetails.dockerInspect ? (
+                        ) : instanceDetails.podInspect ? (
                           <div className="docker-inspect-container">
                             <pre className="docker-inspect-json">
-                              {JSON.stringify(instanceDetails.dockerInspect, null, 2)}
+                              {JSON.stringify(instanceDetails.podInspect, null, 2)}
                             </pre>
                           </div>
                         ) : (
                           <div className="error-message">
-                            <p><strong>No Docker data available</strong></p>
-                            <p>Docker inspect information could not be retrieved.</p>
+                            <p><strong>No pod data available</strong></p>
+                            <p>Pod inspect information could not be retrieved.</p>
                           </div>
                         )}
                       </div>
@@ -1153,7 +1158,7 @@ Current Activity Score: ${data.summary.currentScore || 0}`);
                                 )}
                                 <button 
                                   className={'btn btn-danger ' + (instance.status === 'deleted' ? 'disabled' : '')} 
-                                  onClick={() => this.removeInstance(instance.dockerid)} 
+                                  onClick={() => this.removeInstance(instance.podName)} 
                                   disabled={instance.status === 'deleted'}
                                 >
                                   <i className="fas fa-trash"></i> Remove Instance

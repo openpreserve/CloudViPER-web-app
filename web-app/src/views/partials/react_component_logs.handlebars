@@ -401,7 +401,7 @@ class LogViewer extends React.Component {
                         <strong>Instance UUID:</strong> {log.instanceUUID || 'Unknown'}
                     </div>
                     <div className="log-detail">
-                        <strong>Instance URL:</strong> <a href={'https://' + log.instanceURL} target="_blank">{log.instanceURL || 'Unknown'}</a>
+                        <strong>Instance URL:</strong> <a href={(log.instanceURL && log.instanceURL.startsWith('http')) ? log.instanceURL : 'https://' + log.instanceURL} target="_blank">{log.instanceURL || 'Unknown'}</a>
                     </div>
                     <div className="log-detail">
                         <strong>Created By:</strong> {log.userEmail || 'Unknown'} (ID: {log.userId || 'Unknown'})

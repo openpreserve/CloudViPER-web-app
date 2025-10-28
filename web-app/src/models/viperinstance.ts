@@ -6,7 +6,7 @@ interface ViperInstanceAttributes {
     id?: number;
     owner: number;
     uuid: string;
-    dockerid: string;
+    podName: string;
     name: string;
     url: string;
     kasmvncPassword: string;
@@ -27,7 +27,7 @@ export default (sequelize: Sequelize) => {
         public id?: number;
         public owner!: number;
         public uuid!: string;
-        public dockerid!: string;
+  public podName!: string;
         public name!: string;
         public url!: string;
         public kasmvncPassword!: string;
@@ -66,7 +66,7 @@ export default (sequelize: Sequelize) => {
         id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
         owner: { type: DataTypes.INTEGER, allowNull: true },
         uuid: { type: DataTypes.STRING, allowNull: true },
-        dockerid: { type: DataTypes.STRING, allowNull: true },
+  podName: { type: DataTypes.STRING, allowNull: true },
         name: { type: DataTypes.STRING, allowNull: true },
         url: { type: DataTypes.STRING, allowNull: true },
         kasmvncPassword: { type: DataTypes.STRING, allowNull: true },

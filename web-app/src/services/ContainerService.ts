@@ -39,173 +39,63 @@ export interface IContainerService {
   ping(): Promise<void>;
 }
 
-/**
- * Docker Implementation of ContainerService
- */
-export class DockerContainerService implements IContainerService {
-  private docker: Docker;
-  
-  constructor() {
-    // Docker initialization with socket path
-    this.docker = new Docker({ socketPath: '/var/run/docker.sock' });
-  }
-  async ping(): Promise<void> {
-    try {
-      await this.docker.ping();
-    } catch (error) {
-      appLogger.error('Error pinging Docker daemon', {
-        eventType: 'Docker Ping Error',
-        error: (error as Error).message,
-        timestamp: new Date().toISOString()
-      });
-      throw error;
-    }
+import { CoreV1Api, KubeConfig, V1Pod, V1DeleteOptions } from '@kubernetes/client-node';
+
+export class KubernetesContainerService implements IContainerService {
+  private k8sApi: CoreV1Api;
+  private namespace: string;
+
+  constructor(namespace = 'default') {
+    const kc = new KubeConfig();
+    kc.loadFromDefault();
+    this.k8sApi = kc.makeApiClient(CoreV1Api);
+    this.namespace = namespace;
   }
 
   async createContainer(options: any): Promise<any> {
-    try {
-      const container = await this.docker.createContainer(options);
-      return container;
-    } catch (error) {
-      appLogger.error('Error creating Docker container', {
-        eventType: 'Container Creation Error',
-        error: (error as Error).message,
-        options,
-        timestamp: new Date().toISOString()
-      });
-      throw error;
-    }
+    // options should be a valid V1Pod spec
+    const podSpec: V1Pod = options;
+    // Correct usage: pass as object
+    return await this.k8sApi.createNamespacedPod({ namespace: this.namespace, body: podSpec });
   }
 
   async startContainer(containerId: string): Promise<void> {
-    try {
-      const container = this.docker.getContainer(containerId);
-      await container.start();
-    } catch (error) {
-      appLogger.error('Error starting Docker container', {
-        eventType: 'Container Start Error',
-        containerId,
-        error: (error as Error).message,
-        timestamp: new Date().toISOString()
-      });
-      throw error;
-    }
+    // Pods start automatically in Kubernetes
+    return;
   }
 
   async stopContainer(containerId: string): Promise<void> {
-    try {
-      const container = this.docker.getContainer(containerId);
-      await container.stop({ t: 10 }); // Stop with 10 second timeout
-    } catch (error) {
-      appLogger.error('Error stopping Docker container', {
-        eventType: 'Container Stop Error',
-        containerId,
-        error: (error as Error).message,
-        timestamp: new Date().toISOString()
-      });
-      throw error;
-    }
+    await this.k8sApi.deleteNamespacedPod({ name: containerId, namespace: this.namespace });
   }
 
   async removeContainer(containerId: string): Promise<void> {
-    try {
-      const container = this.docker.getContainer(containerId);
-      await container.remove({ force: true });
-    } catch (error) {
-      appLogger.error('Error removing Docker container', {
-        eventType: 'Container Remove Error',
-        containerId,
-        error: (error as Error).message,
-        timestamp: new Date().toISOString()
-      });
-      throw error;
-    }
+    await this.stopContainer(containerId);
   }
 
   async inspectContainer(containerId: string): Promise<any> {
-    try {
-      const container = this.docker.getContainer(containerId);
-      return await container.inspect();
-    } catch (error) {
-      appLogger.error('Error inspecting Docker container', {
-        eventType: 'Container Inspect Error',
-        containerId,
-        error: (error as Error).message,
-        timestamp: new Date().toISOString()
-      });
-      throw error;
-    }
+    return await this.k8sApi.readNamespacedPod({ name: containerId, namespace: this.namespace });
   }
 
   async listContainers(options?: any): Promise<any[]> {
-    try {
-      // Using a type assertion to work around typing issues
-      return (this.docker as any).listContainers(options || {}) || [];
-    } catch (error) {
-      appLogger.error('Error listing Docker containers', {
-        eventType: 'Container List Error',
-        error: (error as Error).message,
-        timestamp: new Date().toISOString()
-      });
-      throw error;
-    }
+    const result = await this.k8sApi.listNamespacedPod({ namespace: this.namespace });
+    return result.items;
   }
 
-  async execInContainer(
-    containerId: string,
-    command: string[],
-    options?: any
-  ): Promise<{ output: string; exitCode: number }> {
-    try {
-      const container = this.docker.getContainer(containerId);
-      const execOptions = {
-        AttachStdout: true,
-        AttachStderr: true,
-        Cmd: command,
-        ...(options || {}),
-      };
-      
-      const exec = await container.exec(execOptions);
-      const stream = await exec.start({ hijack: true, stdin: true });
-      
-      let output = '';
-      await new Promise((resolve) => {
-        stream.on('data', (data: any) => {
-          output += data.toString();
-        });
-        stream.on('end', resolve);
-      });
-      
-      const inspectData = await exec.inspect();
-      const exitCode = inspectData.ExitCode || 0;
-      
-      return { output, exitCode };
-    } catch (error) {
-      appLogger.error('Error executing command in Docker container', {
-        eventType: 'Container Exec Error',
-        containerId,
-        command,
-        error: (error as Error).message,
-        timestamp: new Date().toISOString()
-      });
-      throw error;
-    }
+  async execInContainer(containerId: string, command: string[], options?: any): Promise<{ output: string; exitCode: number }> {
+    // Exec is more complex in k8s, would need to use @kubernetes/client-node exec API
+    throw new Error('execInContainer not implemented for Kubernetes');
   }
 
   getContainer(containerId: string): any {
-    return this.docker.getContainer(containerId);
+    // Not needed in k8s, use inspectContainer
+    return null;
+  }
+
+  async ping(): Promise<void> {
+    await this.k8sApi.getAPIResources();
   }
 }
 
-/**
- * Factory function to create the appropriate container service
- * In the future, this could return different implementations based on configuration
- */
-export function createContainerService(): IContainerService {
-  // Future enhancement: Choose between Docker and Kubernetes based on config
-  return new DockerContainerService();
-}
+// export const containerService = new KubernetesContainerService(process.env.K8S_NAMESPACE || 'default');
 
-// Default export as a singleton instance
-const containerService = createContainerService();
-export default containerService;
+export const containerService = new KubernetesContainerService(process.env.K8S_NAMESPACE || 'default');
