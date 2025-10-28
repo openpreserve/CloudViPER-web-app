@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi  # 10GB for production (adjust as needed)
+  storageClassName: standard-rwo  # GKE standard persistent disk (SSD-backed)
+  # Note: GKE will automatically provision a persistent disk
+  # No PV needed - dynamic provisioning handles it

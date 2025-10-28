@@ -1,0 +1,119 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: db-init-script
+  labels:
+    app: viper-app
+data:
+  init-db.sql: |
+    -- Initialize database schema for viper-cloud-web-gui
+    -- This script is idempotent and can be run multiple times safely
+
+    -- Create Users table (matching Sequelize model)
+    CREATE TABLE IF NOT EXISTS Users (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        username VARCHAR(255) NOT NULL,
+        email VARCHAR(255) NOT NULL UNIQUE,
+        title VARCHAR(255),
+        firstName VARCHAR(255),
+        lastName VARCHAR(255),
+        role VARCHAR(50) NOT NULL DEFAULT 'user',
+        team VARCHAR(255) DEFAULT 'none',
+        invitedById INT,
+        oauthID VARCHAR(255),
+        oauthProvider VARCHAR(255),
+        salt VARCHAR(255),
+        hash TEXT,
+        resetPasswordToken VARCHAR(255),
+        resetPasswordExpires DATETIME,
+        oauthProfile JSON,
+        createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (invitedById) REFERENCES Users(id) ON DELETE SET NULL,
+        INDEX idx_username (username),
+        INDEX idx_email (email),
+        INDEX idx_role (role),
+        INDEX idx_team (team)
+    ) ENGINE=InnoDB 
+      DEFAULT CHARSET=utf8mb4 
+      COLLATE=utf8mb4_unicode_ci;
+
+    -- Create ViperInstances table (matching Sequelize model)
+    CREATE TABLE IF NOT EXISTS ViperInstances (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        owner INT,
+        uuid VARCHAR(255),
+        podName VARCHAR(255),
+        name VARCHAR(255),
+        url VARCHAR(255),
+        kasmvncPassword VARCHAR(255),
+        statusKey VARCHAR(255),
+        status VARCHAR(50) NOT NULL DEFAULT 'initilising',
+        logs JSON,
+        lastActivity DATETIME,
+        lastScreenshot JSON,
+        activityHistory JSON,
+        activityScore INT DEFAULT 0,
+        isUserActive TINYINT(1) DEFAULT 0,
+        createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (owner) REFERENCES Users(id) ON DELETE SET NULL,
+        INDEX idx_owner (owner),
+        INDEX idx_uuid (uuid),
+        INDEX idx_status (status)
+    ) ENGINE=InnoDB 
+      DEFAULT CHARSET=utf8mb4 
+      COLLATE=utf8mb4_unicode_ci;
+
+    -- Create Screenshots table (matching Sequelize model)
+    CREATE TABLE IF NOT EXISTS Screenshots (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        instanceId INT NOT NULL,
+        instanceUUID VARCHAR(255) NOT NULL,
+        screenshotData LONGTEXT NOT NULL,
+        capturedAt DATETIME,
+        receivedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (instanceId) REFERENCES ViperInstances(id) ON DELETE CASCADE,
+        INDEX idx_instanceId_createdAt (instanceId, createdAt),
+        INDEX idx_instanceUUID (instanceUUID)
+    ) ENGINE=InnoDB 
+      DEFAULT CHARSET=utf8mb4 
+      COLLATE=utf8mb4_unicode_ci;
+
+    -- Create Activities table (matching Sequelize model)
+    CREATE TABLE IF NOT EXISTS Activities (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        instanceId INT NOT NULL,
+        instanceUUID VARCHAR(255) NOT NULL,
+        mouseEvents INT NOT NULL DEFAULT 0,
+        keyboardEvents INT NOT NULL DEFAULT 0,
+        windowActive TINYINT(1) NOT NULL DEFAULT 0,
+        cpuUsage DECIMAL(5,2) NOT NULL DEFAULT 0,
+        memoryUsage DECIMAL(5,2) NOT NULL DEFAULT 0,
+        activityScore INT NOT NULL DEFAULT 0,
+        reportedAt DATETIME,
+        receivedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (instanceId) REFERENCES ViperInstances(id) ON DELETE CASCADE,
+        INDEX idx_instanceId_createdAt (instanceId, createdAt),
+        INDEX idx_instanceUUID (instanceUUID),
+        INDEX idx_activityScore (activityScore)
+    ) ENGINE=InnoDB 
+      DEFAULT CHARSET=utf8mb4 
+      COLLATE=utf8mb4_unicode_ci;
+
+    -- Create sessions table for express-mysql-session
+    CREATE TABLE IF NOT EXISTS sessions (
+        session_id VARCHAR(128) COLLATE utf8mb4_bin NOT NULL PRIMARY KEY,
+        expires INT UNSIGNED NOT NULL,
+        data MEDIUMTEXT COLLATE utf8mb4_bin,
+        KEY expires_idx (expires)
+    ) ENGINE=InnoDB 
+      DEFAULT CHARSET=utf8mb4 
+      COLLATE=utf8mb4_unicode_ci;
+
+    -- Log successful initialization
+    SELECT 'Database schema initialization complete' as status;

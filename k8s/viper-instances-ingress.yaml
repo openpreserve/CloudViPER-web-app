@@ -1,0 +1,57 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: viper-instances-ingress
+  labels:
+    app: viper-instances
+  annotations:
+    # Use nginx ingress controller
+    kubernetes.io/ingress.class: "nginx"
+    
+    # Enable WebSocket support
+    nginx.ingress.kubernetes.io/websocket-services: "*"
+    
+    # Rewrite target - strip the /service/viper-instances/{uuid} prefix
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    
+    # Increase timeouts for long-running WebSocket connections
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    
+    # WebSocket specific settings
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection "upgrade";
+      proxy_set_header Host $host;
+      proxy_set_header X-Real-IP $remote_addr;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto $scheme;
+      
+spec:
+  rules:
+  - http:
+      paths:
+      # Main app routes (everything except /service/viper-instances/)
+      - path: /()(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: viper-app
+            port:
+              number: 3000
+      
+      # Instance routing pattern - captures UUID and forwards to corresponding service
+      # Pattern: /service/viper-instances/{uuid}/(.*)
+      # This uses nginx regex to extract UUID and route dynamically
+      - path: /service/viper-instances/([a-z0-9]+)(/|$)(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            # This is a placeholder - nginx will dynamically route based on the captured UUID
+            # We'll use a server-snippet to handle dynamic service selection
+            name: viper-app  # Fallback to main app if service not found
+            port:
+              number: 3000

@@ -1,0 +1,147 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: viper-proxy-config
+  namespace: default
+data:
+  nginx.conf: |
+    events {
+      worker_connections 1024;
+    }
+
+    http {
+      include /etc/nginx/mime.types;
+      default_type application/octet-stream;
+
+      sendfile on;
+      keepalive_timeout 65;
+
+      # DNS resolver for Kubernetes service discovery - using kube-dns IP
+      resolver 10.96.0.10 valid=10s;
+      resolver_timeout 5s;
+
+      # Map for WebSocket upgrade
+      map $http_upgrade $connection_upgrade {
+        default upgrade;
+        '' close;
+      }
+
+      server {
+        listen 8080;
+        server_name _;
+
+        # WebSocket endpoint for VNC - routes /websockify to KasmVNC port 6901
+        location = /websockify {
+          proxy_pass http://127.0.0.1:6901/;
+          
+          # WebSocket support
+          proxy_http_version 1.1;
+          proxy_set_header Upgrade $http_upgrade;
+          proxy_set_header Connection $connection_upgrade;
+          
+          # Standard proxy headers
+          proxy_set_header Host $host;
+          proxy_set_header X-Real-IP $remote_addr;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header X-Forwarded-Proto $scheme;
+          
+          # Timeouts for long-lived connections
+          proxy_read_timeout 3600s;
+          proxy_send_timeout 3600s;
+          proxy_connect_timeout 3600s;
+          
+          # Disable buffering for real-time data
+          proxy_buffering off;
+        }
+
+        # Extract the instance UUID from the path
+        # Path format: /viper-instances/{uuid}/...
+        location ~ ^/viper-instances/([^/]+)(/.*)?$ {
+          set $instance_uuid $1;
+          set $remainder $2;
+
+          # Authentication check - DISABLED FOR NOW - DNS resolution issues
+          # auth_request /auth-check;
+          # auth_request_set $auth_status $upstream_status;
+          # error_page 401 403 = @auth_error;
+
+          # Special handling for file transfer endpoint - route to port 4901
+          set $target_port 3000;
+          set $target_path $remainder;
+          
+          if ($remainder = "/websockify") {
+            set $target_port 6901;
+            set $target_path "/";
+          }
+          
+          # File transfer Socket.IO endpoint
+          if ($remainder ~* "^/files") {
+            set $target_port 4901;
+            set $target_path $remainder;
+          }
+
+          # Proxy to appropriate backend
+          proxy_pass http://127.0.0.1:$target_port$target_path$is_args$args;
+          
+          # Standard proxy headers
+          proxy_set_header Host $host;
+          proxy_set_header X-Real-IP $remote_addr;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header X-Forwarded-Proto $scheme;
+          
+          # Pass through Authorization header for KasmVNC authentication
+          proxy_set_header Authorization $http_authorization;
+          proxy_pass_header Authorization;
+          
+          # WebSocket support
+          proxy_http_version 1.1;
+          proxy_set_header Upgrade $http_upgrade;
+          proxy_set_header Connection $connection_upgrade;
+          
+          # Timeouts for long-lived connections
+          proxy_read_timeout 3600s;
+          proxy_send_timeout 3600s;
+          proxy_connect_timeout 3600s;
+          
+          # Disable buffering for real-time data
+          proxy_buffering off;
+          
+          # Inject base URL and fix WebSocket path in HTML
+          sub_filter_types text/html;
+          sub_filter_once off;
+          sub_filter_last_modified off;
+          # Fix iframe src to include path parameter for WebSocket
+          sub_filter 'src="vnc/index.html?autoconnect=1' 'src="vnc/index.html?path=/viper-instances/$instance_uuid/websockify&autoconnect=1';
+          # Replace the websockify path input default value (fallback)
+          sub_filter 'value=websockify' 'value=/viper-instances/$instance_uuid/websockify';
+          # Also inject base tag for other resources
+          sub_filter '<html lang=en class=noVNC_loading>' '<html lang=en class=noVNC_loading><head><base href="/viper-instances/$instance_uuid/"></head>';
+        }
+
+        # Internal auth check location - forwards to web-app for validation
+        location = /auth-check {
+          internal;
+          proxy_pass http://viper-app-service:3000/service/auth/instance/$instance_uuid;
+          proxy_pass_request_body off;
+          proxy_set_header Content-Length "";
+          proxy_set_header X-Original-URI $request_uri;
+          proxy_set_header X-Real-IP $remote_addr;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          # Pass cookies for session authentication
+          proxy_set_header Cookie $http_cookie;
+        }
+
+        # Auth error handler
+        location @auth_error {
+          return 403 '{"error": "Access denied", "message": "You do not have permission to access this instance"}';
+          add_header Content-Type application/json;
+        }
+
+        # Health check endpoint
+        location /healthz {
+          access_log off;
+          return 200 "healthy\n";
+          add_header Content-Type text/plain;
+        }
+      }
+    }

@@ -1,0 +1,31 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: viper-app-ingress
+  annotations:
+    kubernetes.io/ingress.class: "gce"
+    networking.gke.io/managed-certificates: "viper-app-cert"
+    kubernetes.io/ingress.global-static-ip-name: "viper-app-ip"
+  labels:
+    app: viper-app
+spec:
+  rules:
+  - http:
+      paths:
+      - path: /*
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: viper-app
+            port:
+              number: 3000
+---
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: viper-app-cert
+  labels:
+    app: viper-app
+spec:
+  domains:
+    - "*.endpoints.*.cloud.goog"  # This will be replaced by deployer with actual domain

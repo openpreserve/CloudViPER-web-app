@@ -1,0 +1,48 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: viper-app
+  labels:
+    app: viper-app
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: viper-app-role
+  labels:
+    app: viper-app
+rules:
+# Read-only permissions for detecting service URL
+- apiGroups: [""]
+  resources: ["services"]
+  verbs: ["get", "list"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingresses"]
+  verbs: ["get", "list"]
+# Full permissions for managing ViPER instance pods
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["create", "delete", "get", "list", "watch"]
+# Full permissions for managing ViPER instance services
+- apiGroups: [""]
+  resources: ["services"]
+  verbs: ["create", "delete", "get", "list", "watch"]
+# Full permissions for managing ViPER instance ingresses
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingresses"]
+  verbs: ["create", "delete", "get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: viper-app-role-binding
+  labels:
+    app: viper-app
+subjects:
+- kind: ServiceAccount
+  name: viper-app
+  namespace: default
+roleRef:
+  kind: Role
+  name: viper-app-role
+  apiGroup: rbac.authorization.k8s.io

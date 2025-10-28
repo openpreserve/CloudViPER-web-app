@@ -1,0 +1,101 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: viper-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: viper-app
+  template:
+    metadata:
+      labels:
+        app: viper-app
+    spec:
+      serviceAccountName: viper-app
+      initContainers:
+      - name: db-init
+        image: mysql:8.0
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "Waiting for MySQL to be ready..."
+          until mysql -h ${DB_HOST} -u ${DB_USER} -p${DB_PASSWORD} ${DB_NAME} -e "SELECT 1" > /dev/null 2>&1; do
+            echo "MySQL not ready, waiting..."
+            sleep 2
+          done
+          echo "MySQL is ready, initializing database schema..."
+          mysql -h ${DB_HOST} -u ${DB_USER} -p${DB_PASSWORD} ${DB_NAME} < /init/init-db.sql
+          echo "Database initialization complete!"
+        envFrom:
+        - configMapRef:
+            name: viper-app-config
+        - secretRef:
+            name: viper-app-secret
+        volumeMounts:
+        - name: db-init-script
+          mountPath: /init
+      containers:
+      - name: viper-app
+        image: localhost:5000/web-app:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3000
+          name: http
+        env:
+        # Inject pod namespace for Kubernetes API access
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        envFrom:
+        - configMapRef:
+            name: viper-app-config
+        - secretRef:
+            name: viper-app-secret
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 3000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+      volumes:
+      - name: db-init-script
+        configMap:
+          name: db-init-script
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: viper-app
+  labels:
+    app: viper-app
+  annotations:
+    cloud.google.com/neg: '{"ingress": true}'  # Enable Network Endpoint Groups for Ingress
+spec:
+  type: ClusterIP  # Changed from NodePort - Ingress will handle external access
+  selector:
+    app: viper-app
+  ports:
+  - name: http
+    port: 3000
+    targetPort: 3000
+    protocol: TCP
