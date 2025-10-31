@@ -194,25 +194,29 @@ class ViPERMonitor:
 
     def screenshot_worker(self):
         """Worker thread for capturing and sending screenshots"""
-        logger.info(f"Starting screenshot worker (interval: {self.screenshot_interval}s)")
+        # DISABLED: Screenshot functionality commented out to reduce overhead
+        logger.info("Screenshot worker disabled")
+        return
         
-        while self.running:
-            try:
-                screenshot = self.capture_screenshot()
-                if screenshot:
-                    self.send_screenshot(screenshot)
-                    logger.info("Screenshot captured and sent")
-                else:
-                    logger.warning("No screenshot captured")
-                    
-            except Exception as e:
-                logger.error(f"Error in screenshot worker: {e}")
-            
-            # Wait for next screenshot
-            for _ in range(self.screenshot_interval):
-                if not self.running:
-                    break
-                time.sleep(1)
+        # logger.info(f"Starting screenshot worker (interval: {self.screenshot_interval}s)")
+        # 
+        # while self.running:
+        #     try:
+        #         screenshot = self.capture_screenshot()
+        #         if screenshot:
+        #             self.send_screenshot(screenshot)
+        #             logger.info("Screenshot captured and sent")
+        #         else:
+        #             logger.warning("No screenshot captured")
+        #             
+        #     except Exception as e:
+        #         logger.error(f"Error in screenshot worker: {e}")
+        #     
+        #     # Wait for next screenshot
+        #     for _ in range(self.screenshot_interval):
+        #         if not self.running:
+        #             break
+        #         time.sleep(1)
 
     def activity_worker(self):
         """Worker thread for sending activity reports"""

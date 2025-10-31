@@ -95,7 +95,7 @@ class ViperInstanceService {
     const ingressName = `viper-ingress-${instanceUUID}`;
 
     // Ingress spec for path-based routing with WebSocket support
-    // Using GCE ingress controller (GKE default) with BackendConfig for WebSocket timeouts
+    // Using nginx ingress controller for proper WebSocket handling
     const ingressSpec = {
       apiVersion: 'networking.k8s.io/v1',
       kind: 'Ingress',
@@ -107,27 +107,32 @@ class ViperInstanceService {
           instanceUUID
         },
         annotations: {
-          // Use GCE ingress controller (GKE default)
-          'kubernetes.io/ingress.class': 'gce',
-          // WebSocket and timeout support via BackendConfig
-          'cloud.google.com/backend-config': `{"ports": {"3000":"${serviceName}-backendconfig"}}`,
-          // Optional: connection draining timeout
-          'cloud.google.com/connection-draining-timeout': '3600'
+          // Enable WebSocket support
+          'nginx.ingress.kubernetes.io/websocket-services': serviceName,
+          
+          // Increase timeouts for long-running WebSocket connections
+          'nginx.ingress.kubernetes.io/proxy-connect-timeout': '3600',
+          'nginx.ingress.kubernetes.io/proxy-send-timeout': '3600',
+          'nginx.ingress.kubernetes.io/proxy-read-timeout': '3600',
+          
+          // WebSocket specific settings (standard annotations, no snippet needed)
+          'nginx.ingress.kubernetes.io/proxy-http-version': '1.1'
         }
       },
       spec: {
+        ingressClassName: 'nginx',  // Use ingressClassName instead of deprecated annotation
         rules: [
           {
             http: {
               paths: [
                 {
-                  path: `/viper-instances/${instanceUUID}/*`,
-                  pathType: 'ImplementationSpecific',
+                  path: `/viper-instances/${instanceUUID}`,
+                  pathType: 'Prefix',
                   backend: {
                     service: {
                       name: serviceName,
                       port: {
-                        number: 3000
+                        number: 3000  // Service port (which routes to 8080 nginx sidecar)
                       }
                     }
                   }
@@ -303,7 +308,7 @@ class ViperInstanceService {
           {
             name: 'viper',
             // image: process.env.VIPER_IMAGE || 'gcr.io/YOUR_PROJECT/opf-cloud-viper:latest',
-            image: process.env.VIPER_IMAGE || 'darrenopf/opf-cloud-viper:docker-0.0.17',
+            image: process.env.VIPER_IMAGE || 'australia-southeast2-docker.pkg.dev/opf-viper-cloud/opf-viper-repo/opf-cloud-viper:docker-workshop-0.0.18',
             env: [
               { name: 'INSTANCE_UUID', value: instanceUUID },
               // { name: 'PASSWORD', value: kasmvncPassword },
@@ -424,12 +429,9 @@ class ViperInstanceService {
 
       // Create the Ingress for routing
       try {
-        // First create BackendConfig for GKE WebSocket support
-        await this.createBackendConfig(serviceName, instanceUUID);
-        
-        // Then create the Ingress
+        // Create nginx ingress for WebSocket support (no BackendConfig needed)
         await this.createIngress(instanceUUID, serviceName);
-        appLogger.info('Kubernetes Ingress and BackendConfig created for ViPER instance', {
+        appLogger.info('Kubernetes Ingress created for ViPER instance', {
           eventType: 'Ingress Created',
           instanceUUID,
           serviceName,
@@ -437,7 +439,7 @@ class ViperInstanceService {
           timestamp: new Date().toISOString()
         });
       } catch (ingressError) {
-        appLogger.warn('Failed to create Ingress/BackendConfig, but pod and service exist', {
+        appLogger.warn('Failed to create Ingress, but pod and service exist', {
           eventType: 'Ingress Creation Warning',
           instanceUUID,
           serviceName,

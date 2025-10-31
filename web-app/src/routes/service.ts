@@ -1381,6 +1381,7 @@ router.post('/screenshot/:instanceUUID', async (req: Request, res: Response): Pr
     }
 });
 
+
 // Activity report endpoint - containers can report user activity (requires statusKey authentication)
 router.post('/activity/:instanceUUID', async (req: Request, res: Response): Promise<void> => {
     const { instanceUUID } = req.params;
