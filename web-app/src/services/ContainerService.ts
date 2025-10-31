@@ -43,13 +43,18 @@ import { CoreV1Api, KubeConfig, V1Pod, V1DeleteOptions } from '@kubernetes/clien
 
 export class KubernetesContainerService implements IContainerService {
   private k8sApi: CoreV1Api;
+  private kc: KubeConfig;
   private namespace: string;
 
-  constructor(namespace = 'default') {
-    const kc = new KubeConfig();
-    kc.loadFromDefault();
-    this.k8sApi = kc.makeApiClient(CoreV1Api);
+  constructor(namespace: string = 'default') {
     this.namespace = namespace;
+    this.kc = new KubeConfig();
+    this.kc.loadFromCluster(); // Explicit in-cluster config
+    
+    // Enable verbose logging for debugging
+    process.env.NODE_DEBUG = 'request';
+    
+    this.k8sApi = this.kc.makeApiClient(CoreV1Api);
   }
 
   async createContainer(options: any): Promise<any> {
@@ -82,8 +87,56 @@ export class KubernetesContainerService implements IContainerService {
   }
 
   async execInContainer(containerId: string, command: string[], options?: any): Promise<{ output: string; exitCode: number }> {
-    // Exec is more complex in k8s, would need to use @kubernetes/client-node exec API
-    throw new Error('execInContainer not implemented for Kubernetes');
+    const { Exec } = await import('@kubernetes/client-node');
+    const stream = await import('stream');
+    const exec = new Exec(this.kc); // Use the class's KubeConfig instance
+    
+    return new Promise((resolve, reject) => {
+      let stdout = '';
+      let stderr = '';
+      let exitCode = 0;
+      
+      const stdoutStream = new stream.PassThrough();
+      const stderrStream = new stream.PassThrough();
+      
+      stdoutStream.on('data', (chunk) => {
+        stdout += chunk.toString();
+      });
+      
+      stderrStream.on('data', (chunk) => {
+        stderr += chunk.toString();
+      });
+      
+      exec.exec(
+        this.namespace,
+        containerId,
+        'viper', // container name in the pod
+        command,
+        stdoutStream,
+        stderrStream,
+        null, // stdin
+        false, // tty
+        (status) => {
+          exitCode = status.status === 'Success' ? 0 : 1;
+          resolve({
+            output: stdout + stderr,
+            exitCode
+          });
+        }
+      ).catch((error) => {
+        appLogger.error('Kubernetes exec failed', {
+          eventType: 'K8s Exec Error',
+          podName: containerId,
+          command: command.join(' '),
+          error: (error as Error).message,
+          errorStack: (error as Error).stack,
+          errorDetails: JSON.stringify(error),
+          timestamp: new Date().toISOString()
+        });
+        
+        reject(error);
+      });
+    });
   }
 
   getContainer(containerId: string): any {

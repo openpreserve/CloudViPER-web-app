@@ -1,7 +1,26 @@
+# NOTE: This file is NOT used in GKE deployment!
+# 
+# GKE uses the GCE ingress controller which does not support:
+# - Regex path matching
+# - Dynamic service routing
+# - Per-path rewrite rules
+#
+# Instead, individual Ingress resources are created per instance by ViperInstanceService.ts
+# Each instance gets its own Ingress that routes /viper-instances/{uuid} to viper-svc-{uuid}
+#
+# This file is kept for reference/documentation but should NOT be applied to GKE.
+#
+# If you need nginx-style routing, you would need to:
+# 1. Install nginx-ingress-controller in GKE
+# 2. Update ViperInstanceService.ts to use ingressClassName: 'nginx'
+# 3. Apply this ingress configuration
+#
+# For now, the per-instance Ingress approach works well with GCE ingress controller.
+
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: viper-instances-ingress
+  name: viper-instances-ingress-DISABLED
   labels:
     app: viper-instances
   annotations:

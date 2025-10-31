@@ -72,7 +72,11 @@ export default (sequelize: Sequelize) => {
         kasmvncPassword: { type: DataTypes.STRING, allowNull: true },
         statusKey: { type: DataTypes.STRING, allowNull: true },
         createdAt: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
-        status: { type: DataTypes.STRING, allowNull: false, defaultValue: 'initilising' },
+        status: { 
+          type: DataTypes.STRING, 
+          allowNull: false, 
+          defaultValue: 'creating' 
+        },
         logs: { type: DataTypes.JSON, allowNull: true, defaultValue: [] }, // Initialize as an empty array
         lastActivity: { type: DataTypes.DATE, allowNull: true },
         lastScreenshot: { type: DataTypes.JSON, allowNull: true },

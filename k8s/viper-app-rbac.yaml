@@ -23,6 +23,10 @@ rules:
 - apiGroups: [""]
   resources: ["pods"]
   verbs: ["create", "delete", "get", "list", "watch"]
+# Permission to execute commands in pods (for monitoring injection)
+- apiGroups: [""]
+  resources: ["pods/exec"]
+  verbs: ["create", "get"]
 # Full permissions for managing ViPER instance services
 - apiGroups: [""]
   resources: ["services"]

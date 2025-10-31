@@ -1323,27 +1323,56 @@ router.post('/screenshot/:instanceUUID', async (req: Request, res: Response): Pr
     }
 
     try {
-        // Store screenshot in dedicated Screenshot table
-        await db.Screenshot.create({
-            instanceId: instance.id!,
-            instanceUUID,
-            screenshotData: screenshot,
-            capturedAt: timestamp ? new Date(timestamp) : new Date(),
-            receivedAt: new Date()
-        });
-
-        // Clean up old screenshots - keep only the latest 10
-        const screenshotsToDelete = await db.Screenshot.findAll({
+        // Check for duplicate screenshot before saving
+        const recentScreenshots = await db.Screenshot.findAll({
             where: { instanceId: instance.id },
             order: [['createdAt', 'DESC']],
-            offset: 10 // Skip the first 10 (most recent)
+            limit: 5, // Check last 5 screenshots for duplicates
+            attributes: ['screenshotData']
         });
 
-        if (screenshotsToDelete.length > 0) {
-            const idsToDelete = screenshotsToDelete.map(s => s.id!);
-            await db.Screenshot.destroy({
-                where: { id: idsToDelete }
+        // Create a simple hash from image size and first 100 characters
+        const newHash = `${screenshot.length}-${screenshot.substring(0, 100)}`;
+        let isDuplicate = false;
+
+        for (const existingScreenshot of recentScreenshots) {
+            if (existingScreenshot.screenshotData) {
+                const existingHash = `${existingScreenshot.screenshotData.length}-${existingScreenshot.screenshotData.substring(0, 100)}`;
+                if (existingHash === newHash) {
+                    isDuplicate = true;
+                    appLogger.info('Duplicate screenshot detected, skipping save', {
+                        eventType: 'Duplicate Screenshot Skipped',
+                        instanceUUID,
+                        timestamp: new Date().toISOString()
+                    });
+                    break;
+                }
+            }
+        }
+
+        // Only save if not a duplicate
+        if (!isDuplicate) {
+            await db.Screenshot.create({
+                instanceId: instance.id!,
+                instanceUUID,
+                screenshotData: screenshot,
+                capturedAt: timestamp ? new Date(timestamp) : new Date(),
+                receivedAt: new Date()
             });
+
+            // Clean up old screenshots - keep only the latest 10
+            const screenshotsToDelete = await db.Screenshot.findAll({
+                where: { instanceId: instance.id },
+                order: [['createdAt', 'DESC']],
+                offset: 10 // Skip the first 10 (most recent)
+            });
+
+            if (screenshotsToDelete.length > 0) {
+                const idsToDelete = screenshotsToDelete.map(s => s.id!);
+                await db.Screenshot.destroy({
+                    where: { id: idsToDelete }
+                });
+            }
         }
 
         // Update instance activity timestamp

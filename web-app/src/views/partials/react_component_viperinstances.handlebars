@@ -36,11 +36,10 @@
       .screenshot-container {
         position: relative;
         width: 100%;
-        overflow: hidden;
         border-radius: 8px;
         display: flex;
-        align-items: center;
-        justify-content: center;
+        flex-direction: column;
+        overflow: hidden;
       }
       
       .screenshot-container.loading {
@@ -71,74 +70,92 @@
       .screenshot-wrapper {
         position: relative;
         width: 100%;
+        height: 300px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #000;
       }
       
       .screenshot-image {
-        width: 100%;
+        max-width: 100%;
+        max-height: 100%;
         height: 100%;
+        width: auto;
         object-fit: contain;
         cursor: pointer;
       }
       
+      .screenshot-controls {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: #f8f9fa;
+        padding: 8px 10px;
+        border-top: 1px solid #dee2e6;
+      }
+      
+      .screenshot-nav {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      
       .carousel-btn {
-        position: absolute;
-        top: 50%;
-        transform: translateY(-50%);
-        background: rgba(0,0,0,0.7);
+        background: #007bff;
         color: white;
         border: none;
-        width: 30px;
-        height: 30px;
-        border-radius: 50%;
-        font-size: 18px;
+        width: 28px;
+        height: 28px;
+        border-radius: 4px;
+        font-size: 16px;
         font-weight: bold;
         cursor: pointer;
         display: flex;
         align-items: center;
         justify-content: center;
-        transition: all 0.3s ease;
-        z-index: 10;
+        transition: all 0.2s ease;
       }
       
       .carousel-btn:hover {
-        background: rgba(0,0,0,0.9);
-        transform: translateY(-50%) scale(1.1);
+        background: #0056b3;
+        transform: scale(1.05);
       }
       
-      .carousel-prev {
-        left: 5px;
-      }
-      
-      .carousel-next {
-        right: 5px;
+      .carousel-btn:disabled {
+        background: #6c757d;
+        cursor: not-allowed;
+        opacity: 0.5;
       }
       
       .screenshot-info {
-        position: absolute;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        background: linear-gradient(transparent, rgba(0,0,0,0.8));
-        color: white;
-        padding: 8px 5px 5px 5px;
-        font-size: 10px;
         display: flex;
-        justify-content: space-between;
-        align-items: end;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 4px;
       }
       
       .screenshot-counter {
-        background: rgba(255,255,255,0.2);
-        padding: 2px 6px;
-        border-radius: 10px;
+        background: #007bff;
+        color: white;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 11px;
         font-weight: bold;
       }
       
       .screenshot-badge {
-        background: rgba(40,167,69,0.8);
-        padding: 2px 6px;
-        border-radius: 10px;
-        font-size: 9px;
+        background: #28a745;
+        color: white;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 10px;
+      }
+      
+      .screenshot-timestamp {
+        font-size: 10px;
+        color: #6c757d;
+        font-style: italic;
       }
       
       /* Screenshot Modal Styles */
@@ -233,13 +250,11 @@
           detailsLoading: false,
           // Filter state
           filters: {
-            active: true,
-            inactive: true,
-            building: true,
-            created: true,
-            deleted: true,
+            creating: true,
+            initializing: true,
+            ready: true,
             error: true,
-            pending: true
+            deleted: false  // Hide deleted by default
           },
           showFilters: false,
           // Screenshot carousel state
@@ -251,7 +266,16 @@
             instanceUUID: '',
             screenshotIndex: 0,
             title: ''
-          }
+          },
+          // Activity chart state - track which charts are initialized
+          initializedCharts: {}, // { uuid: boolean }
+          // Loading states for buttons
+          creatingInstance: false,
+          deletingInstances: {}, // { podName: boolean }
+          // Connection status
+          connectionLost: false,
+          connectionRestored: false,
+          lastSuccessfulFetch: new Date()
         };
       }
 
@@ -264,29 +288,90 @@
         clearInterval(this.interval);
       }
 
-      fetchInstances = () => {
-        fetch('/service/viperinstances')
-          .then(response => response.json())
-          .then(data => {
-            // Handle the new API response format
-            let instances = [];
-            if (data && Array.isArray(data.instances)) {
-              instances = data.instances;
-            } else if (Array.isArray(data)) {
-              // Fallback for old format
-              instances = data;
+      fetchInstances = async () => {
+        try {
+          const response = await fetch('/service/viperinstances');
+          
+          // Check if response is OK (status 200-299)
+          if (!response.ok) {
+            // If service unavailable (503) or other server error, keep existing data and show banner
+            if (response.status === 503 || response.status >= 500) {
+              console.warn('Service temporarily unavailable, keeping existing data...');
+              const hadConnection = !this.state.connectionLost;
+              this.setState({ 
+                connectionLost: true,
+                connectionRestored: false,
+                isLoading: false
+              });
+              
+              // Auto-hide the banner after showing it was restored
+              if (hadConnection) {
+                // First time losing connection, schedule retry
+                setTimeout(() => {
+                  console.log('Retrying connection...');
+                  this.fetchInstances();
+                }, 10000); // Retry after 10 seconds
+              }
+              return;
             }
-            console.log('Fetched instances:', instances); // Debug log
-            this.setState({ instances: instances, isLoading: false }, () => {
-              // Refresh charts and initialize screenshot carousels after state update
-              this.refreshAllCharts();
-              this.initializeAllScreenshotCarousels();
-            });
-          })
-          .catch(error => {
-            console.error('Error fetching instances:', error);
-            this.setState({ error, isLoading: false, instances: [] });
+            throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+          }
+          
+          const data = await response.json();
+          
+          // Handle the new API response format
+          let instances = [];
+          if (data && Array.isArray(data.instances)) {
+            instances = data.instances;
+          } else if (Array.isArray(data)) {
+            // Fallback for old format
+            instances = data;
+          }
+          
+          console.log('Fetched instances:', instances); // Debug log
+          
+          // Check if we just restored connection
+          const wasDisconnected = this.state.connectionLost;
+          
+          this.setState({ 
+            instances: instances, 
+            isLoading: false, 
+            error: null,
+            connectionLost: false,
+            connectionRestored: wasDisconnected, // Show green banner if we were disconnected
+            lastSuccessfulFetch: new Date()
+          }, () => {
+            // Refresh charts and initialize screenshot carousels after state update
+            this.refreshAllCharts();
+            this.initializeAllScreenshotCarousels();
+            
+            // Auto-hide the "connection restored" banner after 5 seconds
+            if (wasDisconnected) {
+              setTimeout(() => {
+                this.setState({ connectionRestored: false });
+              }, 5000);
+            }
           });
+        } catch (error) {
+          console.error('Error fetching instances:', error);
+          
+          // Keep existing data and show connection lost banner
+          const hadConnection = !this.state.connectionLost;
+          
+          this.setState({ 
+            connectionLost: true,
+            connectionRestored: false,
+            isLoading: false
+          });
+          
+          // Schedule retry after 10 seconds
+          if (hadConnection) {
+            setTimeout(() => {
+              console.log('Retrying connection after error...');
+              this.fetchInstances();
+            }, 10000);
+          }
+        }
       }
 
       // Initialize screenshot carousels for all instances
@@ -400,25 +485,72 @@
       }
 
       startNewInstance = () => {
+        this.setState({ creatingInstance: true });
         fetch('/service/new-instance', { method: 'GET' })
           .then(response => {
             if (response.ok) {
-              this.fetchInstances();
+              // Wait a moment then refresh to see the new instance
+              setTimeout(() => {
+                this.fetchInstances();
+                this.setState({ creatingInstance: false });
+              }, 1000);
+            } else {
+              this.setState({ creatingInstance: false });
+              alert('Error starting new instance');
             }
           })
-          .catch(error => console.error('Error starting new instance:', error));
+          .catch(error => {
+            console.error('Error starting new instance:', error);
+            this.setState({ creatingInstance: false });
+            alert('Error starting new instance: ' + error.message);
+          });
       }
 
       removeInstance = (podName) => {
+        if (!confirm('Are you sure you want to remove this instance?')) {
+          return;
+        }
+        
+        this.setState(prevState => ({
+          deletingInstances: {
+            ...prevState.deletingInstances,
+            [podName]: true
+          }
+        }));
+        
         fetch('/service/terminate-instance/' + podName, { method: 'GET' })
           .then(response => {
             if (response.ok) {
+              // Remove from state after a short delay
+              setTimeout(() => {
+                this.setState(prevState => ({
+                  instances: prevState.instances.filter(instance => instance.podName !== podName),
+                  deletingInstances: {
+                    ...prevState.deletingInstances,
+                    [podName]: false
+                  }
+                }));
+              }, 1000);
+            } else {
               this.setState(prevState => ({
-                instances: prevState.instances.filter(instance => instance.podName !== podName)
+                deletingInstances: {
+                  ...prevState.deletingInstances,
+                  [podName]: false
+                }
               }));
+              alert('Error removing instance');
             }
           })
-          .catch(error => console.error('Error terminating instance:', error));
+          .catch(error => {
+            console.error('Error terminating instance:', error);
+            this.setState(prevState => ({
+              deletingInstances: {
+                ...prevState.deletingInstances,
+                [podName]: false
+              }
+            }));
+            alert('Error removing instance: ' + error.message);
+          });
       }
 
       formatOwnerInfo = (instance) => {
@@ -521,13 +653,11 @@
       selectAllFilters = () => {
         this.setState({
           filters: {
-            active: true,
-            inactive: true,
-            building: true,
-            created: true,
-            deleted: true,
+            creating: true,
+            initializing: true,
+            ready: true,
             error: true,
-            pending: true
+            deleted: true
           }
         });
       }
@@ -535,13 +665,11 @@
       clearAllFilters = () => {
         this.setState({
           filters: {
-            active: false,
-            inactive: false,
-            building: false,
-            created: false,
-            deleted: false,
+            creating: false,
+            initializing: false,
+            ready: false,
             error: false,
-            pending: false
+            deleted: false
           }
         });
       }
@@ -632,15 +760,15 @@ Current Activity Score: ${data.summary.currentScore || 0}`);
         // Show screenshot carousel
         const currentScreenshot = carousel.screenshots[carousel.currentIndex];
         const screenshotSrc = `/service/screenshot-image/${instance.uuid}?index=${currentScreenshot && currentScreenshot.index ? currentScreenshot.index : 0}`;
+        const timestamp = currentScreenshot && currentScreenshot.capturedAt ? new Date(currentScreenshot.capturedAt).toLocaleString() : 'Unknown';
         
         return React.createElement('div', { className: 'screenshot-container carousel-container' },
-          // Main screenshot image
+          // Main screenshot image wrapper
           React.createElement('div', { className: 'screenshot-wrapper' },
             React.createElement('img', { 
               src: screenshotSrc,
-              className: 'card-img-custom screenshot-image',
+              className: 'screenshot-image',
               alt: `Screenshot ${carousel.currentIndex + 1}`,
-              title: `Screenshot taken: ${currentScreenshot && currentScreenshot.capturedAt ? new Date(currentScreenshot.capturedAt).toLocaleString() : 'Unknown'}`,
               onClick: (e) => {
                 e.stopPropagation();
                 this.openScreenshotModal(instance, currentScreenshot);
@@ -650,49 +778,85 @@ Current Activity Score: ${data.summary.currentScore || 0}`);
                 e.target.src = '/images/CloudViPER-Logo.png';
                 e.target.title = 'Screenshot failed to load';
               }
-            }),
-            
-            // Navigation buttons (only show if more than 1 unique screenshot)
-            carousel.screenshots.length > 1 && [
-              React.createElement('button', {
-                key: 'prev',
-                className: 'carousel-btn carousel-prev',
-                onClick: (e) => {
-                  e.stopPropagation();
-                  this.navigateScreenshot(instance.uuid, 'prev');
-                },
-                title: 'Previous screenshot'
-              }, '‹'),
-              
-              React.createElement('button', {
-                key: 'next', 
-                className: 'carousel-btn carousel-next',
-                onClick: (e) => {
-                  e.stopPropagation();
-                  this.navigateScreenshot(instance.uuid, 'next');
-                },
-                title: 'Next screenshot'
-              }, '›')
-            ]
+            })
           ),
           
-          // Screenshot info overlay
-          React.createElement('div', { className: 'screenshot-info' },
-            carousel.screenshots.length > 1 && React.createElement('span', { className: 'screenshot-counter' },
-              `${carousel.currentIndex + 1}/${carousel.screenshots.length}`
+          // Controls and metadata below the image
+          React.createElement('div', { className: 'screenshot-controls' },
+            // Navigation buttons on the left
+            React.createElement('div', { className: 'screenshot-nav' },
+              carousel.screenshots.length > 1 && [
+                React.createElement('button', {
+                  key: 'prev',
+                  className: 'carousel-btn',
+                  onClick: (e) => {
+                    e.stopPropagation();
+                    this.navigateScreenshot(instance.uuid, 'prev');
+                  },
+                  title: 'Previous screenshot',
+                  disabled: carousel.screenshots.length <= 1
+                }, '◀'),
+                
+                React.createElement('button', {
+                  key: 'next', 
+                  className: 'carousel-btn',
+                  onClick: (e) => {
+                    e.stopPropagation();
+                    this.navigateScreenshot(instance.uuid, 'next');
+                  },
+                  title: 'Next screenshot',
+                  disabled: carousel.screenshots.length <= 1
+                }, '▶')
+              ]
             ),
-            React.createElement('span', { className: 'screenshot-badge' },
-              `${carousel.uniqueCount} unique of ${carousel.totalCount} total`
+            
+            // Metadata on the right
+            React.createElement('div', { className: 'screenshot-info' },
+              carousel.screenshots.length > 1 && React.createElement('span', { className: 'screenshot-counter' },
+                `${carousel.currentIndex + 1} of ${carousel.screenshots.length}`
+              ),
+              React.createElement('span', { className: 'screenshot-badge' },
+                `${carousel.uniqueCount} unique`
+              ),
+              React.createElement('span', { className: 'screenshot-timestamp' },
+                timestamp
+              )
             )
           )
         );
       }
       renderActivityChart = (instance) => {
         const canvasId = `chart-${instance.uuid}`;
+        const { initializedCharts } = this.state;
         
-        // Initialize chart after a short delay to ensure DOM element exists
-        setTimeout(() => this.initializeChart(canvasId, instance.uuid), 100);
+        // Check if this chart has been initialized
+        if (!initializedCharts[instance.uuid]) {
+          // Show placeholder with "Load Chart" button
+          return React.createElement('div', { className: 'activity-chart-container text-center' },
+            React.createElement('h6', { className: 'chart-title mb-2', style: { fontSize: '12px' } }, 'Recent Activity'),
+            React.createElement('div', { 
+              className: 'chart-placeholder',
+              style: { 
+                width: '180px', 
+                height: '100px', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center',
+                border: '1px solid #dee2e6',
+                borderRadius: '4px',
+                backgroundColor: '#f8f9fa'
+              }
+            },
+              React.createElement('button', {
+                className: 'btn btn-sm btn-outline-primary',
+                onClick: () => this.loadActivityChart(canvasId, instance.uuid),
+                style: { fontSize: '11px' }
+              }, 'Load Activity Chart')
+            )
+          );
+        }
         
+        // Chart is initialized, render the canvas
         return React.createElement('div', { className: 'activity-chart-container' },
           React.createElement('h6', { className: 'chart-title text-center mb-2', style: { fontSize: '12px' } }, 'Recent Activity'),
           React.createElement('canvas', { 
@@ -707,6 +871,19 @@ Current Activity Score: ${data.summary.currentScore || 0}`);
             React.createElement('span', { style: { color: '#28a745' } }, '● Activity')
           )
         );
+      }
+      
+      loadActivityChart = (canvasId, instanceUUID) => {
+        // Mark this chart as initialized
+        this.setState(prevState => ({
+          initializedCharts: {
+            ...prevState.initializedCharts,
+            [instanceUUID]: true
+          }
+        }), () => {
+          // Initialize chart after state update and DOM render
+          setTimeout(() => this.initializeChart(canvasId, instanceUUID), 100);
+        });
       }
 
       initializeChart = async (canvasId, instanceUUID) => {
@@ -865,22 +1042,40 @@ Current Activity Score: ${data.summary.currentScore || 0}`);
       }
 
       render() {
-        const { instances, isLoading, error, selectedInstance, instanceDetails, detailsLoading, filters, showFilters, screenshotModal } = this.state;
+        const { instances, isLoading, error, selectedInstance, instanceDetails, detailsLoading, filters, showFilters, screenshotModal, creatingInstance, deletingInstances, connectionLost, connectionRestored } = this.state;
         const filteredInstances = this.getFilteredInstances();
 
-        if (isLoading) {
+        // Only show loading on initial load (when we have no instances yet)
+        if (isLoading && instances.length === 0) {
           return <p>Loading instances...</p>;
         }
 
-        if (error) {
-          return <p>Error loading instances: {error.message}</p>;
-        }
+        // Don't show error if we have existing data - show banner instead
 
         return (
           <div>
             <h1>ViPER Instances</h1>
             
             {/* Filter Controls */}
+            {/* Connection Status Banners */}
+            {connectionLost && React.createElement('div', {
+              className: 'alert alert-danger connection-banner',
+              role: 'alert',
+              style: { position: 'fixed', top: '70px', right: '20px', zIndex: 1040, minWidth: '350px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }
+            }, [
+              React.createElement('i', { className: 'fas fa-exclamation-triangle', key: 'icon' }),
+              ' Connection to API lost - retrying automatically...'
+            ])}
+            
+            {connectionRestored && React.createElement('div', {
+              className: 'alert alert-success connection-banner',
+              role: 'alert',
+              style: { position: 'fixed', top: '70px', right: '20px', zIndex: 1040, minWidth: '350px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }
+            }, [
+              React.createElement('i', { className: 'fas fa-check-circle', key: 'icon' }),
+              ' Connection restored!'
+            ])}
+
             <div className="filter-controls mb-3">
               <button 
                 className="btn btn-outline-secondary btn-sm" 
@@ -935,7 +1130,21 @@ Current Activity Score: ${data.summary.currentScore || 0}`);
             </div>
 
             <div className="btn-container">
-              <button className="btn btn-primary" onClick={this.startNewInstance}>Start New Instance</button>
+              <button 
+                className={'btn btn-primary ' + (creatingInstance ? 'disabled' : '')} 
+                onClick={this.startNewInstance}
+                disabled={creatingInstance}
+              >
+                {creatingInstance ? (
+                  <span>
+                    <i className="fas fa-spinner fa-spin"></i> Creating Instance...
+                  </span>
+                ) : (
+                  <span>
+                    <i className="fas fa-plus"></i> Start New Instance
+                  </span>
+                )}
+              </button>
             </div>
 
             {/* Instance Details Modal */}
@@ -1087,7 +1296,7 @@ Current Activity Score: ${data.summary.currentScore || 0}`);
                                 <small className="text-muted"><strong>UUID: </strong>{instance.uuid}</small><br/>
                   <small className="text-muted">
                     <strong>URL: </strong>
-                    {instance.status === 'active' ? (
+                    {instance.status === 'ready' ? (
                       <a href={this.formatUrl(instance.url)} target="_blank" rel="noopener noreferrer">{instance.url}</a>
                     ) : (
                       instance.url
@@ -1126,9 +1335,10 @@ Current Activity Score: ${data.summary.currentScore || 0}`);
                             <div className="card-footer">
                               <div className="instance-buttons">
                                 <button
-                                  className={'btn btn-primary ' + (instance.status === 'active' ? '' : 'disabled')} 
+                                  className={'btn btn-primary ' + (instance.status === 'ready' ? '' : 'disabled')} 
                                   onClick={() => window.open(this.formatUrl(instance.url), '_blank')}
-                                  disabled={instance.status !== 'active'}
+                                  disabled={instance.status !== 'ready'}
+                                  title={instance.status !== 'ready' ? 'Instance is ' + instance.status : 'Launch ViPER Instance'}
                                 >
                                   <i className="fas fa-external-link-alt"></i> Launch Instance
                                 </button>
@@ -1157,11 +1367,19 @@ Current Activity Score: ${data.summary.currentScore || 0}`);
                                   </button>
                                 )}
                                 <button 
-                                  className={'btn btn-danger ' + (instance.status === 'deleted' ? 'disabled' : '')} 
+                                  className={'btn btn-danger ' + (instance.status === 'deleted' || deletingInstances[instance.podName] ? 'disabled' : '')} 
                                   onClick={() => this.removeInstance(instance.podName)} 
-                                  disabled={instance.status === 'deleted'}
+                                  disabled={instance.status === 'deleted' || deletingInstances[instance.podName]}
                                 >
-                                  <i className="fas fa-trash"></i> Remove Instance
+                                  {deletingInstances[instance.podName] ? (
+                                    <span>
+                                      <i className="fas fa-spinner fa-spin"></i> Removing...
+                                    </span>
+                                  ) : (
+                                    <span>
+                                      <i className="fas fa-trash"></i> Remove Instance
+                                    </span>
+                                  )}
                                 </button>
                               </div>
                             </div>

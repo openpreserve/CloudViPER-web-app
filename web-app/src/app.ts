@@ -57,11 +57,12 @@ const DOMAIN_WITHOUT_WWW = DOMAIN_NAME.replace('www.', '');
 // Prod specific 
 if (process.env.NODE_ENV === 'production') {
     app.use((req, res, next)=>{
-        // Allow internal Docker network requests to bypass HTTPS redirect
+        // Allow internal Docker/Kubernetes network requests to bypass HTTPS redirect
         const isInternalRequest = 
             req.ip?.startsWith('172.') || // Docker internal network
-            req.ip?.startsWith('10.') ||  // Docker internal network
-            req.hostname === 'cloud-viper-gui-app' ||
+            req.ip?.startsWith('10.') ||  // Kubernetes pod network
+            req.hostname === 'cloud-viper-gui-app' || // Docker service name
+            req.hostname === 'viper-app' || // Kubernetes service name
             req.hostname === 'localhost';
         
         const isServiceEndpoint = req.path.startsWith('/service/');
@@ -110,14 +111,39 @@ let session_config: session.SessionOptions = {
     saveUninitialized: false,
 };
 
-// Add session to app
+// Add session to app - but exclude API endpoints to prevent session explosion
 const sessionMW = session(session_config);
-app.use(sessionMW);
-app.use(flash());
+
+// Conditional session middleware - skip for API endpoints
+app.use((req, res, next) => {
+    // Skip sessions for monitoring/API endpoints that don't need authentication
+    if (req.path.startsWith('/service/screenshot/') || 
+        req.path.startsWith('/service/activity/') ||
+        req.path === '/service/health' ||
+        req.path === '/service/statistics') {
+        return next();
+    }
+    // Apply session middleware for authenticated routes
+    sessionMW(req, res, next);
+});
+
+app.use((req, res, next) => {
+    // Skip flash for non-session routes
+    if (!req.session) {
+        return next();
+    }
+    flash()(req, res, next);
+});
 
 // Configure passport
 app.use(passport.initialize());
-app.use(passport.session());
+app.use((req, res, next) => {
+    // Skip passport session for non-session routes
+    if (!req.session) {
+        return next();
+    }
+    passport.session()(req, res, next);
+});
 import configurePassport from './config/passport';
 // import { default } from './config/passport';
 configurePassport(passport);
@@ -273,6 +299,30 @@ app.listen(PORT, async () => {
             error: error instanceof Error ? error.message : String(error),
             timestamp: new Date().toISOString()
         });
+    }
+    
+    // Download and cache JHOVE test corpus to PVC (runs once, then cached)
+    try {
+        const { testCorpusService } = await import('./services/TestCorpusService');
+        console.log('Checking for JHOVE test corpus in PVC...');
+        
+        if (await testCorpusService.isCorpusAvailable()) {
+            console.log('✓ Test corpus already available in PVC');
+            const size = await testCorpusService.getCorpusSize();
+            console.log(`  Size: ${(size / 1024 / 1024).toFixed(2)} MB`);
+        } else {
+            console.log('Downloading JHOVE test corpus from GitHub to PVC (one-time download)...');
+            await testCorpusService.downloadCorpus();
+            const size = await testCorpusService.getCorpusSize();
+            console.log(`✓ Test corpus cached to PVC successfully (${(size / 1024 / 1024).toFixed(2)} MB)`);
+        }
+        
+    } catch (error) {
+        appLogger.error('Failed to setup test corpus', {
+            error: error instanceof Error ? error.message : String(error),
+            timestamp: new Date().toISOString()
+        });
+        console.warn('⚠ Test corpus download failed - instances will start without test files');
     }
 });
 

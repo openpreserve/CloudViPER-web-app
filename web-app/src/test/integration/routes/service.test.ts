@@ -158,7 +158,7 @@ describe('Service Routes', () => {
     const createMockViperInstance = (overrides = {}) => ({
         id: 1,
         uuid: 'mock-random-string',
-        dockerid: TEST_CONTAINERS.VALID_ID,
+        podName: TEST_CONTAINERS.VALID_ID,
         name: 'viper-cloud-mock-random-string',
         url: 'mock-random-string.localhost',
         kasmvncPassword: 'mock-random-string',
@@ -841,13 +841,13 @@ describe('Service Routes', () => {
 
     // Additional tests for the new admin-only routes
     describe('Admin-only routes', () => {
-        describe('GET /viperinstance/:dockerid/inspect', () => {
+        describe('GET /viperinstance/:podName/inspect', () => {
         it('should return instance details for admin users', async () => {
             const testApp = createTestApp({ id: 1, username: 'admin', email: 'admin@test.com', role: UserRole.ADMIN });
 
             const mockInstance = {
                 id: 1,
-                dockerid: 'test-docker-id',
+                podName: 'test-pod-name',
                 createdAt: '2023-01-01T00:00:00.000Z', // Use string to match JSON serialization
                 ownerUser: {
                     id: 1,
@@ -856,27 +856,27 @@ describe('Service Routes', () => {
                 }
             };
 
-            const mockDockerInspect = {
-                Id: 'test-docker-id',
-                State: { Status: 'running' },
-                Config: { Image: 'test-image' }
+            const mockPodInspect = {
+                metadata: { name: 'test-pod-name' },
+                status: { phase: 'Running' },
+                spec: { containers: [{ image: 'test-image' }] }
             };
 
             (db.ViperInstance.findOne as jest.Mock).mockResolvedValue(mockInstance);
-            mockContainer.inspect = jest.fn().mockResolvedValue(mockDockerInspect);
+            mockContainer.inspect = jest.fn().mockResolvedValue(mockPodInspect);
 
-            const response = await request(testApp).get('/service/viperinstance/test-docker-id/inspect');
+            const response = await request(testApp).get('/service/viperinstance/test-pod-name/inspect');
 
             expect(response.status).toBe(200);
             expect(response.body).toHaveProperty('instance');
             expect(response.body).toHaveProperty('operationalHours');
-            expect(response.body).toHaveProperty('dockerInspect');
+            expect(response.body).toHaveProperty('podInspect');
             expect(response.body.instance).toEqual(mockInstance);
-            expect(response.body.dockerInspect).toEqual(mockDockerInspect);
+            expect(response.body.podInspect).toEqual(mockPodInspect);
         });            it('should return 403 for non-admin users', async () => {
                 const testApp = createTestApp({ id: 2, username: 'member', email: 'member@test.com', role: UserRole.MEMBER });
 
-                const response = await request(testApp).get('/service/viperinstance/test-docker-id/inspect');
+                const response = await request(testApp).get('/service/viperinstance/test-pod-name/inspect');
 
                 expect(response.status).toBe(403);
                 expect(response.body).toEqual({ message: 'Admin access required' });

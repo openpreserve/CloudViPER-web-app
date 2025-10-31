@@ -56,11 +56,11 @@ spec:
             name: viper-app-secret
         resources:
           requests:
-            memory: "256Mi"
+            memory: "512Mi"
             cpu: "200m"
           limits:
-            memory: "512Mi"
-            cpu: "500m"
+            memory: "1Gi"
+            cpu: "1000m"
         livenessProbe:
           httpGet:
             path: /healthz
@@ -88,11 +88,8 @@ metadata:
   name: viper-app
   labels:
     app: viper-app
-  annotations:
-    cloud.google.com/neg: '{"ingress": true}'  # Enable Network Endpoint Groups for Ingress
-    beta.cloud.google.com/backend-config: '{"ports":{"http":"viper-app-backendconfig"}}'  # Use BackendConfig for health checks
 spec:
-  type: ClusterIP  # Changed from NodePort - Ingress will handle external access
+  type: ClusterIP
   selector:
     app: viper-app
   ports:

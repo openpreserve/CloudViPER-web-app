@@ -15,6 +15,11 @@ RUN npm ci
 COPY ./web-app/src/ ./src/
 COPY ./web-app/scripts/ ./scripts/
 
+# Copy monitoring script templates (used for runtime injection)
+COPY ./scripts/viper-monitor.sh ./scripts/viper-monitor.sh
+COPY ./scripts/viper-monitor.service ./scripts/viper-monitor.service
+COPY ./scripts/viper-monitor.desktop ./scripts/viper-monitor.desktop
+
 # Build the TypeScript application
 RUN npm run build
 

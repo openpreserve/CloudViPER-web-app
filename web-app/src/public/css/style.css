@@ -1388,3 +1388,69 @@ input.form-control:focus {
         padding-right: 10px;
     }
 }
+
+/* Status Badge Styles */
+.status-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.status-creating {
+    background-color: #e3f2fd;
+    color: #1976d2;
+    border: 1px solid #90caf9;
+}
+
+.status-initializing {
+    background-color: #fff3e0;
+    color: #f57c00;
+    border: 1px solid #ffb74d;
+}
+
+.status-ready {
+    background-color: #e8f5e9;
+    color: #388e3c;
+    border: 1px solid #81c784;
+}
+
+.status-error {
+    background-color: #ffebee;
+    color: #c62828;
+    border: 1px solid #ef5350;
+}
+
+.status-deleted {
+    background-color: #f5f5f5;
+    color: #616161;
+    border: 1px solid #bdbdbd;
+    text-decoration: line-through;
+}
+
+/* Filter checkbox styling */
+.filter-panel {
+    background-color: #f8f9fa;
+}
+
+.filter-checkboxes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.filter-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.filter-checkbox input[type="checkbox"] {
+    cursor: pointer;
+}
