@@ -3,30 +3,25 @@ kind: Ingress
 metadata:
   name: viper-app-ingress
   annotations:
-    kubernetes.io/ingress.class: "gce"
-    networking.gke.io/managed-certificates: "viper-app-cert"
-    kubernetes.io/ingress.global-static-ip-name: "viper-app-ip"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
   labels:
     app: viper-app
 spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - workshop.vipercloud.cc
+    secretName: viper-app-tls
   rules:
-  - host: vipercloud.cc
+  - host: workshop.vipercloud.cc
     http:
       paths:
-      - path: /*
-        pathType: ImplementationSpecific
+      - path: /
+        pathType: Prefix
         backend:
           service:
             name: viper-app
             port:
               number: 3000
----
-apiVersion: networking.gke.io/v1
-kind: ManagedCertificate
-metadata:
-  name: viper-app-cert
-  labels:
-    app: viper-app
-spec:
-  domains:
-    - "vipercloud.cc"

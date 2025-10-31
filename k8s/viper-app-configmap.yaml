@@ -11,11 +11,12 @@ data:
   DB_NAME: viper_db
   MEMCACHED_HOST: memcached
   PORT: "3000"
-  SERVICE_URL: http://viper-app:3000
-  # These will be overridden when deployed via Marketplace with auto-detected URL
-  APP_HOST: localhost
-  DOMAIN_NAME: localhost
-  NODE_ENV: development
+  SERVICE_URL: https://workshop.vipercloud.cc
+  # Production domain configuration
+  APP_HOST: workshop.vipercloud.cc
+  APP_PUBLIC_URL: https://workshop.vipercloud.cc
+  DOMAIN_NAME: workshop.vipercloud.cc
+  NODE_ENV: production
   # Kubernetes service discovery
   SERVICE_NAME: viper-app
   POD_NAMESPACE: default

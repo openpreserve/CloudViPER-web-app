@@ -38,7 +38,7 @@ spec:
           mountPath: /init
       containers:
       - name: viper-app
-        image: europe-west1-docker.pkg.dev/opf-viper-cloud/opf-viper-repo/web-app:latest
+        image: australia-southeast2-docker.pkg.dev/opf-viper-cloud/opf-viper-repo/web-app:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 3000
