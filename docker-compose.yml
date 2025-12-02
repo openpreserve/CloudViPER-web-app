@@ -48,13 +48,19 @@ services:
     restart: always
     env_file: ./web-app/.env
     environment:
-      EXPIRE_LOGS_DAYS: 7
+      EXPIRE_LOGS_DAYS: 3
+    deploy:
+      resources:
+        limits:
+          memory: 300M
+        reservations:
+          memory: 200M
     ports:
       - 3306:3306
     volumes:
       - ./volumes/mysql_8_data:/var/lib/mysql
-    #command: --default-authentication-plugin=mysql_native_password
-    command: --default-authentication-plugin=mysql_native_password --skip-log-bin
+      - ./mysql-config/my.cnf:/etc/mysql/conf.d/custom.cnf:ro
+    command: --default-authentication-plugin=mysql_native_password --skip-log-bin --performance-schema=OFF
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       timeout: 20s
