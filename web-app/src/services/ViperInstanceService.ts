@@ -51,19 +51,9 @@ class ViperInstanceService {
     });
 
     const envVars = [
-      "VIRTUAL_PORT=3000",
-      "VIRTUAL_HOST=" + instanceURL,
-      "LETSENCRYPT_HOST=" + instanceURL,
-      "LETSENCRYPT_EMAIL=sysadmin@openpreservation.org",
       "PASSWORD=" + kasmvncPassword,
       "PUID=1000",
       "PGID=1000",
-      "ACME_PRE_HOOK=curl " + (process.env.SERVICE_URL || (process.env.NODE_ENV === 'production' ? 
-          `http://cloud-viper-gui-app:3000` : 
-          `http://localhost:3000`)) + "/service/set-status-instance/"+statusKey+"/begin_cert",
-      "ACME_POST_HOOK=curl " + (process.env.SERVICE_URL || (process.env.NODE_ENV === 'production' ? 
-          `http://cloud-viper-gui-app:3000` : 
-          `http://localhost:3000`)) + "/service/set-status-instance/"+statusKey+"/active",
     ];
     
     console.log('Container Environment Variables:', envVars);
@@ -87,11 +77,20 @@ class ViperInstanceService {
         NetworkingConfig: {
           EndpointsConfig: {
             'cloud-viper-net': {},
-            ...(process.env.NODE_ENV === 'prod' && { 'ingress-proxy': {} }),
-            ...(process.env.NODE_ENV === 'production' && { 'ingress-proxy': {} })
+            ...(process.env.NODE_ENV === 'prod' && { 'cloudviper_ingress': {} }),
+            ...(process.env.NODE_ENV === 'production' && { 'cloudviper_ingress': {} })
           }
         },
         Env: envVars,
+        Labels: {
+          'traefik.enable': 'true',
+          [`traefik.http.routers.${containerName}.rule`]: `Host(\`${instanceURL}\`)`,
+          [`traefik.http.routers.${containerName}.entrypoints`]: 'websecure',
+          [`traefik.http.routers.${containerName}.tls`]: 'true',
+          [`traefik.http.routers.${containerName}.tls.certresolver`]: 'letsencrypt',
+          [`traefik.http.services.${containerName}.loadbalancer.server.port`]: '3000',
+          'traefik.docker.network': 'cloudviper_ingress'
+        }
       };
 
       const container = await containerService.createContainer(containerOptions);
@@ -133,9 +132,36 @@ class ViperInstanceService {
         timestamp: new Date().toISOString()
       });
 
-      // In development mode, simulate ACME hook completion since SSL certs won't be issued
+      // Traefik handles SSL automatically, so set instance to active after a short delay
+      // In both dev and production, we no longer need ACME hooks
       if (process.env.NODE_ENV === 'dev') {
         this.simulateDevCertProcess(instanceUUID, newViperInstance);
+      } else if (process.env.NODE_ENV === 'production') {
+        // In production with Traefik, set to active after container starts
+        // Traefik will handle SSL certificate generation automatically
+        setTimeout(async () => {
+          try {
+            await newViperInstance.update({
+              status: 'active',
+              logs: [...(newViperInstance.logs || []), { 
+                timestamp: new Date(), 
+                message: 'Instance active - Traefik managing SSL' 
+              }]
+            });
+            appLogger.info('Instance set to active (Traefik SSL)', {
+              eventType: 'Instance Activated',
+              instanceUUID,
+              timestamp: new Date().toISOString()
+            });
+          } catch (error) {
+            appLogger.error('Failed to set instance to active', {
+              eventType: 'Instance Activation Failed',
+              instanceUUID,
+              error: (error as Error).message,
+              timestamp: new Date().toISOString()
+            });
+          }
+        }, 5000); // 5 second delay to allow Traefik to register the container
       }
 
       // Setup monitoring and security (non-critical - don't fail instance creation if these fail)

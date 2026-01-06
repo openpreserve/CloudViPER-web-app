@@ -1,0 +1,62 @@
+# Site settings
+title: CloudViPER Documentation
+description: Cloud-based digital preservation and file management interface
+baseurl: "" # the subpath of your site, e.g. /blog
+url: "" # the base hostname & protocol for your site
+
+# Build settings
+markdown: kramdown
+theme: jekyll-theme-cayman
+
+# Exclude from processing
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - node_modules
+  - vendor/bundle/
+  - vendor/cache/
+  - vendor/gems/
+  - vendor/ruby/
+
+# Collections
+collections:
+  documentation:
+    output: true
+    permalink: /documentation/:path/
+
+# Default front matter
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: default
+  - scope:
+      path: ""
+      type: "documentation"
+    values:
+      layout: default
+
+# Navigation
+navigation:
+  - title: Home
+    url: /
+  - title: Getting Started
+    url: /getting-started/
+  - title: Documentation
+    url: /documentation/
+  - title: About
+    url: /about/
+  - title: Glossary
+    url: /glossary/
+  - title: Acknowledgements
+    url: /acknowledgements/
+
+# Footer links
+footer_links:
+  - title: GitHub
+    url: https://github.com/openpreserve/CloudViPER-web-app
+  - title: Open Preservation Foundation
+    url: https://openpreservation.org
+
+# Google Analytics (optional)
+# google_analytics: UA-XXXXXXXX-X

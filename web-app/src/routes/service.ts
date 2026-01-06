@@ -328,7 +328,7 @@ router.get('/team-leader', async (req: Request, res: Response) => {
 
 router.get('/new-instance', async (req: Request, res: Response): Promise<void> => {
     const user = req.user as ServiceUser | undefined;
-    const permissionCheck = checkUserPermission(user, [UserRole.TESTING, UserRole.MEMBER, UserRole.SUBSCRIBER, UserRole.ADMIN]);
+    const permissionCheck = checkUserPermission(user, [UserRole.TESTING, UserRole.MEMBER, UserRole.TEAM_LEADER, UserRole.TEAM_ADMIN, UserRole.SUBSCRIBER, UserRole.ADMIN]);
 
     if (!permissionCheck.authorized) {
         appLogger.warn('Unauthorized instance creation attempt', {
@@ -349,7 +349,10 @@ router.get('/new-instance', async (req: Request, res: Response): Promise<void> =
     if (instanceLimit > 0) { // -1 means unlimited
         try {
             const existingInstances = await db.ViperInstance.count({
-                where: { owner: user!.id }
+                where: { 
+                    owner: user!.id,
+                    status: { [Op.ne]: 'deleted' } // Don't count deleted instances
+                }
             });
             
             if (existingInstances >= instanceLimit) {
@@ -576,7 +579,7 @@ router.get('/viperinstances', async (req: Request, res: Response): Promise<void>
             total: enrichedInstances.length,
             userRole: user.role,
             canCreateNew: getInstanceLimit(user.role) === -1 || // Unlimited
-                await db.ViperInstance.count({ where: { owner: user.id } }) < getInstanceLimit(user.role)
+                await db.ViperInstance.count({ where: { owner: user.id, status: { [Op.ne]: 'deleted' } } }) < getInstanceLimit(user.role)
         });
 
     } catch (error) {
