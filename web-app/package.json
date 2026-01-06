@@ -43,6 +43,7 @@
     "passport-google-oauth20": "^2.0.0",
     "passport-local": "^1.0.0",
     "passport-local-sequelize": "^0.9.1",
+    "resend": "^4.8.0",
     "sequelize": "^6.37.3",
     "sequelize-mock": "^0.10.2",
     "sqlite3": "^5.1.7",
