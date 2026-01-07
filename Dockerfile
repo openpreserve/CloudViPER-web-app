@@ -20,6 +20,10 @@ COPY ./scripts/viper-monitor.sh ./scripts/viper-monitor.sh
 COPY ./scripts/viper-monitor.service ./scripts/viper-monitor.service
 COPY ./scripts/viper-monitor.desktop ./scripts/viper-monitor.desktop
 
+# Copy corpus initialization scripts
+COPY ./scripts/viper-corpus-init.sh ./scripts/viper-corpus-init.sh
+COPY ./scripts/viper-corpus-init.desktop ./scripts/viper-corpus-init.desktop
+
 # Build the TypeScript application
 RUN npm run build
 

@@ -1,0 +1,34 @@
+# Build viper-instance image with corpus pre-installed
+FROM darrenopf/opf-cloud-viper:docker-0.0.17
+
+# Switch to root to install packages
+USER 0
+
+# Install required packages
+RUN apt-get update && apt-get install -y \
+    curl \
+    tar \
+    && rm -rf /var/lib/apt/lists/*
+
+# Download and extract JHOVE test corpus - only keep the corpora folder
+RUN mkdir -p /config/test-corpus && \
+    cd /tmp && \
+    curl -L https://github.com/openpreserve/jhove/archive/refs/heads/integration.tar.gz | tar xz && \
+    mv jhove-integration/test-root/corpora /config/test-corpus/ && \
+    rm -rf jhove-integration && \
+    chown -R 1000:1000 /config/test-corpus
+
+# Create Desktop directory and add shortcut to test corpus
+RUN mkdir -p /config/Desktop && \
+    echo '[Desktop Entry]' > /config/Desktop/test-corpus.desktop && \
+    echo 'Type=Link' >> /config/Desktop/test-corpus.desktop && \
+    echo 'Name=Test Corpus' >> /config/Desktop/test-corpus.desktop && \
+    echo 'Icon=folder' >> /config/Desktop/test-corpus.desktop && \
+    echo 'URL=file:///config/test-corpus/corpora' >> /config/Desktop/test-corpus.desktop && \
+    chmod +x /config/Desktop/test-corpus.desktop && \
+    chown -R 1000:1000 /config/Desktop
+
+# Switch back to default user
+USER 1000
+
+# Keep the original entrypoint from base image
