@@ -1,0 +1,8 @@
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+  - role: worker
+    extraMounts:
+      - hostPath: /home/darrren/OPF/sandbox/viper-cloud-web-gui/volumes/k8s_mysql_data
+        containerPath: /mnt/k8s_mysql_data

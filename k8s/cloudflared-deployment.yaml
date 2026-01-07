@@ -1,0 +1,82 @@
+# Cloudflare Tunnel deployment for GKE
+# This eliminates the need for a LoadBalancer by routing traffic through Cloudflare Tunnel
+# 
+# Prerequisites:
+# 1. Cloudflare account with domain
+# 2. Create tunnel: cloudflared tunnel create viper-tunnel
+# 3. Get tunnel credentials JSON and create secret:
+#    kubectl create secret generic tunnel-credentials --from-file=credentials.json=/path/to/tunnel-credentials.json
+# 4. Configure tunnel to route to nginx-ingress ClusterIP service
+#
+# Benefits:
+# - Save $20/month on LoadBalancer
+# - No public IPs needed
+# - Free SSL via Cloudflare
+# - Better DDoS protection
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cloudflared-config
+  namespace: default
+data:
+  config.yaml: |
+    tunnel: viper-tunnel
+    credentials-file: /etc/cloudflared/credentials.json
+    
+    # Route traffic to nginx-ingress ClusterIP service
+    ingress:
+    - hostname: vipercloud.cc
+      service: http://nginx-ingress-ingress-nginx-controller.default.svc.cluster.local:80
+    - hostname: "*.vipercloud.cc"
+      service: http://nginx-ingress-ingress-nginx-controller.default.svc.cluster.local:80
+    # Catch-all rule (required)
+    - service: http_status:404
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudflared
+  namespace: default
+spec:
+  replicas: 2  # Run 2 for redundancy
+  selector:
+    matchLabels:
+      app: cloudflared
+  template:
+    metadata:
+      labels:
+        app: cloudflared
+    spec:
+      containers:
+      - name: cloudflared
+        image: cloudflare/cloudflared:latest
+        args:
+        - tunnel
+        - --config
+        - /etc/cloudflared/config.yaml
+        - run
+        volumeMounts:
+        - name: config
+          mountPath: /etc/cloudflared/config.yaml
+          subPath: config.yaml
+          readOnly: true
+        - name: credentials
+          mountPath: /etc/cloudflared/credentials.json
+          subPath: credentials.json
+          readOnly: true
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+      volumes:
+      - name: config
+        configMap:
+          name: cloudflared-config
+      - name: credentials
+        secret:
+          secretName: tunnel-credentials

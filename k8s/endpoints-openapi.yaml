@@ -1,0 +1,46 @@
+swagger: "2.0"
+info:
+  title: "ViPER Cloud API"
+  description: "ViPER Cloud Web Application"
+  version: "1.0.0"
+host: "viper-app.endpoints.opf-viper-cloud.cloud.goog"
+x-google-backend:
+  address: "http://34.76.253.108"
+  protocol: "http/1.1"
+schemes:
+  - "https"
+  - "http"
+produces:
+  - "application/json"
+paths:
+  "/**":
+    get:
+      summary: "Proxy all GET requests"
+      operationId: "proxyGet"
+      responses:
+        200:
+          description: "Success"
+    post:
+      summary: "Proxy all POST requests"
+      operationId: "proxyPost"
+      responses:
+        200:
+          description: "Success"
+    put:
+      summary: "Proxy all PUT requests"
+      operationId: "proxyPut"
+      responses:
+        200:
+          description: "Success"
+    delete:
+      summary: "Proxy all DELETE requests"
+      operationId: "proxyDelete"
+      responses:
+        200:
+          description: "Success"
+    patch:
+      summary: "Proxy all PATCH requests"
+      operationId: "proxyPatch"
+      responses:
+        200:
+          description: "Success"

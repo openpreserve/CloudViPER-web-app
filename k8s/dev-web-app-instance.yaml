@@ -1,0 +1,59 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-app-dev-instance
+  namespace: default
+  labels:
+    app: web-app-dev-instance
+spec:
+  containers:
+  - name: dev-web-app
+    image: australia-southeast2-docker.pkg.dev/opf-viper-cloud/opf-viper-repo/web-app:latest
+    imagePullPolicy: Always
+    command: ["/bin/sh"]
+    args: ["-c", "sleep infinity"]  # Keep container running
+    ports:
+    - containerPort: 3000
+      name: http
+    env:
+    - name: NODE_ENV
+      value: "development"
+    - name: DB_HOST
+      value: "mysql"
+    - name: DB_NAME
+      value: "viper_db"
+    - name: DB_USER
+      value: "root"
+    - name: DB_PORT
+      value: "3306"
+    envFrom:
+    - configMapRef:
+        name: viper-app-config
+    - secretRef:
+        name: viper-app-secret
+    resources:
+      requests:
+        memory: '512Mi'
+        cpu: '200m'
+      limits:
+        memory: '1Gi'
+        cpu: '1000m'
+    # Enable root access
+    securityContext:
+      runAsUser: 0
+      runAsGroup: 0
+  restartPolicy: Never
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-app-dev-instance
+  namespace: default
+spec:
+  selector:
+    app: web-app-dev-instance
+  ports:
+  - name: http
+    port: 3000
+    targetPort: 3000
+  type: ClusterIP

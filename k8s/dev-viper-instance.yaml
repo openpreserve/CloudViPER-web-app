@@ -1,0 +1,57 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: viper-dev-instance
+  namespace: default
+  labels:
+    app: viper-dev-instance
+spec:
+  containers:
+  - name: kasmvnc
+    image: accetto/ubuntu-vnc-xfce-firefox-g3:latest
+    imagePullPolicy: Always
+    ports:
+    - containerPort: 5901
+      name: vnc
+    - containerPort: 6901
+      name: novnc
+    - containerPort: 4901
+      name: files
+    resources:
+      requests:
+        memory: '1Gi'
+        cpu: '500m'
+      limits:
+        memory: '2Gi'
+        cpu: '1'
+    env:
+    - name: VNC_PW
+      value: "changeme"
+    - name: VNC_RESOLUTION
+      value: "1280x720"
+    # Enable root access
+    securityContext:
+      runAsUser: 0
+      runAsGroup: 0
+      privileged: false
+  restartPolicy: Never
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: viper-dev-instance
+  namespace: default
+spec:
+  selector:
+    app: viper-dev-instance
+  ports:
+  - name: vnc
+    port: 5901
+    targetPort: 5901
+  - name: novnc
+    port: 6901
+    targetPort: 6901
+  - name: files
+    port: 4901
+    targetPort: 4901
+  type: ClusterIP

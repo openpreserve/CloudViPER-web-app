@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: corpus-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce  # Single node can mount read-write (web-app writes, viper instances read)
+  storageClassName: standard-rwo  # Standard persistent disk
+  resources:
+    requests:
+      storage: 1Gi  # Minimum size, only using ~300MB

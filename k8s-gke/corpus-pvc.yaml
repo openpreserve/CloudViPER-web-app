@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: corpus-pvc
+spec:
+  accessModes:
+    - ReadWriteMany  # Multiple pods can mount this volume
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: standard-rwx  # GKE Filestore for ReadWriteMany
+  # Note: standard-rwx requires GKE Filestore CSI driver
+  # Minimum Filestore instance is 1TB, but we request 1Gi PVC from it

@@ -1,0 +1,43 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: corpus-downloader
+  namespace: default
+spec:
+  template:
+    metadata:
+      labels:
+        app: corpus-downloader
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: downloader
+        image: alpine:latest
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "Installing required packages..."
+          apk add --no-cache curl tar nfs-utils
+          
+          echo "Mounting NFS share..."
+          mkdir -p /mnt/corpus
+          mount -t nfs -o nolock corpus-nfs-server.default.svc.cluster.local:/corpus /mnt/corpus
+          
+          echo "Checking if corpus already exists..."
+          if [ -d "/mnt/corpus/jhove-integration" ]; then
+            echo "Corpus already downloaded!"
+            exit 0
+          fi
+          
+          echo "Downloading JHOVE test corpus..."
+          cd /mnt/corpus
+          curl -L https://github.com/openpreserve/jhove/archive/refs/heads/integration.tar.gz | tar xz
+          
+          echo "Corpus download complete!"
+          ls -lh /mnt/corpus/
+          
+          echo "Unmounting NFS..."
+          umount /mnt/corpus
+        securityContext:
+          privileged: true

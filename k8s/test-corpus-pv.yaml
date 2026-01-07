@@ -1,0 +1,29 @@
+# PersistentVolume for JHOVE test corpus (shared read-only across all instances)
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: test-corpus-pv
+  labels:
+    type: local
+spec:
+  storageClassName: manual
+  capacity:
+    storage: 500Mi
+  accessModes:
+    - ReadOnlyMany  # Multiple pods can mount read-only
+  hostPath:
+    path: /mnt/test-corpus  # Path on the host node
+    type: DirectoryOrCreate
+---
+# PersistentVolumeClaim for test corpus
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: test-corpus-pvc
+spec:
+  storageClassName: manual
+  accessModes:
+    - ReadOnlyMany
+  resources:
+    requests:
+      storage: 500Mi
