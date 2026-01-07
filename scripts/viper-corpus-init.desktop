@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=ViPER Corpus Setup
+Exec=/usr/local/bin/viper-corpus-init.sh
+Hidden=false
+NoDisplay=true
+X-GNOME-Autostart-enabled=true
+X-GNOME-Autostart-Delay=15
+StartupNotify=false
