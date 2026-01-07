@@ -13,6 +13,9 @@ volumes
 reports/*
 !reports/README.md
 
+# Large corpus files
+web-app/src/public/files/corpora.tar.gz
+
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
