@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import path from 'path';
-import { QueryTypes } from 'sequelize';
+import { QueryTypes, Op } from 'sequelize';
 import db from '../models';
 import helperFunctions from '../utility/helperFunctions';
 import { getAvailablePort } from '../utility/portManager';
@@ -123,6 +123,7 @@ class ViperInstanceService {
         ingressClassName: 'nginx',  // Use ingressClassName instead of deprecated annotation
         rules: [
           {
+            host: process.env.DOMAIN_NAME || 'workshop.vipercloud.cc',  // Must match main ingress host
             http: {
               paths: [
                 {
@@ -332,7 +333,7 @@ class ViperInstanceService {
             ],
             resources: {
               requests: { memory: '1Gi', cpu: '500m' },
-              limits: { memory: '2Gi', cpu: '1' }
+              limits: { memory: '4500Mi', cpu: '1450m' }
             }
           },
           {
@@ -582,6 +583,9 @@ class ViperInstanceService {
     // Setup monitoring scripts and service
     await this.setupMonitoringScripts(container, instanceUUID, statusKey);
     
+    // Setup corpus initialization (downloads and extracts test corpus)
+    await this.setupCorpusInitialization(container, instanceUUID);
+    
     // Create desktop shortcut for test corpus
     await this.createTestCorpusShortcut(container, instanceUUID);
   }
@@ -793,6 +797,73 @@ class ViperInstanceService {
         timestamp: new Date().toISOString()
       });
       throw setupError;
+    }
+  }
+
+  /**
+   * Sets up corpus initialization script to download and extract test files
+   */
+  private async setupCorpusInitialization(container: any, instanceUUID: string): Promise<void> {
+    const serviceUrl = process.env.SERVICE_URL || (process.env.NODE_ENV === 'production' ? 
+      `https://workshop.vipercloud.cc` : `http://localhost:3000`);
+
+    try {
+      // Get the corpus initialization script with variables substituted
+      const corpusScript = readAndProcessScript('viper-corpus-init.sh', {
+        INSTANCE_UUID: instanceUUID,
+        SERVICE_URL: serviceUrl,
+        DOMAIN_NAME: DOMAIN_NAME,
+        STATUS_KEY: '' // Not needed for corpus init
+      });
+
+      // Create the script in /usr/local/bin
+      await this.createFileInContainer(container, '/usr/local/bin/viper-corpus-init.sh', corpusScript);
+      
+      // Set executable permissions
+      await containerService.execInContainer(container.id, ['chmod', '755', '/usr/local/bin/viper-corpus-init.sh']);
+      
+      appLogger.info('Corpus initialization script created', {
+        eventType: 'Corpus Setup',
+        instanceUUID,
+        containerId: container.id,
+        action: 'script_created',
+        timestamp: new Date().toISOString()
+      });
+
+      // Create autostart entry for corpus initialization
+      const corpusAutostartEntry = readAndProcessScript('viper-corpus-init.desktop', {
+        INSTANCE_UUID: instanceUUID,
+        SERVICE_URL: serviceUrl,
+        DOMAIN_NAME: DOMAIN_NAME,
+        STATUS_KEY: '' // Not needed for corpus init
+      });
+
+      // Create autostart directory
+      await containerService.execInContainer(container.id, ['mkdir', '-p', '/config/.config/autostart']);
+      
+      // Create autostart desktop file
+      await this.createFileInContainer(container, '/config/.config/autostart/viper-corpus-init.desktop', corpusAutostartEntry);
+      
+      // Set permissions
+      await containerService.execInContainer(container.id, ['chmod', '444', '/config/.config/autostart/viper-corpus-init.desktop']);
+      
+      appLogger.info('Corpus initialization autostart entry created', {
+        eventType: 'Corpus Setup',
+        instanceUUID,
+        containerId: container.id,
+        action: 'autostart_created',
+        timestamp: new Date().toISOString()
+      });
+
+    } catch (setupError) {
+      appLogger.warn('Failed to setup corpus initialization', {
+        eventType: 'Corpus Setup Error',
+        instanceUUID,
+        containerId: container.id,
+        error: (setupError as Error).message,
+        timestamp: new Date().toISOString()
+      });
+      // Don't throw - this is not critical
     }
   }
 
@@ -1030,6 +1101,162 @@ URL=file:///config/test-corpus
         timestamp: new Date().toISOString()
       });
       throw error;
+    }
+  }
+
+  /**
+   * Checks instance health by examining pod logs for fatal errors and ready state
+   * Returns health status with error details if unhealthy, or ready status if fully operational
+   */
+  async checkInstanceHealth(podName: string): Promise<{ healthy: boolean; ready?: boolean; error?: string; reason?: string }> {
+    try {
+      // Get recent logs from the viper container stdout
+      const { output: stdoutLogs } = await containerService.execInContainer(podName, 
+        ['sh', '-c', 'cat /proc/1/fd/1 2>/dev/null | tail -100 || echo "no stdout"']
+      );
+
+      // Check for X server fatal errors (crash loop)
+      const xServerErrors = stdoutLogs.match(/Fatal server error.*Server is already active for display/g);
+      if (xServerErrors && xServerErrors.length > 3) {
+        return {
+          healthy: false,
+          error: 'X Server crash loop detected',
+          reason: `X server failed to start (${xServerErrors.length} failures detected). This usually indicates a persistent volume issue or corrupted X lock file.`
+        };
+      }
+
+      // Check for other critical errors
+      if (stdoutLogs.includes('Cannot open display') || stdoutLogs.includes('X11 connection rejected')) {
+        return {
+          healthy: false,
+          error: 'X11 display error',
+          reason: 'X server is not accessible. The desktop environment failed to initialize.'
+        };
+      }
+
+      // Check for ready indicators - look for successful KasmVNC startup
+      const isReady = 
+        stdoutLogs.includes('[ls.io-init] done.') &&  // Container init completed
+        (stdoutLogs.includes('websockify started') || stdoutLogs.includes('Listening for VNC connections'));
+
+      if (isReady) {
+        return { 
+          healthy: true, 
+          ready: true 
+        };
+      }
+
+      // Healthy but not yet ready
+      return { healthy: true, ready: false };
+    } catch (error) {
+      appLogger.warn('Could not check instance health', {
+        eventType: 'Health Check Warning',
+        podName,
+        error: (error as Error).message,
+        timestamp: new Date().toISOString()
+      });
+      return { healthy: true, ready: false }; // Assume healthy but not ready if we can't check
+    }
+  }
+
+  /**
+   * Monitors running instances and auto-deletes ones with fatal errors
+   * Should be called periodically (e.g., every 2 minutes)
+   */
+  async monitorInstanceHealth(): Promise<void> {
+    try {
+      // Get all instances that are in 'running' state for more than 2 minutes
+      const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
+      const runningInstances = await db.ViperInstance.findAll({
+        where: {
+          status: 'running',
+          createdAt: {
+            [Op.lt]: twoMinutesAgo
+          }
+        }
+      });
+
+      for (const instance of runningInstances) {
+        const healthCheck = await this.checkInstanceHealth(instance.podName);
+        
+        if (!healthCheck.healthy) {
+          // Instance has fatal errors - delete it
+          appLogger.error('Unhealthy instance detected - auto-deleting', {
+            eventType: 'Unhealthy Instance Auto-Delete',
+            instanceId: instance.id,
+            instanceUUID: instance.uuid,
+            podName: instance.podName,
+            owner: instance.owner,
+            error: healthCheck.error,
+            reason: healthCheck.reason,
+            timestamp: new Date().toISOString()
+          });
+
+          // Update instance status to 'failed' with error details
+          await instance.update({
+            status: 'failed',
+            logs: [
+              ...(instance.logs || []),
+              {
+                timestamp: new Date(),
+                message: `Auto-deleted: ${healthCheck.error}`,
+                details: healthCheck.reason
+              }
+            ]
+          });
+
+          // Delete the pod and associated resources
+          try {
+            const serviceName = `viper-svc-${instance.uuid}`;
+            const ingressName = `viper-ingress-${instance.uuid}`;
+
+            // Clean up Kubernetes resources
+            await containerService.removeContainer(instance.podName);
+            await this.deleteService(serviceName);
+            await this.deleteIngress(ingressName);
+
+            appLogger.info('Failed instance cleaned up', {
+              eventType: 'Failed Instance Cleanup',
+              instanceId: instance.id,
+              instanceUUID: instance.uuid,
+              timestamp: new Date().toISOString()
+            });
+          } catch (deleteError) {
+            appLogger.error('Error cleaning up failed instance', {
+              eventType: 'Cleanup Error',
+              instanceId: instance.id,
+              error: (deleteError as Error).message,
+              timestamp: new Date().toISOString()
+            });
+          }
+        } else if (healthCheck.ready) {
+          // Instance is healthy and ready - update status
+          appLogger.info('Instance is ready - updating status', {
+            eventType: 'Instance Ready',
+            instanceId: instance.id,
+            instanceUUID: instance.uuid,
+            podName: instance.podName,
+            timestamp: new Date().toISOString()
+          });
+
+          await instance.update({
+            status: 'ready',
+            logs: [
+              ...(instance.logs || []),
+              {
+                timestamp: new Date(),
+                message: 'Instance ready - KasmVNC started successfully'
+              }
+            ]
+          });
+        }
+      }
+    } catch (error) {
+      appLogger.error('Error in instance health monitoring', {
+        eventType: 'Health Monitoring Error',
+        error: (error as Error).message,
+        timestamp: new Date().toISOString()
+      });
     }
   }
 }

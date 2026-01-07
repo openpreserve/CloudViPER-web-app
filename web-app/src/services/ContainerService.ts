@@ -145,7 +145,8 @@ export class KubernetesContainerService implements IContainerService {
   }
 
   async ping(): Promise<void> {
-    await this.k8sApi.getAPIResources();
+    // Simple health check - list pods in namespace to verify API connectivity
+    await this.k8sApi.listNamespacedPod({ namespace: this.namespace, limit: 1 });
   }
 }
 

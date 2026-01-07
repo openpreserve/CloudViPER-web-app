@@ -116,14 +116,12 @@ const sessionMW = session(session_config);
 
 // Conditional session middleware - skip for API endpoints
 app.use((req, res, next) => {
-    // Skip sessions for monitoring/API endpoints that don't need authentication
+    // Skip sessions for monitoring/API endpoints that use statusKey authentication
     if (req.path.startsWith('/service/screenshot/') || 
-        req.path.startsWith('/service/activity/') ||
-        req.path === '/service/health' ||
-        req.path === '/service/statistics') {
+        req.path.startsWith('/service/activity/')) {
         return next();
     }
-    // Apply session middleware for authenticated routes
+    // Apply session middleware for authenticated routes (including /service/health and /service/statistics)
     sessionMW(req, res, next);
 });
 
@@ -324,6 +322,26 @@ app.listen(PORT, async () => {
         });
         console.warn('⚠ Test corpus download failed - instances will start without test files');
     }
+    
+    // Start background health monitoring for instances
+    // Check every 2 minutes for failed instances (X server crashes, etc.)
+    const HEALTH_CHECK_INTERVAL = 2 * 60 * 1000; // 2 minutes
+    setInterval(async () => {
+        try {
+            const viperInstanceService = (await import('./services/ViperInstanceService')).default;
+            await viperInstanceService.monitorInstanceHealth();
+        } catch (error) {
+            appLogger.error('Instance health monitoring failed', {
+                error: error instanceof Error ? error.message : String(error),
+                timestamp: new Date().toISOString()
+            });
+        }
+    }, HEALTH_CHECK_INTERVAL);
+    
+    appLogger.info('Instance health monitoring started', {
+        interval: `${HEALTH_CHECK_INTERVAL / 1000}s`,
+        timestamp: new Date().toISOString()
+    });
 });
 
 // Note: WebSocket proxying is now handled by Kubernetes Ingress (not at app level)

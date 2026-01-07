@@ -685,7 +685,9 @@
 
       loadActivityHistory = async (instanceUUID) => {
         try {
-          const response = await fetch(`/service/activity/${instanceUUID}`);
+          const response = await fetch(`/service/activity/${instanceUUID}`, {
+            credentials: 'same-origin'
+          });
           const data = await response.json();
           
           if (data.success) {
@@ -713,7 +715,9 @@ Current Activity Score: ${data.summary.currentScore || 0}`);
       // Fetch activity data for charts (last 30 points)
       fetchActivityDataForChart = async (instanceUUID) => {
         try {
-          const response = await fetch(`/service/activity/${instanceUUID}?limit=30`);
+          const response = await fetch(`/service/activity/${instanceUUID}?limit=30`, {
+            credentials: 'same-origin'
+          });
           const data = await response.json();
           
           if (data.success && data.activityHistory) {
@@ -1269,7 +1273,7 @@ Current Activity Score: ${data.summary.currentScore || 0}`);
             <table className="table table-striped">
               <thead>
                 <tr>
-                    <th>ViPERs:</th>
+                    <th>ViPERs ({filteredInstances.length}):</th>
                 </tr>
               </thead>
               <tbody>
@@ -1277,7 +1281,10 @@ Current Activity Score: ${data.summary.currentScore || 0}`);
                   <tr key={instance.uuid}><td>
 
                         {{!-- <row> --}}
-                        <div className="card mb-3">
+                        <div className="card mb-3 position-relative">
+                        <span className="position-absolute text-muted small" style=\{{ top: '8px', right: '12px', fontWeight: '500' }}>
+                          #{instance.id}
+                        </span>
                         <div className="row">
                             <div className="col-md-5 center-image">
                               {/* Dynamic Screenshot Carousel */}

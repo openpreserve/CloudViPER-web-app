@@ -42,7 +42,9 @@ class SystemStatistics extends React.Component {
 
     fetchStatistics = async () => {
         try {
-            const response = await fetch('/service/statistics');
+            const response = await fetch('/service/statistics', {
+                credentials: 'same-origin'
+            });
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }

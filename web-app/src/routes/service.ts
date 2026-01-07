@@ -1288,6 +1288,45 @@ router.get('/statistics', async (req: Request, res: Response): Promise<void> => 
     }
 });
 
+// Manual health check trigger endpoint (admin only)
+router.post('/check-instance-health', async (req: Request, res: Response): Promise<void> => {
+    const user = req.user as ServiceUser | undefined;
+    const permissionCheck = checkUserPermission(user, UserRole.ADMIN);
+    
+    if (!permissionCheck.authorized) {
+        res.status(403).json({ error: permissionCheck.reason });
+        return;
+    }
+
+    try {
+        appLogger.info('Manual health check triggered', {
+            eventType: 'Manual Health Check',
+            userId: user!.id,
+            timestamp: new Date().toISOString()
+        });
+
+        await viperInstanceService.monitorInstanceHealth();
+
+        res.json({
+            success: true,
+            message: 'Health check completed',
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        appLogger.error('Manual health check failed', {
+            eventType: 'Health Check Error',
+            userId: user!.id,
+            error: (error as Error).message,
+            timestamp: new Date().toISOString()
+        });
+
+        res.status(500).json({
+            error: 'Health check failed',
+            message: (error as Error).message
+        });
+    }
+});
+
 // Screenshot upload endpoint - containers can send screenshots (requires statusKey authentication)
 router.post('/screenshot/:instanceUUID', async (req: Request, res: Response): Promise<void> => {
     const { instanceUUID } = req.params;
@@ -1507,12 +1546,28 @@ router.post('/activity/:instanceUUID', async (req: Request, res: Response): Prom
         }
 
         // Update instance activity summary
-        await instance.update({
+        const updateData: any = {
             lastActivity: hasRecentInteraction ? lastInteractionTime : instance.lastActivity, // Only update if user just interacted
             activityScore: activityScore,
             isUserActive: isActive,
             updatedAt: new Date()
-        });
+        };
+
+        // If this is the first activity report and instance is still "running", 
+        // update status to "ready" as this indicates the container is fully operational
+        if (instance.status === 'running') {
+            updateData.status = 'ready';
+            appLogger.info('Instance status updated to ready on first activity report', {
+                eventType: 'Instance Status Update',
+                instanceUUID,
+                instanceId: instance.id,
+                oldStatus: 'running',
+                newStatus: 'ready',
+                timestamp: new Date().toISOString()
+            });
+        }
+
+        await instance.update(updateData);
 
         appLogger.info('Authenticated activity report received', {
             eventType: 'Activity Report Received',
@@ -1526,6 +1581,7 @@ router.post('/activity/:instanceUUID', async (req: Request, res: Response): Prom
             isActive,
             lastInteractionTime: lastInteractionTime.toISOString(),
             tenMinuteTimeoutActive: !hasRecentInteraction && isActive,
+            statusUpdated: instance.status === 'running',
             timestamp: new Date().toISOString()
         });
 

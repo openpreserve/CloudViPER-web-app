@@ -37,7 +37,9 @@ class SystemHealth extends React.Component {
 
     fetchHealthData = async () => {
         try {
-            const response = await fetch('/service/health');
+            const response = await fetch('/service/health', {
+                credentials: 'same-origin'
+            });
             const data = await response.json();
             
             this.setState({
